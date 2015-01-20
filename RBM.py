@@ -72,10 +72,14 @@ class RBM(object):
         self.hbias = hbias
         self.vbias = vbias
         self.theano_rng = theano_rng                           # Bad idea to assign random generator
+
         # For momentum
         self.old_DW = theano.shared(value=np.zeros_like(initial_W), name='old_DW', borrow=True)
-        self.old_Dhbias = theano.shared(value=np.zeros(n_hidden, dtype=theano.config.floatX), name='old_Dhbias', borrow=True)
-        self.old_Dvbias = theano.shared(value=np.zeros(n_visible, dtype=theano.config.floatX), name='old_Dvbias', borrow=True)
+        self.old_Dhbias = theano.shared(value=np.zeros(n_hidden, dtype=theano.config.floatX),
+                                        name='old_Dhbias', borrow=True)
+        self.old_Dvbias = theano.shared(value=np.zeros(n_visible, dtype=theano.config.floatX),
+                                        name='old_Dvbias', borrow=True)
+
         self.params = [self.W, self.hbias, self.vbias]
         self.all_params = [self.W, self.hbias, self.vbias, self.old_DW, self.old_Dhbias, self.old_Dvbias]
         print "RBM initialised"
@@ -191,15 +195,55 @@ class RBM(object):
         updates[self.old_Dhbias] = new_Dhbias
         updates[self.old_Dvbias] = new_Dvbias
 
-        # without momentum
-        gparams = T.grad(cost, self.params, consider_constant=[v_sample])
-        for gparam, param in zip(gparams, self.params):
-            new_param = param - gparam * T.cast(lr, dtype=theano.config.floatX)
-            updates[param] = new_param
-
         cross_entropy = self.get_reconstruction_cost(updates, pre_sigmoid_nv)
 
         return cross_entropy, updates
+
+        # Nesterov update:
+        # v_new = m * v_old - lr * Df(x_old + m*v_old)
+        # x_new = x_old + v_new
+        # <=> x_new = [x_old + m * v_old] - lr * Df([x_old + m * v_old])
+    def get_nesterov_cost_updates(self, lr=0.1, m=0.5, k=1):
+        lr = T.cast(lr, dtype=theano.config.floatX)
+        m = T.cast(m, dtype=theano.config.floatX)
+
+        partial_updates = []
+        # {self.W: self.W + m * self.old_DW,
+        #                    self.hbias: self.hbias + m * self.old_Dhbias,
+        #                    self.vbias: self.vbias + m * self.old_Dvbias}
+
+        partial_updates.append((self.W, self.W + m * self.old_DW))
+        partial_updates.append((self.hbias, self.hbias + m * self.old_Dhbias))
+        partial_updates.append((self.vbias, self.vbias + m * self.old_Dvbias))
+
+        updates, v_sample, pre_sigmoid_nv = self.contrastive_divergence(k)
+
+        cost = T.mean(self.free_energy(self.input)) - T.mean(self.free_energy(v_sample))
+
+        # Computes gradient for the cost function for parameter updates
+        g_W, g_h, g_v = T.grad(cost, self.params, consider_constant=[v_sample])
+
+        new_DW = m * self.old_DW - lr * g_W
+        new_Dhbias = m * self.old_Dhbias - lr * g_h
+        new_Dvbias = m * self.old_Dvbias - lr * g_v
+        # new_W = self.W + new_DW
+        # new_hbias = self.hbias + new_Dhbias
+        # new_vbias = self.vbias + new_Dvbias
+        new_W = self.W - lr * g_W
+        new_hbias = self.hbias - lr * g_h
+        new_vbias = self.vbias - lr * g_v
+        # update parameters
+        updates[self.W] = new_W
+        updates[self.hbias] = new_hbias
+        updates[self.vbias] = new_vbias
+        # update velocities
+        updates[self.old_DW] = new_DW
+        updates[self.old_Dhbias] = new_Dhbias
+        updates[self.old_Dvbias] = new_Dvbias
+
+        cross_entropy = self.get_reconstruction_cost(updates, pre_sigmoid_nv)
+
+        return cross_entropy, updates, partial_updates
 
 ##################################################
 #               Training RBM                     #
@@ -212,6 +256,7 @@ theano.config.exception_verbosity = 'high'
 
 def test_rbm(learning_rate=0.1,
              momentum=0.5,
+             nesterov=True,
              training_epochs=15,
              dataset='mnist.pkl.gz',
              batch_size=20,
@@ -238,22 +283,42 @@ def test_rbm(learning_rate=0.1,
 
     # we are using cross_entropy as proxy to "log-likelihood"
     # we want to minimise nll but we cannot measure it because of Z. we use cross_entropy to approximate it
-    cross_entropy, updates = rbm.get_cost_updates(lr=learning_rate, m=momentum, k=1)
+    if nesterov:
+        cross_entropy, updates, partial_updates = rbm.get_nesterov_cost_updates(lr=learning_rate, m=momentum, k=1)
+
+        weights_partial_update = theano.function(
+            inputs=[],
+            outputs=[],
+            updates=partial_updates
+        )
+        train_function = theano.function(
+            inputs=[index],
+            outputs=cross_entropy,
+            updates=updates,
+            givens={
+                x: train_set_x[index * batch_size: (index + 1) * batch_size],
+            }
+        )
+
+        def train_rbm(i):
+            weights_partial_update()
+            return train_function(i)
+
+    else:
+        cross_entropy, updates = rbm.get_cost_updates(lr=learning_rate, m=momentum, k=1)
+        train_rbm = theano.function(
+            [index],
+            cross_entropy, # use cross entropy to keep track
+            updates=updates,
+            givens={
+                x: train_set_x[index * batch_size: (index + 1) * batch_size]
+            },
+            name='train_rbm'
+        )
 
     if not os.path.isdir(output_folder):
         os.makedirs(output_folder)
     os.chdir(output_folder)
-
-
-    train_rbm = theano.function(
-        [index],
-        cross_entropy, # use cross entropy to keep track
-        updates=updates,
-        givens={
-            x: train_set_x[index * batch_size: (index + 1) * batch_size]
-        },
-        name='train_rbm'
-    )
 
     plotting_time = 0.
     start_time = time.clock()
@@ -358,14 +423,15 @@ def test_rbm(learning_rate=0.1,
 if __name__ == '__main__':
 
     test_rbm(learning_rate=0.1,
-             momentum=0.9,
+             momentum=0.5,
+             nesterov=True,
              training_epochs=15,
              dataset='mnist.pkl.gz',
              batch_size=20,
              n_chains=20,
              n_samples=10,
-             output_folder='rbm_plots10momentum',
-             n_hidden=10)
+             output_folder='rbm_plots100nesterov_momentum',
+             n_hidden=100)
 
 
     # test_rbm(learning_rate=0.1, training_epochs=15,
