@@ -165,7 +165,13 @@ class RBM(object):
 
         return cross_entropy
 
-    def get_cost_updates(self, lr=0.1, m=0.5, k=1):
+    def get_cost_updates(self,
+                         lr=0.1,
+                         m=0.5,
+                         weight_decay=0.001,
+                         sparsity_target=0.01,
+                         sparsity_cost=0.01,
+                         k=1):
         updates, v_sample, pre_sigmoid_nv = self.contrastive_divergence(k)
 
         cost = T.mean(self.free_energy(self.input)) - T.mean(
@@ -174,6 +180,7 @@ class RBM(object):
         # Cast meta parameters
         lr = T.cast(lr, dtype=theano.config.floatX)
         m = T.cast(m, dtype=theano.config.floatX)
+        weight_decay = T.cast(weight_decay, dtype=theano.config.floatX)
 
         # Computes gradient for the cost function for parameter updates
         g_W, g_h, g_v = T.grad(cost, self.params, consider_constant=[v_sample])
@@ -186,6 +193,10 @@ class RBM(object):
         new_W = self.W + new_DW
         new_hbias = self.hbias + new_Dhbias
         new_vbias = self.vbias + new_Dvbias
+        #penalise weight decay
+        new_W -= lr * weight_decay * self.W
+        new_hbias -= lr * weight_decay * self.hbias
+        new_vbias -= lr * weight_decay * self.vbias
         # update parameters
         updates[self.W] = new_W
         updates[self.hbias] = new_hbias
@@ -203,9 +214,16 @@ class RBM(object):
         # v_new = m * v_old - lr * Df(x_old + m*v_old)
         # x_new = x_old + v_new
         # <=> x_new = [x_old + m * v_old] - lr * Df([x_old + m * v_old])
-    def get_nesterov_cost_updates(self, lr=0.1, m=0.5, k=1):
+    def get_nesterov_cost_updates(self,
+                                  lr=0.1,
+                                  m=0.5,
+                                  weight_decay=0.001,
+                                  sparsity_target=0.01,
+                                  sparsity_cost=0.01,
+                                  k=1):
         lr = T.cast(lr, dtype=theano.config.floatX)
         m = T.cast(m, dtype=theano.config.floatX)
+        weight_decay = T.cast(weight_decay, dtype=theano.config.floatX)
 
         partial_updates = []
         # {self.W: self.W + m * self.old_DW,
@@ -232,6 +250,10 @@ class RBM(object):
         new_W = self.W - lr * g_W
         new_hbias = self.hbias - lr * g_h
         new_vbias = self.vbias - lr * g_v
+        #penalise weight decay. W is set as W+m*v, we need to subtract m*v to get old W)
+        new_W -= lr * weight_decay * (self.W - m * self.old_DW)
+        new_hbias -= lr * weight_decay * (self.hbias - m * self.old_Dhbias)
+        new_vbias -= lr * weight_decay * (self.vbias - m * self.old_Dvbias)
         # update parameters
         updates[self.W] = new_W
         updates[self.hbias] = new_hbias
@@ -256,6 +278,9 @@ theano.config.exception_verbosity = 'high'
 
 def test_rbm(learning_rate=0.1,
              momentum=0.5,
+             weight_decay=0.001,
+             sparsity_target=0.01,
+             sparsity_cost=0.01,
              nesterov=True,
              training_epochs=15,
              dataset='mnist.pkl.gz',
@@ -284,7 +309,12 @@ def test_rbm(learning_rate=0.1,
     # we are using cross_entropy as proxy to "log-likelihood"
     # we want to minimise nll but we cannot measure it because of Z. we use cross_entropy to approximate it
     if nesterov:
-        cross_entropy, updates, partial_updates = rbm.get_nesterov_cost_updates(lr=learning_rate, m=momentum, k=1)
+        cross_entropy, updates, partial_updates = rbm.get_nesterov_cost_updates(lr=learning_rate,
+                                                                                m=momentum,
+                                                                                weight_decay=weight_decay,
+                                                                                sparsity_cost=sparsity_cost,
+                                                                                sparsity_target=sparsity_target,
+                                                                                k=1)
 
         weights_partial_update = theano.function(
             inputs=[],
@@ -305,7 +335,7 @@ def test_rbm(learning_rate=0.1,
             return train_function(i)
 
     else:
-        cross_entropy, updates = rbm.get_cost_updates(lr=learning_rate, m=momentum, k=1)
+        cross_entropy, updates = rbm.get_cost_updates(lr=learning_rate, m=momentum, weight_decay=weight_decay, k=1)
         train_rbm = theano.function(
             [index],
             cross_entropy, # use cross entropy to keep track
@@ -424,7 +454,10 @@ if __name__ == '__main__':
 
     test_rbm(learning_rate=0.1,
              momentum=0.5,
-             nesterov=True,
+             weight_decay=0.001,
+             nesterov=False,
+             sparsity_target=0.01,      # in range (0.1^9, 0.01)
+             sparsity_cost=0.01,
              training_epochs=15,
              dataset='mnist.pkl.gz',
              batch_size=20,
