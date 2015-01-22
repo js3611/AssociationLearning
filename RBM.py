@@ -3,6 +3,7 @@ import theano
 import theano.tensor as T
 from theano.tensor.shared_randomstreams import RandomStreams
 import time
+import collections
 
 try:
     import PIL.Image as Image
@@ -79,6 +80,11 @@ class RBM(object):
                                         name='old_Dhbias', borrow=True)
         self.old_Dvbias = theano.shared(value=np.zeros(n_visible, dtype=theano.config.floatX),
                                         name='old_Dvbias', borrow=True)
+
+        # For sparsity cost
+        self.active_probability_h = theano.shared(value=np.zeros(n_hidden, dtype=theano.config.floatX),
+                                                  name="active_probability_h",
+                                                  borrow=True)
 
         self.params = [self.W, self.hbias, self.vbias]
         self.all_params = [self.W, self.hbias, self.vbias, self.old_DW, self.old_Dhbias, self.old_Dvbias]
@@ -171,6 +177,7 @@ class RBM(object):
                          weight_decay=0.001,
                          sparsity_target=0.01,
                          sparsity_cost=0.01,
+                         sparsity_decay_rate=0.1,
                          k=1):
         updates, v_sample, pre_sigmoid_nv = self.contrastive_divergence(k)
 
@@ -181,6 +188,7 @@ class RBM(object):
         lr = T.cast(lr, dtype=theano.config.floatX)
         m = T.cast(m, dtype=theano.config.floatX)
         weight_decay = T.cast(weight_decay, dtype=theano.config.floatX)
+        # Potentially cast sparsity_XX if compiler complains
 
         # Computes gradient for the cost function for parameter updates
         g_W, g_h, g_v = T.grad(cost, self.params, consider_constant=[v_sample])
@@ -193,10 +201,45 @@ class RBM(object):
         new_W = self.W + new_DW
         new_hbias = self.hbias + new_Dhbias
         new_vbias = self.vbias + new_Dvbias
-        #penalise weight decay
+        # Penalise weight decay
         new_W -= lr * weight_decay * self.W
         new_hbias -= lr * weight_decay * self.hbias
         new_vbias -= lr * weight_decay * self.vbias
+
+        # Sparsity
+        # 1. Compute actual probability of hidden unit being active, q
+        # 1.1 Get q_current (mean probability that a unit is active in each mini-batch
+        _, ph_mean = self.propup(self.input)
+        # q is the decaying average of mean active probability in each batch
+        q = sparsity_decay_rate * self.active_probability_h + (1-sparsity_decay_rate) * T.mean(ph_mean, axis=0)
+
+        # 1.2 Update q_current = q for next iteration
+        updates[self.active_probability_h] = q
+        # updates = collections.OrderedDict([(self.active_probability_h, q)])
+
+        # 2. Define Sparsity Penalty Measure (dim = 1 x n_hidden)
+        sparsity_penalty = T.nnet.binary_crossentropy(sparsity_target, q)
+
+        # 3. Get the derivative
+        # if rbm.hiddenUnitType == sigmoid
+        if False: # if sigmoid
+            d_sparsity = q - sparsity_target
+        else:
+            # Summation is a trick to differentiate element-wise
+            # (as non relevant terms in sum vanish because they are constant w.r.t the partial derivatives)
+            d_sparsity = T.grad(T.sum(sparsity_penalty), q)
+
+        # Apply derivitive scaled by sparsity_cost to the weights
+        # 1. use same quantity to adjust each weight
+        # new_hbias -= lr * sparsity_cost * d_sparsity
+        # new_W -= lr * sparsity_cost * d_sparsity
+        # 2. multiply quantity by dq/dw (chain rule)
+        chain_W, chain_h = T.grad(T.sum(q), [self.W, self.hbias])
+        new_hbias -= lr * sparsity_cost * d_sparsity * chain_h
+        new_W -= lr * sparsity_cost * d_sparsity * chain_W
+
+        # Enforce sparsity
+        #new_W -= lr * sparsity
         # update parameters
         updates[self.W] = new_W
         updates[self.hbias] = new_hbias
@@ -338,7 +381,7 @@ def test_rbm(learning_rate=0.1,
         cross_entropy, updates = rbm.get_cost_updates(lr=learning_rate, m=momentum, weight_decay=weight_decay, k=1)
         train_rbm = theano.function(
             [index],
-            cross_entropy, # use cross entropy to keep track
+            cross_entropy,  # use cross entropy to keep track
             updates=updates,
             givens={
                 x: train_set_x[index * batch_size: (index + 1) * batch_size]
@@ -460,11 +503,11 @@ if __name__ == '__main__':
              sparsity_cost=0.01,
              training_epochs=15,
              dataset='mnist.pkl.gz',
-             batch_size=20,
+             batch_size=1,
              n_chains=20,
              n_samples=10,
-             output_folder='rbm_plots100nesterov_momentum',
-             n_hidden=100)
+             output_folder='rbm_plots10sparsity',
+             n_hidden=10)
 
 
     # test_rbm(learning_rate=0.1, training_epochs=15,
