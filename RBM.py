@@ -503,11 +503,11 @@ if __name__ == '__main__':
              sparsity_cost=0.01,
              training_epochs=15,
              dataset='mnist.pkl.gz',
-             batch_size=1,
+             batch_size=20,
              n_chains=20,
              n_samples=10,
              output_folder='rbm_plots10sparsity',
-             n_hidden=10)
+             n_hidden=100)
 
 
     # test_rbm(learning_rate=0.1, training_epochs=15,
