@@ -139,7 +139,7 @@ class RBM(object):
         print "... initialised RBM"
 
     def __str__(self):
-        return "RBM_" + str(self.h_n) + \
+        return "rbm_" + str(self.h_n) + \
                "_" + self.cd_type + str(self.cd_steps) + \
                "_" + str(self.train_parameters)
 
@@ -485,12 +485,13 @@ class RBM(object):
             print 'Epoch %d, cost is ' % epoch, np.mean(mean_cost)
     
             if param.plot_during_training:
+                tile_shape = (self.h_n / 10 + 1, 10)
                 plotting_start = time.clock()       # Measure plotting time 
                 image = Image.fromarray(
                     tile_raster_images(
                         X=self.W.get_value(borrow=True).T,
                         img_shape=(28, 28),
-                        tile_shape=(10, 10),
+                        tile_shape=tile_shape,
                         tile_spacing=(1, 1)
                     )
                 )
@@ -504,7 +505,7 @@ class RBM(object):
         print ('Training took %f minutes' % (pre_training_time / 60.))
         os.chdir('../../')
 
-        return [self.W, self.v_bias, self.h_bias]
+        return [mean_cost]
 
     def plot_samples(self, test_data):
         self.create_and_move_to_output_dir()
@@ -586,7 +587,7 @@ def test_rbm():
     # Initialise the RBM and training parameters
     tr = TrainParam(learning_rate=0.01,
                     momentum_type=NESTEROV,
-                    momentum=0.9,
+                    momentum=0.5,
                     weight_decay=0.001,
                     sparsity_constraint=True,
                     sparsity_target=0.01,
@@ -595,7 +596,7 @@ def test_rbm():
                     plot_during_training=True)
 
     n_visible = train_set_x.get_value().shape[1]
-    n_hidden = 10
+    n_hidden = 50
 
     rbm = RBM(n_visible,
               n_hidden,
