@@ -498,7 +498,7 @@ if __name__ == '__main__':
     test_rbm(learning_rate=0.1,
              momentum=0.5,
              weight_decay=0.001,
-             nesterov=False,
+             nesterov=True,
              sparsity_target=0.01,      # in range (0.1^9, 0.01)
              sparsity_cost=0.01,
              training_epochs=15,
@@ -507,7 +507,7 @@ if __name__ == '__main__':
              n_chains=20,
              n_samples=10,
              output_folder='rbm_plots10sparsity',
-             n_hidden=100)
+             n_hidden=30)
 
 
     # test_rbm(learning_rate=0.1, training_epochs=15,

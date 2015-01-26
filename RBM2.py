@@ -3,17 +3,21 @@ import theano
 import theano.tensor as T
 from activationFunction import *
 from theano.tensor.shared_randomstreams import RandomStreams
-import time
+from utils import tile_raster_images
+from utils import load_data
 
+import os
+import time
+import datastorage
 try:
     import PIL.Image as Image
 except ImportError:
     import Image
 
-import os
 
-from utils import tile_raster_images
-from utils import load_data
+CLASSICAL = 'classical'
+NESTEROV = "nesterov"
+PERSISTENT = "persistent"
 
 # Macro
 t_float_x = theano.config.floatX
@@ -21,18 +25,15 @@ t_float_x = theano.config.floatX
 # Theano Debugging Configuration
 # compute_test_value is 'off' by default, meaning this feature is inactive
 # theano.config.compute_test_value = 'off' # Use 'warn' to activate this feature
-theano.config.optimizer = 'None'
-theano.config.exception_verbosity = 'high'
+#theano.config.optimizer = 'None'
+#theano.config.exception_verbosity = 'high'
 
 
 class TrainParam(object):
     def __init__(self,
                  epochs=15,
                  batch_size=20,
-                 n_chains=20,
-                 n_samples=10,
-                 plot_epoch_image=True,
-                 plot_sample=True,
+                 plot_during_training=True,
                  output_directory=None,
                  learning_rate=0.1,
                  momentum_type='nesterov',
@@ -46,8 +47,6 @@ class TrainParam(object):
         
         self.epochs = epochs
         self.batch_size = batch_size
-        self.n_chains = n_chains
-        self.n_samples = n_samples
         # Weight Update Parameters
         self.learning_rate = learning_rate
         self.momentum_type = momentum_type
@@ -60,19 +59,18 @@ class TrainParam(object):
         self.sparsity_decay = sparsity_decay
         # Output Configuration
         self.output_directory = output_directory
-        self.plot_epoch_image = plot_epoch_image
-        self.plot_sample = plot_sample
+        self.plot_during_training = plot_during_training
 
     def __str__(self):
         return "epoch" + str(self.epochs) + \
                "_batch" + str(self.batch_size) + \
                "_lr" + str(self.learning_rate) + \
                "_" + self.momentum_type + str(self.momentum) + \
+               "_wd" + str(self.weight_decay) + \
                ("_sparsity"
                 + "_t" + str(self.sparsity_target)
                 + "_c" + str(self.sparsity_cost) +
                 "_d" + str(self.sparsity_decay) if self.sparsity_constraint else "")
-
 
 class RBM(object):
 
@@ -84,11 +82,11 @@ class RBM(object):
                  v_bias=None,
                  h_activation_fn=log_sig,
                  v_activation_fn=log_sig,
-                 cd_type='persistent',
+                 cd_type=PERSISTENT,
                  cd_steps=1,
                  train_parameters=None):
 
-        np_rand = np.random.RandomState(1234)
+        np_rand = np.random.RandomState(123)
         self.rand = RandomStreams(np_rand.randint(2 ** 30))
 
         if W is None:
@@ -117,6 +115,9 @@ class RBM(object):
         if train_parameters is None:
             train_parameters = TrainParam()
 
+        persistent = theano.shared(value=np.zeros((train_parameters.batch_size, h_n),
+                                                  dtype=t_float_x), name="persistent")
+
         self.train_parameters = train_parameters
 
         # Weights
@@ -132,17 +133,26 @@ class RBM(object):
         # Gibbs Sampling Method
         self.cd_type = cd_type
         self.cd_steps = cd_steps
-
+        self.persistent = persistent
         self.params = [self.W, self.v_bias, self.h_bias]
 
-        print "Initialised"
+        print "... initialised RBM"
 
     def __str__(self):
-        return "RBM_" + str(self.h_n)
+        return "RBM_" + str(self.h_n) + \
+               "_" + self.cd_type + str(self.cd_steps) + \
+               "_" + str(self.train_parameters)
 
-    def free_energy(self, v):        
-        wv_c = T.dot(v, self.W) + self.h_bias
-        return - T.dot(v, self.v_bias) - T.sum(T.log(1 + T.exp(wv_c)))
+    def free_energy(self, v, w=None, v_bias=None, h_bias=None):
+        if not w:
+            w = self.W
+        if not v_bias:
+            v_bias = self.v_bias
+        if not h_bias:
+            h_bias = self.h_bias
+
+        wv_c = T.dot(v, w) + h_bias
+        return - T.dot(v, v_bias) - T.sum(T.log(1 + T.exp(wv_c)))
 
     def prop_up(self, v):
         """Propagates v to the hidden layer. """
@@ -184,6 +194,37 @@ class RBM(object):
         return [h_total_input, h_p_activation, h_sample,
                 v_total_input, v_p_activation, v_sample]
 
+    def pcd(self, k=1):
+        chain_start = self.persistent
+        (
+            [
+                v_total_inputs,
+                v_p_activations,
+                v_samples,
+                h_total_inputs,
+                h_p_activations,
+                h_samples
+            ],
+            updates
+        ) = theano.scan(
+            self.gibbs_hvh,
+            outputs_info=[None, None, None, None, None, chain_start],
+            n_steps=k
+        )
+        chain_end = v_samples[-1]
+
+        updates[self.persistent] = h_samples[-1]
+
+        # Return result of scan
+        return [updates,
+                chain_end,
+                v_total_inputs,
+                v_p_activations,
+                v_samples,
+                h_total_inputs,
+                h_p_activations,
+                h_samples]
+
     def contrastive_divergence(self, x, k=1):
         h_total_input, h_p_activation, h_sample = self.sample_h_given_v(x)
         chain_start = h_sample
@@ -214,7 +255,14 @@ class RBM(object):
                 h_p_activations,
                 h_samples]
 
+    def negative_statistics(self, x):
+        if self.cd_type is PERSISTENT:
+            return self.pcd(self.cd_steps)
+        else:
+            return self.contrastive_divergence(x, self.cd_steps)
+
     def get_reconstruction_cost(self, x, v_total_inputs):
+        """Used to monitor progress when using CD-k"""
         p = self.v_activation_fn(v_total_inputs)
         cross_entropy = T.mean(
             T.sum(
@@ -224,16 +272,53 @@ class RBM(object):
         )
         return cross_entropy
 
+    def get_pseudo_likelihood(self, x, updates):
+        """Stochastic approximation to the pseudo-likelihood.
+        Used to Monitor progress when using PCD-k"""
+
+        # index of bit i in expression p(x_i | x_{\i})
+        bit_i_idx = theano.shared(value=0, name='bit_i_idx')
+
+        # binarize the input image by rounding to nearest integer
+        xi = T.round(x)
+
+        # calculate free energy for the given bit configuration
+        fe_xi = self.free_energy(xi)
+
+        # flip bit x_i of matrix xi and preserve all other bits x_{\i}
+        # Equivalent to xi[:,bit_i_idx] = 1-xi[:, bit_i_idx], but assigns
+        # the result to xi_flip, instead of working in place on xi.
+        xi_flip = T.set_subtensor(xi[:, bit_i_idx], 1 - xi[:, bit_i_idx])
+
+        # calculate free energy with bit flipped
+        fe_xi_flip = self.free_energy(xi_flip)
+
+        # equivalent to e^(-FE(x_i)) / (e^(-FE(x_i)) + e^(-FE(x_{\i})))
+        cost = T.mean(self.v_n * T.log(T.nnet.sigmoid(fe_xi_flip - fe_xi)))
+
+        # increment bit_i_idx % number as part of updates
+        updates[bit_i_idx] = (bit_i_idx + 1) % self.v_n
+
+        return cost
+
     def get_cost_updates(self, x, param_increments):
         param = self.train_parameters
         # Cast parameters
         lr = T.cast(param.learning_rate, dtype=t_float_x)
         m = T.cast(param.momentum, dtype=t_float_x)
         weight_decay = T.cast(param.weight_decay, dtype=t_float_x)
+
+        # Declare parameter update variables
         old_DW, old_Dvbias, old_Dhbias = param_increments[:-1]
+        pre_updates = []
+
+        if param.momentum_type is NESTEROV:
+            pre_updates.append((self.W, self.W + m * old_DW))
+            pre_updates.append((self.h_bias, self.h_bias + m * old_Dhbias))
+            pre_updates.append((self.v_bias, self.v_bias + m * old_Dvbias))
 
         # Perform Gibbs Sampling to generate negative statistics
-        res = self.contrastive_divergence(x, self.cd_steps)
+        res = self.negative_statistics(x)
         updates = res[0]
         v_sample = res[1]
         v_total_inputs = res[2]
@@ -242,20 +327,35 @@ class RBM(object):
         cost = T.mean(self.free_energy(x)) - T.mean(self.free_energy(v_sample))
         g_W, g_v, g_h = T.grad(cost, self.params, consider_constant=[v_sample])
 
-        # Classical Momentum - From Sutskever, Hinton.
-        # v_new = momentum * v_old + lr * grad_wrt_w
-        # w_new = w_old + v_new
         new_DW = m * old_DW - lr * g_W
         new_Dhbias = m * old_Dhbias - lr * g_h
         new_Dvbias = m * old_Dvbias - lr * g_v
-        new_W = self.W + new_DW
-        new_hbias = self.h_bias + new_Dhbias
-        new_vbias = self.v_bias + new_Dvbias
 
-        # Weight Decay
-        new_W -= lr * weight_decay * self.W
-        new_hbias -= lr * weight_decay * self.h_bias
-        new_vbias -= lr * weight_decay * self.v_bias
+        if param.momentum_type is NESTEROV:
+            # Nesterov update:
+            # v_new = m * v_old - lr * Df(x_old + m*v_old)
+            # x_new = x_old + v_new
+            # <=> x_new = [x_old + m * v_old] - lr * Df([x_old + m * v_old])
+            new_W = self.W - lr * g_W
+            new_hbias = self.h_bias - lr * g_h
+            new_vbias = self.v_bias - lr * g_v
+
+            # Weight Decay
+            new_W -= lr * weight_decay * (self.W - m * old_DW)
+            new_hbias -= lr * weight_decay * (self.h_bias - m * old_Dhbias)
+            new_vbias -= lr * weight_decay * (self.v_bias - m * old_Dvbias)
+        else:
+            # Classical Momentum from Sutskever, Hinton.
+            # v_new = momentum * v_old + lr * grad_wrt_w
+            # w_new = w_old + v_new
+            new_W = self.W + new_DW
+            new_hbias = self.h_bias + new_Dhbias
+            new_vbias = self.v_bias + new_Dvbias
+
+            # Weight Decay
+            new_W -= lr * weight_decay * self.W
+            new_hbias -= lr * weight_decay * self.h_bias
+            new_vbias -= lr * weight_decay * self.v_bias
 
         # Sparsity
         if param.sparsity_constraint:
@@ -301,66 +401,13 @@ class RBM(object):
         updates[old_Dhbias] = new_Dhbias
         updates[old_Dvbias] = new_Dvbias
 
-        cross_entropy = self.get_reconstruction_cost(x, v_total_inputs)
+        if self.cd_type is PERSISTENT:
+            # cost = self.get_reconstruction_cost(x, v_total_inputs)
+            measure_cost = self.get_pseudo_likelihood(x, updates)
+        else:
+            measure_cost = self.get_reconstruction_cost(x, v_total_inputs)
 
-        return cross_entropy, updates
-
-        # Nesterov update:
-        # v_new = m * v_old - lr * Df(x_old + m*v_old)
-        # x_new = x_old + v_new
-        # <=> x_new = [x_old + m * v_old] - lr * Df([x_old + m * v_old])
-    def get_nesterov_cost_updates(self,
-                                  lr=0.1,
-                                  m=0.5,
-                                  weight_decay=0.001,
-                                  sparsity_target=0.01,
-                                  sparsity_cost=0.01,
-                                  k=1):
-        lr = T.cast(lr, dtype=theano.config.floatX)
-        m = T.cast(m, dtype=theano.config.floatX)
-        weight_decay = T.cast(weight_decay, dtype=theano.config.floatX)
-
-        partial_updates = []
-        # {self.W: self.W + m * self.old_DW,
-        #                    self.h_bias: self.h_bias + m * self.old_Dhbias,
-        #                    self.v_bias: self.v_bias + m * self.old_Dvbias}
-
-        partial_updates.append((self.W, self.W + m * self.old_DW))
-        partial_updates.append((self.h_bias, self.h_bias + m * self.old_Dhbias))
-        partial_updates.append((self.v_bias, self.v_bias + m * self.old_Dvbias))
-
-        updates, v_sample, pre_sigmoid_nv = self.contrastive_divergence(k)
-
-        cost = T.mean(self.free_energy(self.input)) - T.mean(self.free_energy(v_sample))
-
-        # Computes gradient for the cost function for parameter updates
-        g_W, g_v ,g_h = T.grad(cost, self.params, consider_constant=[v_sample])
-
-        new_DW = m * self.old_DW - lr * g_W
-        new_Dhbias = m * self.old_Dhbias - lr * g_h
-        new_Dvbias = m * self.old_Dvbias - lr * g_v
-        # new_W = self.W + new_DW
-        # new_hbias = self.h_bias + new_Dhbias
-        # new_vbias = self.v_bias + new_Dvbias
-        new_W = self.W - lr * g_W
-        new_hbias = self.h_bias - lr * g_h
-        new_vbias = self.v_bias - lr * g_v
-        # penalise weight decay. W is set as W+m*v, we need to subtract m*v to get old W)
-        new_W -= lr * weight_decay * (self.W - m * self.old_DW)
-        new_hbias -= lr * weight_decay * (self.h_bias - m * self.old_Dhbias)
-        new_vbias -= lr * weight_decay * (self.v_bias - m * self.old_Dvbias)
-        # update parameters
-        updates[self.W] = new_W
-        updates[self.h_bias] = new_hbias
-        updates[self.v_bias] = new_vbias
-        # update velocities
-        updates[self.old_DW] = new_DW
-        updates[self.old_Dhbias] = new_Dhbias
-        updates[self.old_Dvbias] = new_Dvbias
-
-        cross_entropy = self.get_reconstruction_cost(updates, pre_sigmoid_nv)
-
-        return cross_entropy, updates, partial_updates
+        return measure_cost, updates, pre_updates
 
     def get_train_fn(self, train_data):
         param = self.train_parameters
@@ -368,7 +415,7 @@ class RBM(object):
         index = T.lscalar()
         x = T.matrix('x')
 
-        # Initialise Variable used for training
+        # Initialise Variables used for training
         # For momentum
         old_DW = theano.shared(value=np.zeros(self.W.get_value().shape, dtype=t_float_x),
                                name='old_DW', borrow=True)
@@ -384,40 +431,39 @@ class RBM(object):
 
         param_increments = [old_DW, old_Dvbias, old_Dhbias, active_probability_h]
 
-        if param.momentum_type is 'nesterov':
-            cross_entropy, updates, partial_updates = self.get_nesterov_cost_updates()
-    
-            weights_partial_update = theano.function(
-                inputs=[],
-                outputs=[],
-                updates=partial_updates
-            )
-            train_function = theano.function(
-                inputs=[index],
-                outputs=cross_entropy,
-                updates=updates,
-                givens={
-                    x: train_data[index * batch_size: (index + 1) * batch_size],
-                }
-            )
-    
-            def train_rbm(i):
-                weights_partial_update()
-                return train_function(i)
-    
-        else:
-            cross_entropy, updates = self.get_cost_updates(x, param_increments)
-            train_rbm = theano.function(
-                [index],
-                cross_entropy,  # use cross entropy to keep track
-                updates=updates,
-                givens={
-                    x: train_data[index * batch_size: (index + 1) * batch_size]
-                },
-                name='train_rbm'
-            )
-        
-        return train_rbm
+        cross_entropy, updates, pre_updates = self.get_cost_updates(x, param_increments)
+        pre_train = theano.function([], updates=pre_updates)
+        train_rbm = theano.function(
+            [index],
+            cross_entropy,  # use cross entropy to keep track
+            updates=updates,
+            givens={
+                x: train_data[index * batch_size: (index + 1) * batch_size]
+            },
+            name='train_rbm'
+        )
+
+        def train_fn(i):
+            pre_train()
+            return train_rbm(i)
+
+        return train_fn
+
+    def create_and_move_to_output_dir(self):
+        param = self.train_parameters
+        if param.plot_during_training:
+            if not os.path.isdir("data"):
+                os.makedirs("data")
+            os.chdir("data")
+            if not param.output_directory:
+                out_dir = str(self)
+            else:
+                out_dir = param.output_directory
+
+            if not os.path.isdir(out_dir):
+                os.makedirs(out_dir)
+            os.chdir(out_dir)
+            print "... moved to: " + out_dir
 
     def train(self, train_data):
         """Trains RBM. For now, input needs to be Theano matrix"""
@@ -427,16 +473,7 @@ class RBM(object):
         mini_batches = train_data.get_value(borrow=True).shape[0] / batch_size
 
         train_fn = self.get_train_fn(train_data)
-
-        if param.plot_epoch_image:
-            if not param.output_directory:
-                out_dir = '_'.join([str(self), str(param)])
-            else:
-                out_dir = param.output_directory
-
-            if not os.path.isdir(out_dir):
-                os.makedirs(out_dir)
-            os.chdir(out_dir)
+        self.create_and_move_to_output_dir()
 
         plotting_time = 0.
         start_time = time.clock()       # Measure training time
@@ -447,7 +484,7 @@ class RBM(object):
     
             print 'Epoch %d, cost is ' % epoch, np.mean(mean_cost)
     
-            if param.plot_epoch_image:
+            if param.plot_during_training:
                 plotting_start = time.clock()       # Measure plotting time 
                 image = Image.fromarray(
                     tile_raster_images(
@@ -465,12 +502,77 @@ class RBM(object):
         pre_training_time = (end_time - start_time) - plotting_time
     
         print ('Training took %f minutes' % (pre_training_time / 60.))
-        os.chdir('../')
+        os.chdir('../../')
 
         return [self.W, self.v_bias, self.h_bias]
 
-    def retrieve_parameters(self):
-        return [self.W, self.v_bias, self.h_bias, self.train_parameters]
+    def plot_samples(self, test_data):
+        self.create_and_move_to_output_dir()
+
+        n_chains = 20   # Number of Chains to perform Gibbs Sampling
+        n_samples_from_chain = 10  # Number of samples to take from each chain
+
+        test_set_size = test_data.get_value(borrow=True).shape[0]
+        rand = np.random.RandomState(1234)
+        test_input_index = rand.randint(test_set_size - n_chains)
+        # Sample after 1000 steps of Gibbs Sampling each time
+        plot_every = 1000
+        persistent_vis_chain = theano.shared(
+            np.asarray(
+                test_data.get_value(borrow=True)[test_input_index:test_input_index + n_chains],
+                dtype=theano.config.floatX
+            )
+        )
+
+        # Expression which performs Gibbs Sampling
+        (
+            [
+                presig_hids,
+                hid_mfs,
+                hid_samples,
+                presig_vis,
+                vis_mfs,
+                vis_samples
+            ],
+            updates
+        ) = theano.scan(
+            self.gibbs_vhv,
+            outputs_info=[None, None, None, None, None, persistent_vis_chain],
+            n_steps=plot_every
+        )
+
+        updates.update({persistent_vis_chain: vis_samples[-1]})
+
+        # Function that runs above Gibbs sampling
+        sample_fn = theano.function([], [vis_mfs[-1], vis_samples[-1]],
+                                    updates=updates, name='sample_fn')
+
+        image_data = np.zeros(
+            (29 * n_samples_from_chain + 1, 29 * n_chains - 1),
+            dtype='uint8'
+        )
+
+        # Generate image by plotting the sample from the chain
+        for i in xrange(n_samples_from_chain):
+            vis_mf, vis_sample = sample_fn()
+            print ' ... plotting sample ', i
+            image_data[29 * i:29 * i + 28, :] = tile_raster_images(
+                X=vis_mf,
+                img_shape=(28, 28),
+                tile_shape=(1, n_chains),
+                tile_spacing=(1, 1)
+            )
+
+        # construct image
+        image = Image.fromarray(image_data)
+        image.save('samples.png')
+        os.chdir('../..')
+
+    def save(self):
+        self.create_and_move_to_output_dir()
+        datastorage.store_object(self)
+        os.chdir('../..')
+        print "... saved RBM object to " + os.getcwd() + "/data/" + str(self)
 
 
 def test_rbm():
@@ -481,13 +583,40 @@ def test_rbm():
     train_set_x, train_set_y = datasets[0]
     test_set_x, test_set_y = datasets[2]
 
+    # Initialise the RBM and training parameters
+    tr = TrainParam(learning_rate=0.01,
+                    momentum_type=NESTEROV,
+                    momentum=0.9,
+                    weight_decay=0.001,
+                    sparsity_constraint=True,
+                    sparsity_target=0.01,
+                    sparsity_cost=0.01,
+                    sparsity_decay=0.1,
+                    plot_during_training=True)
+
     n_visible = train_set_x.get_value().shape[1]
-    n_hidden = 100
+    n_hidden = 10
 
-    tr = TrainParam(momentum_type='classical')
+    rbm = RBM(n_visible,
+              n_hidden,
+              cd_type=PERSISTENT,
+              cd_steps=1,
+              train_parameters=tr)
 
-    rbm = RBM(n_visible, n_hidden, train_parameters=tr)
-    rbm.train(test_set_x)
+    # Train RBM
+    rbm.train(train_set_x)
+
+    # Test RBM
+    rbm.plot_samples(test_set_x)
+
+    # Store Parameters
+    rbm.save()
+
+    # Load RBM (test)
+    rbm.create_and_move_to_output_dir()
+    loaded = datastorage.retrieve_object(str(rbm))
+    print loaded
+
 
 if __name__ == '__main__':
     test_rbm()
