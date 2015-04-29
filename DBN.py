@@ -10,7 +10,8 @@ from theano.tensor.shared_randomstreams import RandomStreams
 
 from logistic_sgd import LogisticRegression
 from mlp import HiddenLayer
-from RBM import RBM
+from RBM2 import RBM, TrainParam
+
 
 class DBN(object):
     
@@ -18,7 +19,7 @@ class DBN(object):
                  numpy_rng,
                  theano_rng=None,
                  n_ins=784,
-                 hidden_layers_sizes=[500,500],
+                 hidden_layers_sizes=[500, 500],
                  n_outs=10):
         
         self.sigmoid_layers = []

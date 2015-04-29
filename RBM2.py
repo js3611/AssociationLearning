@@ -72,16 +72,21 @@ class TrainParam(object):
                 + "_c" + str(self.sparsity_cost) +
                 "_d" + str(self.sparsity_decay) if self.sparsity_constraint else "")
 
+
 class RBM(object):
 
     def __init__(self, 
                  v_n,
+                 v_n2,
                  h_n,
                  W=None,
+                 U=None,
                  h_bias=None,
                  v_bias=None,
+                 v_bias2=None,
                  h_activation_fn=log_sig,
                  v_activation_fn=log_sig,
+                 v_activation_fn2=log_sig,
                  cd_type=PERSISTENT,
                  cd_steps=1,
                  train_parameters=None):
@@ -100,10 +105,27 @@ class RBM(object):
             )
             W = theano.shared(value=initial_W, name='W', borrow=True)
 
+        if U is None:
+            initial_U = np.asarray(
+                np_rand.uniform(
+                    low=-4 * np.sqrt(6. / (h_n + v_n2)),
+                    high=4 * np.sqrt(6. / (h_n + v_n2)),
+                    size=(v_n2, h_n)
+                ),
+                dtype=t_float_x
+            )
+            U = theano.shared(value=initial_U, name='U', borrow=True)
+
         if v_bias is None:
             v_bias = theano.shared(
                 value=np.zeros(v_n, dtype=t_float_x),
                 name='v_bias', borrow=True
+            )
+
+        if v_bias2 is None:
+            v_bias2 = theano.shared(
+                value=np.zeros(v_n2, dtype=t_float_x),
+                name='v_bias2', borrow=True
             )
 
         if h_bias is None:
@@ -122,10 +144,15 @@ class RBM(object):
 
         # Weights
         self.W = W
-        # Visible Layer
+        self.U = U
+        # Visible Layer 1
         self.v_n = v_n
         self.v_bias = v_bias
         self.v_activation_fn = v_activation_fn
+        # Visible Layer 2
+        self.v_n2 = v_n2
+        self.v_bias2 = v_bias2
+        self.v_activation_fn2 = v_activation_fn2
         # Hidden Layer
         self.h_n = h_n
         self.h_bias = h_bias
@@ -507,6 +534,16 @@ class RBM(object):
 
         return [mean_cost]
 
+    def classify(self, data):
+
+        # obtain from rbm
+
+        # input x, get y out
+
+        # use argmax
+
+        return 0
+
     def plot_samples(self, test_data):
         self.create_and_move_to_output_dir()
 
@@ -596,7 +633,7 @@ def test_rbm():
                     plot_during_training=True)
 
     n_visible = train_set_x.get_value().shape[1]
-    n_hidden = 50
+    n_hidden = 10
 
     rbm = RBM(n_visible,
               n_hidden,
@@ -619,5 +656,70 @@ def test_rbm():
     print loaded
 
 
+def get_target_vector(x):
+    xs = np.zeros(10, dtype=np.int)
+    xs[x] = 1
+    return xs
+
+
+def test_rbm_association():
+    print "Testing Associative RBM"
+
+    # Load mnist hand digits
+    datasets = load_data('mnist.pkl.gz')
+    train_set_x, train_set_y = datasets[0]
+    test_set_x, test_set_y = datasets[2]
+
+    # Reformat the train label
+    print test_set_y
+    new_train_set_y = np.matrix(map(lambda x: get_target_vector(x), train_set_y.eval()))
+    # # Cast to int type
+    # train_set_y = T.cast(theano.shared(new_train_set_y), 'int32')
+    train_set_y = theano.shared(new_train_set_y)
+    print train_set_y
+
+    # Combine the input
+    train_set_xy = T.concatenate([train_set_x, train_set_y], 1)
+    print train_set_xy
+    print train_set_xy.eval().shape
+
+
+    # Initialise the RBM and training parameters
+    tr = TrainParam(learning_rate=0.01,
+                    momentum_type=NESTEROV,
+                    momentum=0.5,
+                    weight_decay=0.001,
+                    sparsity_constraint=True,
+                    sparsity_target=0.01,
+                    sparsity_cost=0.01,
+                    sparsity_decay=0.1,
+                    plot_during_training=True,
+                    output_directory="AssociationTest")
+
+    n_visible = train_set_x.get_value().shape[1]
+    n_hidden = 10
+
+    rbm = RBM(n_visible,
+              n_hidden,
+              cd_type=PERSISTENT,
+              cd_steps=1,
+              train_parameters=tr)
+
+    # Train RBM
+    # rbm.train(train_set_x)
+
+    # Test RBM
+    # rbm.plot_samples(test_set_x)
+
+    # Store Parameters
+    # rbm.save()
+
+    # Load RBM (test)
+    # rbm.create_and_move_to_output_dir()
+    # loaded = datastorage.retrieve_object(str(rbm))
+    # print loaded
+
+
 if __name__ == '__main__':
-    test_rbm()
+    test_rbm_association()
+    # test_rbm()

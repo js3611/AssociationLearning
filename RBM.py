@@ -133,7 +133,6 @@ class RBM(object):
         return [pre_sigm_h, h_mean, h_sample,
                 pre_sigm_v, v_mean, v_sample]
 
-
     def contrastive_divergence(self, k=1):
         pre_sigm_ph, ph_mean, ph_sample = self.sample_h_given_v(self.input)
         chain_start = ph_sample
