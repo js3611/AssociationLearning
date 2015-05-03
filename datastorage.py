@@ -1,6 +1,7 @@
 __author__ = 'joschlemper'
 
 import cPickle as Store
+import os.path
 
 
 def store_object(obj, name=None):
@@ -14,8 +15,10 @@ def store_object(obj, name=None):
 
 def retrieve_object(name):
     filename = name + ".save"
-    f = open(filename, 'rb')
-    obj = Store.load(f)
-    f.close()
-    return obj
-
+    if os.path.isfile(filename):
+        f = open(filename, 'rb')
+        obj = Store.load(f)
+        f.close()
+        return obj
+    else:
+        return None
