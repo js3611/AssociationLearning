@@ -3,8 +3,7 @@ import theano
 import theano.tensor as T
 from activationFunction import *
 from theano.tensor.shared_randomstreams import RandomStreams
-from utils import tile_raster_images
-from utils import load_data
+from utils import *
 
 import logistic_sgd
 
@@ -32,8 +31,8 @@ data_dir = "/".join([root_dir, "data"])
 # Theano Debugging Configuration
 # compute_test_value is 'off' by default, meaning this feature is inactive
 # theano.config.compute_test_value = 'off' # Use 'warn' to activate this feature
-theano.config.optimizer = 'None'
-theano.config.exception_verbosity = 'high'
+# theano.config.optimizer = 'None'
+# theano.config.exception_verbosity = 'high'
 
 
 class TrainParam(object):
@@ -83,9 +82,10 @@ class TrainParam(object):
 class RBM(object):
 
     def __init__(self,
-                 v_n,
-                 v_n2,
-                 h_n,
+                 v_n=10,
+                 v_n2=10,
+                 h_n=10,
+                 associative=False,
                  W=None,
                  U=None,
                  h_bias=None,
@@ -98,48 +98,12 @@ class RBM(object):
                  cd_steps=1,
                  train_parameters=None):
 
-        np_rand = np.random.RandomState(123)
-        self.rand = RandomStreams(np_rand.randint(2 ** 30))
+        self.np_rand = np.random.RandomState(123)
+        self.rand = RandomStreams(self.np_rand.randint(2 ** 30))
 
-        if W is None:
-            initial_W = np.asarray(
-                np_rand.uniform(
-                    low=-4 * np.sqrt(6. / (h_n + v_n)),
-                    high=4 * np.sqrt(6. / (h_n + v_n)),
-                    size=(v_n, h_n)
-                ),
-                dtype=t_float_x
-            )
-            W = theano.shared(value=initial_W, name='W', borrow=True)
-
-        if U is None:
-            initial_U = np.asarray(
-                np_rand.uniform(
-                    low=-4 * np.sqrt(6. / (h_n + v_n2)),
-                    high=4 * np.sqrt(6. / (h_n + v_n2)),
-                    size=(v_n2, h_n)
-                ),
-                dtype=t_float_x
-            )
-            U = theano.shared(value=initial_U, name='U', borrow=True)
-
-        if v_bias is None:
-            v_bias = theano.shared(
-                value=np.zeros(v_n, dtype=t_float_x),
-                name='v_bias', borrow=True
-            )
-
-        if v_bias2 is None:
-            v_bias2 = theano.shared(
-                value=np.zeros(v_n2, dtype=t_float_x),
-                name='v_bias2', borrow=True
-            )
-
-        if h_bias is None:
-            h_bias = theano.shared(
-                value=np.zeros(h_n, dtype=t_float_x),
-                name='h_bias', borrow=True
-            )
+        W = self.get_initial_weight(W, v_n, h_n, 'W')
+        v_bias = self.get_initial_bias(v_bias, v_n, 'v_bias')
+        h_bias = self.get_initial_bias(h_bias, h_n, 'h_bias')
 
         if train_parameters is None:
             train_parameters = TrainParam()
@@ -151,15 +115,10 @@ class RBM(object):
 
         # Weights
         self.W = W
-        self.U = U
-        # Visible Layer 1
+        # Visible Layer
         self.v_n = v_n
         self.v_bias = v_bias
         self.v_activation_fn = v_activation_fn
-        # Visible Layer 2
-        self.v_n2 = v_n2
-        self.v_bias2 = v_bias2
-        self.v_activation_fn2 = v_activation_fn2
         # Hidden Layer
         self.h_n = h_n
         self.h_bias = h_bias
@@ -168,34 +127,62 @@ class RBM(object):
         self.cd_type = cd_type
         self.cd_steps = cd_steps
         self.persistent = persistent
-        self.params = [self.W, self.v_bias, self.h_bias, self.U, self.v_bias2]
+        self.params = [self.W, self.v_bias, self.h_bias]
 
-        print "... initialised RBM"
+        self.associative = associative
+        if associative:
+            self.U = self.get_initial_weight(U, v_n2, h_n, 'U')
+            # Visible Layer 2
+            self.v_n2 = v_n2
+            self.v_bias2 = self.get_initial_bias(v_bias2, v_n2, 'v_bias2')
+            self.v_activation_fn2 = v_activation_fn2
+            self.params += [self.U, self.v_bias2]
+
+    def get_initial_weight(self, w, nrow, ncol, name):
+        if w is None:
+            w = np.asarray(
+                self.np_rand.uniform(
+                    low=-4 * np.sqrt(6. / (nrow + ncol)),
+                    high=4 * np.sqrt(6. / (nrow + ncol)),
+                    size=(nrow, ncol)
+                ),
+                dtype=t_float_x
+            )
+        return theano.shared(value=w, name=name, borrow=True)
+
+    def get_initial_bias(self, bias, n, name, dtype=t_float_x):
+        if bias is None:
+            bias = np.zeros(n, dtype=dtype)
+        return theano.shared(value=bias, name=name, borrow=True)
 
     def __str__(self):
         return "rbm_" + str(self.h_n) + \
                "_" + self.cd_type + str(self.cd_steps) + \
                "_" + str(self.train_parameters)
 
-    def free_energy(self, v, v2=None, w=None, u=None, v_bias=None, v_bias2=None, h_bias=None):
-        if not w:
-            w = self.W
-        if not v_bias:
-            v_bias = self.v_bias
-        if not h_bias:
-            h_bias = self.h_bias
+    def free_energy(self, v, v2=None):
+        if self.associative:
+            return self.calc_free_energy(v, v2)
+        else:
+            return self.calc_free_energy(v)
 
-        if not v2:
-            wv_c = T.dot(v, w) + h_bias
-            return - T.dot(v, v_bias) - T.sum(T.log(1 + T.exp(wv_c)))
+    def calc_free_energy(self, v, v2=None):
+        w = self.W
+        v_bias = self.v_bias
+        h_bias = self.h_bias
 
-        # Associative - contribution from v2
-        if not u:
+        t0 = - T.dot(v, v_bias)
+        t1 = T.dot(v, w) + h_bias
+
+        if v2:
             u = self.U
-        if not v_bias2:
             v_bias2 = self.v_bias2
-            return - T.dot(v, v_bias) - T.dot(v2, v_bias2) - T.sum(
-                T.log(1 + T.exp(h_bias + T.dot(v2, u) + T.dot(v, w))))
+            t0 += -T.dot(v2, v_bias2)
+            t1 += T.dot(v2, u)
+
+        t2 = - T.sum(T.log(1 + T.exp(t1)))
+
+        return t0 + t2
 
     def prop_up(self, v, v2=None):
         """Propagates v to the hidden layer. """
@@ -379,7 +366,6 @@ class RBM(object):
         if self.cd_type is PERSISTENT:
             return self.pcd(self.cd_steps)
         elif y:
-            print "assoc cd"
             return self.contrastive_divergence_assoc(x, y, 1)
         else:
             return self.contrastive_divergence(x, self.cd_steps)
@@ -424,6 +410,50 @@ class RBM(object):
 
         return cost
 
+    def get_partial_derivitives(self, x, y):
+        # Differentiate cost function w.r.t params to get gradients for param updates
+        if self.associative:
+            # Perform Gibbs Sampling to generate negative statistics
+            res = self.negative_statistics(x, y)
+            v_sample = res[1]
+            v2_sample = res[5]
+            cost = T.mean(self.free_energy(x, y)) - T.mean(self.free_energy(v_sample, v2_sample))
+            grads = T.grad(cost, self.params, consider_constant=[v_sample, v2_sample])
+        else:
+            res = self.negative_statistics(x)
+            v_sample = res[1]
+            # Differentiate cost function w.r.t params to get gradients for param updates
+            cost = T.mean(self.free_energy(x)) - T.mean(self.free_energy(v_sample))
+            grads = T.grad(cost, self.params, consider_constant=[v_sample])
+
+        updates = res[0]
+        v_total_inputs = res[2]
+        return {"gradients": grads,
+                "updates": updates,
+                "statistics": v_total_inputs}
+
+        # # Perform Gibbs Sampling to generate negative statistics
+        # res = self.negative_statistics(x, y)
+        # updates = res[0]
+        # v_sample = res[1]
+        # v_total_inputs = res[2]
+        # ## ASSOC
+        # v2_sample = res[5]
+        #
+        # print v2_sample
+        #
+        # # Differentiate cost function w.r.t params to get gradients for param updates
+        # # cost = T.mean(self.free_energy(x)) - T.mean(self.free_energy(v_sample))
+        # # g_W, g_v, g_h = T.grad(cost, self.params, consider_constant=[v_sample])
+        # cost = T.mean(self.free_energy(x, y)) - T.mean(self.free_energy(v_sample, v2_sample))
+        # g_W, g_v, g_h, g_U, g_v2 = T.grad(cost, self.params, consider_constant=[v_sample, v2_sample])
+        # grads = T.grad(cost, self.params, consider_constant=[v_sample, v2_sample])
+        #
+        # return {"gradients": grads,
+        #         "updates": updates,
+        #         "statistics": v_total_inputs}
+
+
     def get_cost_updates(self, x, param_increments, y=None):
         param = self.train_parameters
         # Cast parameters
@@ -432,79 +462,87 @@ class RBM(object):
         weight_decay = T.cast(param.weight_decay, dtype=t_float_x)
 
         # Declare parameter update variables
-        #old_DW, old_Dvbias, old_Dhbias = param_increments[:-1]
-        old_DW, old_Dvbias, old_Dhbias, old_DU, old_Dvbias2 = param_increments[:-1]
+        old_ds = param_increments[:-1]
+
+        if self.associative:
+            old_DW, old_Dvbias, old_Dhbias, old_DU, old_Dvbias2 = old_ds
+        else:
+            old_DW, old_Dvbias, old_Dhbias = old_ds
 
         pre_updates = []
-
         if param.momentum_type is NESTEROV:
-            pre_updates.append((self.W, self.W + m * old_DW))
-            pre_updates.append((self.h_bias, self.h_bias + m * old_Dhbias))
-            pre_updates.append((self.v_bias, self.v_bias + m * old_Dvbias))
+            for (p, old_dp) in zip(self.params, old_ds):
+                pre_updates.append(p, p + m * old_dp)
 
+            # pre_updates.append((self.W, self.W + m * old_DW))
+            # pre_updates.append((self.h_bias, self.h_bias + m * old_Dhbias))
+            # pre_updates.append((self.v_bias, self.v_bias + m * old_Dvbias))
             # pre_updates.append((self.U, self.U + m * old_DU))
             # pre_updates.append((self.v_bias2, self.v2_bias + m * old_Dv2bias))
 
-        # Perform Gibbs Sampling to generate negative statistics
-        res = self.negative_statistics(x, y)
-        updates = res[0]
-        v_sample = res[1]
-        v_total_inputs = res[2]
+        grad_meta = self.get_partial_derivitives(x, y)
+        gradients = grad_meta["gradients"]
+        updates = grad_meta["updates"]
+        v_total_inputs = grad_meta["statistics"]
+        # g_U, g_W, g_h, g_v, g_v2 = gradients
 
-        ## ASSOC
-        v2_sample = res[5]
+        # For each parameters, compute: new_dx = m * old_dx - lr * grad_x
+        new_ds = map(lambda (d, g): m * d - lr * g, zip(old_ds, gradients))
 
-        print v2_sample
-
-        # Differentiate cost function w.r.t params to get gradients for param updates
-        # cost = T.mean(self.free_energy(x)) - T.mean(self.free_energy(v_sample))
-        # g_W, g_v, g_h = T.grad(cost, self.params, consider_constant=[v_sample])
-
-        cost = T.mean(self.free_energy(x, y)) - T.mean(self.free_energy(v_sample, v2_sample))
-        g_W, g_v, g_h, g_U, g_v2 = T.grad(cost, self.params, consider_constant=[v_sample, v2_sample])
-
-
-        new_DW = m * old_DW - lr * g_W
-        new_Dhbias = m * old_Dhbias - lr * g_h
-        new_Dvbias = m * old_Dvbias - lr * g_v
-
-        new_DU = m * old_DU - lr * g_U
-        new_Dvbias2 = m * old_Dvbias2 - lr * g_v2
-
+        # new_DW = m * old_DW - lr * g_W
+        # new_Dhbias = m * old_Dhbias - lr * g_h
+        # new_Dvbias = m * old_Dvbias - lr * g_v
+        # new_DU = m * old_DU - lr * g_U
+        # new_Dvbias2 = m * old_Dvbias2 - lr * g_v2
 
         if param.momentum_type is NESTEROV:
             # Nesterov update:
             # v_new = m * v_old - lr * Df(x_old + m*v_old)
             # x_new = x_old + v_new
             # <=> x_new = [x_old + m * v_old] - lr * Df([x_old + m * v_old])
-            new_W = self.W - lr * g_W
-            new_hbias = self.h_bias - lr * g_h
-            new_vbias = self.v_bias - lr * g_v
+            def nesterov_update(p, grad_p, old_dp):
+                new_p = p - lr * grad_p
+                new_p -= lr * weight_decay * (p - m * old_dp)
+                return new_p
 
-            # Weight Decay
-            new_W -= lr * weight_decay * (self.W - m * old_DW)
-            new_hbias -= lr * weight_decay * (self.h_bias - m * old_Dhbias)
-            new_vbias -= lr * weight_decay * (self.v_bias - m * old_Dvbias)
+            new_params = map(nesterov_update, zip(self.params, gradients, old_ds))
+
+            new_W = 0
+            new_hbias = 0
+            # new_W = self.W - lr * g_W
+            # new_hbias = self.h_bias - lr * g_h
+            # new_vbias = self.v_bias - lr * g_v
+            #
+            # # Weight Decay
+            # new_W -= lr * weight_decay * (self.W - m * old_DW)
+            # new_hbias -= lr * weight_decay * (self.h_bias - m * old_Dhbias)
+            # new_vbias -= lr * weight_decay * (self.v_bias - m * old_Dvbias)
         else:
             # Classical Momentum from Sutskever, Hinton.
             # v_new = momentum * v_old + lr * grad_wrt_w
             # w_new = w_old + v_new
-            new_W = self.W + new_DW
-            new_hbias = self.h_bias + new_Dhbias
-            new_vbias = self.v_bias + new_Dvbias
 
-            new_U = self.U + new_DU
-            new_vbias2 = self.v_bias2 + new_Dvbias2
+            def classical_update(p, new_dp):
+                new_p = p + new_dp
+                new_p -= lr * weight_decay * p
+                return new_p
 
-            # Weight Decay
-            new_W -= lr * weight_decay * self.W
-            new_hbias -= lr * weight_decay * self.h_bias
-            new_vbias -= lr * weight_decay * self.v_bias
+            new_params = map(classical_update, self.params, new_ds)
 
-            new_U -= lr * weight_decay * self.U
-            new_vbias2 -= lr * weight_decay * self.v_bias2
+            # new_W = self.W + new_DW
+            # new_hbias = self.h_bias + new_Dhbias
+            # new_vbias = self.v_bias + new_Dvbias
+            # new_U = self.U + new_DU
+            # new_vbias2 = self.v_bias2 + new_Dvbias2
+            #
+            # # Weight Decay
+            # new_W -= lr * weight_decay * self.W
+            # new_hbias -= lr * weight_decay * self.h_bias
+            # new_vbias -= lr * weight_decay * self.v_bias
+            # new_U -= lr * weight_decay * self.U
+            # new_vbias2 -= lr * weight_decay * self.v_bias2
 
-        print param.sparsity_constraint
+        # print param.sparsity_constraint
 
         # Sparsity
         if param.sparsity_constraint:
@@ -542,20 +580,24 @@ class RBM(object):
             new_W -= lr * sparsity_cost * d_sparsity * chain_W
 
         # update parameters
-        updates[self.W] = new_W
-        updates[self.h_bias] = new_hbias
-        updates[self.v_bias] = new_vbias
+        for (p, new_p) in zip(self.params, new_params):
+            updates[p] = new_p
 
-        updates[self.U] = new_U
-        updates[self.v_bias2] = new_vbias2
+        # updates[self.W] = new_W
+        # updates[self.h_bias] = new_hbias
+        # updates[self.v_bias] = new_vbias
+        # updates[self.U] = new_U
+        # updates[self.v_bias2] = new_vbias2
 
         # update velocities
-        updates[old_DW] = new_DW
-        updates[old_Dhbias] = new_Dhbias
-        updates[old_Dvbias] = new_Dvbias
+        for (old_dp, new_dp) in zip(old_ds, new_ds):
+            updates[old_dp] = new_dp
 
-        updates[old_DU] = new_DU
-        updates[old_Dvbias2] = new_Dvbias2
+        # updates[old_DW] = new_DW
+        # updates[old_Dhbias] = new_Dhbias
+        # updates[old_Dvbias] = new_Dvbias
+        # updates[old_DU] = new_DU
+        # updates[old_Dvbias2] = new_Dvbias2
 
         if self.cd_type is PERSISTENT:
             # cost = self.get_reconstruction_cost(x, v_total_inputs)
@@ -565,12 +607,13 @@ class RBM(object):
 
         return measure_cost, updates, pre_updates
 
-    def get_train_fn(self, train_data, assoc_data, assoc=False):
+    def get_train_fn(self, train_data, assoc_data):
         param = self.train_parameters
         batch_size = param.batch_size
         index = T.lscalar()
         x = T.matrix('x')
         y = T.matrix('y')
+        param_increments = []
 
         # Initialise Variables used for training
         # For momentum
@@ -580,10 +623,14 @@ class RBM(object):
                                    name='old_Dvbias', borrow=True)
         old_Dhbias = theano.shared(value=np.zeros(self.h_n, dtype=t_float_x),
                                    name='old_Dhbias', borrow=True)
-        old_DU = theano.shared(value=np.zeros(self.U.get_value().shape, dtype=t_float_x),
-                               name='old_DU', borrow=True)
-        old_Dvbias2 = theano.shared(value=np.zeros(self.v_n2, dtype=t_float_x),
-                                   name='old_Dvbias2', borrow=True)
+        param_increments += [old_DW, old_Dvbias, old_Dhbias]
+
+        if self.associative:
+            old_DU = theano.shared(value=np.zeros(self.U.get_value().shape, dtype=t_float_x),
+                                   name='old_DU', borrow=True)
+            old_Dvbias2 = theano.shared(value=np.zeros(self.v_n2, dtype=t_float_x),
+                                       name='old_Dvbias2', borrow=True)
+            param_increments += [old_DU, old_Dvbias2]
 
         # For sparsity cost
         active_probability_h = theano.shared(value=np.zeros(self.h_n, dtype=t_float_x),
@@ -591,36 +638,55 @@ class RBM(object):
                                              borrow=True)
 
         # param_increments = [old_DW, old_Dvbias, old_Dhbias, active_probability_h]
-        param_increments = [old_DW, old_Dvbias, old_Dhbias, old_DU, old_Dvbias2, active_probability_h]
+        param_increments += [active_probability_h]
 
-        if not assoc:
-            cross_entropy, updates, pre_updates = self.get_cost_updates(x, param_increments)
-            pre_train = theano.function([], updates=pre_updates)
-            train_rbm = theano.function(
-                [index],
-                cross_entropy,  # use cross entropy to keep track
-                updates=updates,
-                givens={
-                    x: train_data[index * batch_size: (index + 1) * batch_size]
-                },
-                name='train_rbm'
-            )
+        if self.associative:
+            y_val = assoc_data[index * batch_size: (index + 1) * batch_size]
         else:
-            print "assoc data"
-            print assoc_data.get_value().shape
-            cross_entropy, updates, pre_updates = self.get_cost_updates(x, param_increments, y)
-            pre_train = theano.function([], updates=pre_updates)
-            train_rbm = theano.function(
-                [index],
-                cross_entropy,  # use cross entropy to keep track
-                updates=updates,
-                givens={
-                    x: train_data[index * batch_size: (index + 1) * batch_size],
-                    y: assoc_data[index * batch_size: (index + 1) * batch_size]
-                },
-                name='train_rbm'
-            )
-            return train_rbm
+            y_val = 0
+
+        cross_entropy, updates, pre_updates = self.get_cost_updates(x, param_increments, y)
+        pre_train = theano.function([], updates=pre_updates)
+        train_rbm = theano.function(
+            [index],
+            cross_entropy,  # use cross entropy to keep track
+            updates=updates,
+            givens={
+                x: train_data[index * batch_size: (index + 1) * batch_size],
+                y: y_val
+            },
+            name='train_rbm',
+            on_unused_input='warn'
+        )
+
+        # if not self.associative:
+        #     cross_entropy, updates, pre_updates = self.get_cost_updates(x, param_increments)
+        #     pre_train = theano.function([], updates=pre_updates)
+        #     train_rbm = theano.function(
+        #         [index],
+        #         cross_entropy,  # use cross entropy to keep track
+        #         updates=updates,
+        #         givens={
+        #             x: train_data[index * batch_size: (index + 1) * batch_size]
+        #         },
+        #         name='train_rbm'
+        #     )
+        # else:
+        #     print "assoc data"
+        #     print assoc_data.get_value().shape
+        #     cross_entropy, updates, pre_updates = self.get_cost_updates(x, param_increments, y)
+        #     pre_train = theano.function([], updates=pre_updates)
+        #     train_rbm = theano.function(
+        #         [index],
+        #         cross_entropy,  # use cross entropy to keep track
+        #         updates=updates,
+        #         givens={
+        #             x: train_data[index * batch_size: (index + 1) * batch_size],
+        #             y: assoc_data[index * batch_size: (index + 1) * batch_size]
+        #         },
+        #         name='train_rbm'
+        #     )
+        #     return train_rbm
 
         def train_fn(i):
             pre_train()
@@ -667,17 +733,17 @@ class RBM(object):
             os.chdir(out_dir)
             print "... moved to: " + out_dir
 
-    def train(self, train_data, train_label, assoc=False):
+    def train(self, train_data, train_label=None):
         """Trains RBM. For now, input needs to be Theano matrix"""
 
         param = self.train_parameters
         batch_size = param.batch_size
         mini_batches = train_data.get_value(borrow=True).shape[0] / batch_size
 
-        if not assoc:
-            train_fn = self.get_train_fn(train_data, None)
+        if self.associative:
+            train_fn = self.get_train_fn(train_data, train_label)
         else:
-            train_fn = self.get_train_fn(train_data, train_label, True)
+            train_fn = self.get_train_fn(train_data, None)
 
         plotting_time = 0.
         start_time = time.clock()       # Measure training time
@@ -720,7 +786,7 @@ class RBM(object):
 
         return 0
 
-    def plot_samples(self, test_data):
+    def plot_samples(self, test_data, image_name='samples.png', plot_every=1000):
         n_chains = 20   # Number of Chains to perform Gibbs Sampling
         n_samples_from_chain = 10  # Number of samples to take from each chain
 
@@ -728,7 +794,6 @@ class RBM(object):
         rand = np.random.RandomState(1234)
         test_input_index = rand.randint(test_set_size - n_chains)
         # Sample after 1000 steps of Gibbs Sampling each time
-        plot_every = 1000
         persistent_vis_chain = theano.shared(
             np.asarray(
                 test_data.get_value(borrow=True)[test_input_index:test_input_index + n_chains],
@@ -777,46 +842,153 @@ class RBM(object):
 
         # construct image
         image = Image.fromarray(image_data)
-        image.save('samples.png')
+        image.save(image_name)
 
     def save(self):
         datastorage.store_object(self)
         print "... saved RBM object to " + os.getcwd() + "/" + str(self)
 
-    def reconstruct(self, x, y=None, k=1):
-        if not y:
-            y = self.rand.binomial(size=(x.get_value().shape[0], self.v_n2), n=1, p=0.5, dtype=t_float_x)
+    # Simple test method
+    def reconstruct(self, data, k=1, image_name="reconstructions.png"):
+        # data_size = data.get_value(borrow=True).shape[0]
+        data_size = data.shape[0]
+        if self.associative:
+            return self.reconstruct_association(data, None, k)
 
-        h_total_input, h_p_activation, h_sample = self.sample_h_given_v(x, y)
+        # Gibbs sampling
+        x = T.dmatrix("x")
+        chain_start = x
+        (res, updates) = theano.scan(self.gibbs_vhv,
+                                     outputs_info=[None, None, None,
+                                                   None, None, chain_start],
+                                     n_steps=k,
+                                     name="Gibbs_sampling_reconstruction")
+
+        gibbs_sampling = theano.function([x], res, updates=updates)
+        result = gibbs_sampling(data)
+
+        [h_total_input,
+         h_p_activation,
+         h_sample,
+         v_total_input,
+         v_p_activation,
+         v_sample] = result
+
+        image_data = np.zeros(
+            (29 * (k+1) + 1, 29 * data_size - 1),
+            dtype='uint8'
+        )
+
+        # Original images
+        image_data[0:28, :] = tile_raster_images(
+            X=data,
+            img_shape=(28, 28),
+            tile_shape=(1, data_size),
+            tile_spacing=(1, 1)
+        )
+
+        # Generate image by plotting the sample from the chain
+        for i in xrange(1, k):
+            vis_mf = v_p_activation[i]
+            print ' ... plotting sample ', i
+            image_data[29 * i:29 * i + 28, :] = tile_raster_images(
+                X=vis_mf,
+                img_shape=(28, 28),
+                tile_shape=(1, data_size),
+                tile_spacing=(1, 1)
+            )
+
+        # construct image
+        image = Image.fromarray(image_data)
+        image.save(image_name)
+
+        for i in xrange(k):
+            vis_mf = v_sample[i]
+            print ' ... plotting sample ', i
+            image_data[29 * i:29 * i + 28, :] = tile_raster_images(
+                X=vis_mf,
+                img_shape=(28, 28),
+                tile_shape=(1, data_size),
+                tile_spacing=(1, 1)
+            )
+
+        image = Image.fromarray(image_data)
+        image.save("reconstructed_sample.png")
+        return v_sample[-1]
+
+    def reconstruct_association(self, x, y=None, k=1, bit_p=0, image_name="association.png", sample_size=None):
+        data_size = x.get_value().shape[0]
+        if not sample_size:
+            sample_size = data_size
+        data = T.dmatrix("data_x")
+        association = T.dmatrix("association")
+
+        if not y:
+            y = self.rand.binomial(size=(data_size, self.v_n2), n=1, p=bit_p, dtype=t_float_x)
+
+        h_total_input, h_p_activation, h_sample = self.sample_h_given_v(data, association)
         chain_start = h_sample
         (
-            [
-                v_total_inputs,
-                v_p_activations,
-                v_samples,
-                v2_total_inputs,
-                v2_p_activations,
-                v2_samples,
-                h_total_inputs,
-                h_p_activations,
-                h_samples
-            ],
+            res,
             updates
         ) = theano.scan(
             self.gibbs_hvh_fixed,
             outputs_info=[None, None, None, None, None,
                           None, None, None, chain_start],
-            non_sequences=[x],
-            n_steps=k
+            non_sequences=[data],
+            n_steps=k,
+            name="Gibbs_sampling_association"
         )
 
-        # get y
-        chain_end = v2_samples[-1]
+        gibbs_sampling_assoc = theano.function([], res,
+                                               updates=updates,
+                                               givens={
+                                                   data: x,
+                                                   association: y
+                                               })
 
-        sample_y = theano.function([], [chain_end, v2_samples, v2_p_activations], updates=updates)
+        result = gibbs_sampling_assoc()
 
-        # Return result of scan
-        return sample_y()
+        [v_total_inputs,
+         v_p_activations,
+         v_samples,
+         v2_total_inputs,
+         v2_p_activations,
+         v2_samples,
+         h_total_inputs,
+         h_p_activations,
+         h_samples] = result
+
+        image_data = np.zeros(
+            (29 * (k+1) + 1, 29 * sample_size - 1),
+            dtype='uint8'
+        )
+
+        # Original images
+        image_data[0:28, :] = tile_raster_images(
+            X=x.get_value(borrow=True)[0:sample_size],
+            img_shape=(28, 28),
+            tile_shape=(1, sample_size),
+            tile_spacing=(1, 1)
+        )
+
+        # Generate image by plotting the sample from the chain
+        for i in xrange(1, k):
+            # vis_mf = v2_samples[i]
+            vis_mf = v2_p_activations[i]
+            print ' ... plotting sample ', i
+            image_data[29 * i:29 * i + 28, :] = tile_raster_images(
+                X=vis_mf[0:sample_size],
+                img_shape=(28, 28),
+                tile_shape=(1, sample_size),
+                tile_spacing=(1, 1)
+            )
+
+        # construct image
+        image = Image.fromarray(image_data)
+        image.save(image_name)
+
+        return v2_p_activations[-1]
 
 
 def test_rbm():
@@ -844,14 +1016,17 @@ def test_rbm():
     rbm = RBM(n_visible,
               n_visible,
               n_hidden,
+              associative=False,
               cd_type=CLASSICAL,
               cd_steps=1,
               train_parameters=tr)
 
+    print "... initialised RBM"
+
     rbm.move_to_output_dir()
 
     # Train RBM
-    rbm.train(train_set_x, train_set_x, assoc=False)
+    rbm.train(train_set_x)
 
     # Test RBM
     rbm.plot_samples(test_set_x)
@@ -888,31 +1063,41 @@ def test_rbm_association_with_label():
     new_train_set_y = np.matrix(map(lambda x: get_target_vector(x), train_set_y.eval()))
     new_train_set_y = theano.shared(new_train_set_y)
 
-    # Combine the input
-    # train_set_xy = T.concatenate([train_set_x, train_set_y], 1)
-    # print train_set_xy
-    # print train_set_xy.eval().shape
-
     # Initialise the RBM and training parameters
-    tr = TrainParam(learning_rate=0.1,
+    tr = TrainParam(learning_rate=0.05,
                     momentum_type=CLASSICAL,
-                    momentum=0.5,
-                    weight_decay=0.01,
+                    momentum=0.01,
+                    weight_decay=0.001,
                     plot_during_training=True,
                     output_directory="AssociationLabelTest",
                     sparsity_constraint=False,
-                    epochs=2)
+                    epochs=15)
 
     n_visible = train_set_x.get_value().shape[1]
     n_visible2 = 10
-    n_hidden = 10
+    n_hidden = 500
 
     rbm = RBM(n_visible,
-              n_visible2,
+               n_visible2,
               n_hidden,
+              associative=True,
               cd_type=CLASSICAL,
               cd_steps=1,
               train_parameters=tr)
+
+    rbm.move_to_output_dir()
+
+    loaded = datastorage.retrieve_object(str(rbm))
+    if loaded:
+        rbm = loaded
+        print "... loaded precomputed rbm"
+    else:
+        rbm.train(train_set_x, new_train_set_y)
+        rbm.save()
+
+    rbm.associative = False
+    rbm.reconstruct(test_set_x.get_value(borrow=True)[0:100], 100)
+    rbm.associative = True
 
     # Classification test - Reconstruct y through x
     x_in = theano.shared(
@@ -922,7 +1107,7 @@ def test_rbm_association_with_label():
         )
     )
 
-    y, ys = rbm.reconstruct(x_in, None)
+    y, ys, out = rbm.reconstruct_association(x_in, None)
     sol = test_set_y.eval()
     guess = [np.argmax(lab == 1) for lab in y]
     diff = np.count_nonzero(sol - guess)
@@ -932,11 +1117,11 @@ def test_rbm_association_with_label():
 
 
 def test_rbm_association():
-    print "Testing Associative RBM"
+    print "Testing Associative RBM which tries to learn even-oddness of numbers"
 
     # Even odd test
-    testcases = 600
-    k = 10
+    testcases = 1000
+    k = 100
 
     # Load mnist hand digits
     datasets = load_data('mnist.pkl.gz')
@@ -945,10 +1130,10 @@ def test_rbm_association():
     test_set_x, test_set_y = datasets[2]
 
     # Initialise the RBM and training parameters
-    tr = TrainParam(learning_rate=0.01,
+    tr = TrainParam(learning_rate=0.05,
                     momentum_type=CLASSICAL,
-                    momentum=0.5,
-                    weight_decay=0.01,
+                    momentum=0.01,
+                    weight_decay=0.001,
                     plot_during_training=True,
                     output_directory="AssociationTest",
                     sparsity_constraint=False,
@@ -956,24 +1141,32 @@ def test_rbm_association():
 
     n_visible = train_set_x.get_value().shape[1]
     n_visible2 = n_visible
-    n_hidden = 10
+    n_hidden = 1000
 
     rbm = RBM(n_visible,
               n_visible2,
               n_hidden,
+              associative=True,
               cd_type=CLASSICAL,
               cd_steps=1,
               train_parameters=tr)
 
+    rbm.move_to_output_dir()
+
     # Find 1 example which train_set_x[i] represents 0 and 1
     zero_idx = np.where(train_set_y.eval() == 0)[0]
     one_idx = np.where(train_set_y.eval() == 1)[0]
-    zero_image = train_set_x.get_value(borrow=True)[zero_idx[0] - 1]
-    one_image = train_set_x.get_value(borrow=True)[one_idx[0] - 1]
+    zero_image = train_set_x.get_value(borrow=True)[zero_idx[0]]
+    one_image = train_set_x.get_value(borrow=True)[one_idx[0]]
+
+    save_digit(zero_image, "zero.png")
+    save_digit(one_image, "one.png")
+
 
     # Repeat and take first 50000
     def f(x):
         return zero_image if x % 2 == 0 else one_image
+
     new_train_set_y = theano.shared(
         np.matrix(map(f, train_set_y.eval())),
         name="train_set_y"
@@ -985,11 +1178,10 @@ def test_rbm_association():
     # print train_set_x
 
     # Load RBM (test)
-    rbm.move_to_output_dir()
     loaded = datastorage.retrieve_object(str(rbm))
     if not loaded:
         # Train RBM - learn joint distribution
-        rbm.train(train_set_x, new_train_set_y, True)
+        rbm.train(train_set_x, new_train_set_y)
         rbm.save()
     else:
         rbm = loaded
@@ -998,15 +1190,14 @@ def test_rbm_association():
     # Reconstruct y through x
     x_in = theano.shared(
         np.asarray(
-            test_set_x.get_value(borrow=True)[1:testcases],
+            test_set_x.get_value(borrow=True)[0:testcases],
             # test_set_x.get_value(borrow=True),
             dtype=t_float_x
         )
     )
 
     print "... reconstruction of associated images"
-    reconstructed_y, ys, reconstruction = rbm.reconstruct(x_in, None, k)
-
+    reconstructed_y = rbm.reconstruct_association(x_in, None, k, 0.1, sample_size=100)
     print "... reconstructed"
 
     # Create Dataset to feed into logistic regression
@@ -1014,33 +1205,19 @@ def test_rbm_association():
     # Train data: get only 0's and 1's
     ty = train_set_y.eval()
     zero_ones = (ty == 0) | (ty == 1)  # Get indices which the label is 0 or 1
-    train_x = theano.shared(train_set_x.eval()[zero_ones])
+    train_x = theano.shared(train_set_x.get_value(True)[zero_ones])
     train_y = theano.shared(ty[zero_ones])
 
     # Validation setL get only 0's and 1's
     ty = valid_set_y.eval()
     zero_ones = (ty == 0) | (ty == 1)
-    valid_x = theano.shared(valid_set_x.eval()[zero_ones])
+    valid_x = theano.shared(valid_set_x.get_value(True)[zero_ones])
     valid_y = theano.shared(ty[zero_ones])
 
     # Test set: reconstructed y's become the input. Get the corresponding x's and y's
-    test_x = theano.shared(reconstructed_y)
-    test_y = theano.shared(np.array(map(lambda x: x % 2, train_set_y.eval()), dtype=np.int32))[1:testcases]
 
-    #
-    for i in xrange(0, k):
-        tile_shape = (testcases / 10 + 1, 10)
-        image = Image.fromarray(
-            tile_raster_images(
-                # X=self.W.get_value(borrow=True).T,
-                # X=test_x.get_value(borrow=True),
-                X=reconstruction[i],
-                img_shape=(28, 28),
-                tile_shape=tile_shape,
-                tile_spacing=(1, 1)
-            )
-        )
-        image.save('reconstructions_%i.png' % i)
+    test_x = theano.shared(reconstructed_y[0:testcases])
+    test_y = theano.shared(np.array(map(lambda x: x % 2, train_set_y.eval()), dtype=np.int32)[0:testcases])
 
     dataset = ((train_x, train_y), (valid_x, valid_y), (test_x, test_y))
 
@@ -1053,5 +1230,6 @@ def test_rbm_association():
 
 
 if __name__ == '__main__':
-    # test_rbm_association()
-    test_rbm()
+    test_rbm_association()
+    # test_rbm()
+    # test_rbm_association_with_label()

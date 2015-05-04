@@ -7,6 +7,7 @@ import numpy as np
 import scipy.stats as ss
 theano.config.optimizer = 'None'
 
+
 class SingleRBMTest(unittest.TestCase):
     def setUpRBM(self):
         v = 5
@@ -19,19 +20,40 @@ class SingleRBMTest(unittest.TestCase):
                         plot_during_training=True,
                         output_directory="Test",
                         sparsity_constraint=False,
+                        batch_size=1,
                         epochs=15)
 
         rbm = RBM(v, v2, h,
+                  associative=False, # for now
                   cd_type=CLASSICAL,
                   cd_steps=10,
                   train_parameters=tr)
 
         self.rbm = rbm
-
         self.x = np.array([[1, 1, 1, 0, 0]], dtype=np.float64)
+        self.tx = theano.shared(np.array([[1, 1, 1, 0, 0]], dtype=np.float64))
         self.x2 = np.array([[1, 1, 1, 0, 0],
                             [0, 0, 0, 0, 1]],
                            dtype=np.float64)
+        self.tx2 = theano.shared(np.array([[1, 1, 1, 0, 0],
+                             [0, 0, 0, 0, 1],
+                             [0, 0, 0, 0, 1],
+                             [0, 0, 0, 0, 1],
+                             [0, 0, 0, 0, 1],
+                             [0, 0, 0, 0, 1],
+                             [0, 0, 0, 0, 1],
+                             [0, 0, 0, 0, 1],
+                             [0, 0, 0, 0, 1],
+                             [0, 0, 0, 0, 1],
+                            ],
+                           dtype=np.float64))
+
+    def test_parameters_order(self):
+        self.setUpRBM()
+        rbm = self.rbm
+        self.assertEqual(str(rbm.params[0]), 'W')
+        self.assertEqual(str(rbm.params[1]), 'v_bias')
+        self.assertEqual(str(rbm.params[2]), 'h_bias')
 
     def test_negative_statistics(self):
         self.setUpRBM()
@@ -47,7 +69,7 @@ class SingleRBMTest(unittest.TestCase):
         # print sample
         # print vs
 
-        result = f(self.x2)
+        result = f(self.x)
         # print result[0]
 
         pass
@@ -56,11 +78,8 @@ class SingleRBMTest(unittest.TestCase):
         self.setUpRBM()
         rbm = self.rbm
         w = rbm.W.get_value(borrow=True)
-        u = rbm.U.get_value(borrow=True)
         v = T.dmatrix("v")
-        v2 = T.dmatrix("v2")
         v_bias = rbm.v_bias.eval()
-        v_bias2 = rbm.v_bias2.eval()
         h_bias = rbm.h_bias.eval()
 
         res = rbm.free_energy(v)
@@ -78,28 +97,170 @@ class SingleRBMTest(unittest.TestCase):
         diff = theano_res == np_res
         self.assertTrue(np.all(diff))
 
+    def test_partial_derivatives(self):
+        self.setUpRBM()
+        rbm = self.rbm
+        x = T.dmatrix("x")
+        y = T.dmatrix("y")
+
+        grad_meta = rbm.get_partial_derivitives(x, y)
+        gradients = grad_meta["gradients"]
+        updates = grad_meta["updates"]
+        v_total_inputs = grad_meta["statistics"]
+        g_W, g_v, g_h = gradients
+        f = theano.function([x], [g_W, g_v, g_h], updates=updates)
+        g_W, g_v, g_h = f(self.x)
+        # print g_W
+        # print g_v
+        # print g_h
+        pass
+
+    def test_get_train_fn(self):
+        self.setUpRBM()
+        rbm = self.rbm
+        fn = rbm.get_train_fn(self.tx, None)
+        res = fn(0)
+        print res
+
+        pass
+
+    def test_train(self):
+        self.setUpRBM()
+        rbm = self.rbm
+        pass
+
+
 class AssociativeRBMTest(unittest.TestCase):
-    def setUpAssociativeRBM(self):
-        v = 5
-        v2 = 5
-        h = 10
+    def setUpAssociativeRBM(self, v=5, v2=5, h=10):
         tr = TrainParam(learning_rate=0.01,
                         momentum_type=CLASSICAL,
                         momentum=0.5,
                         weight_decay=0.01,
                         plot_during_training=True,
-                        output_directory="AssociationTest",
+                        output_directory="AssociativeRBMTest",
                         sparsity_constraint=False,
+                        batch_size=1,
                         epochs=15)
 
         rbm = RBM(v, v2, h,
+                  associative=True,
                   cd_type=CLASSICAL,
                   cd_steps=1,
                   train_parameters=tr)
 
         self.rbm = rbm
-        self.rbmx1 = np.array([[2, 5, 5, 2, 1]], dtype=np.float64)
-        self.rbmx2 = np.array([[5, 2, 3, 8, 1]], dtype=np.float64)
+        self.x = np.array([[1, 1, 1, 0, 0]], dtype=np.float64)
+        self.y = np.array([[0, 0, 0, 0, 1]], dtype=np.float64)
+        self.x2 = np.array([[1, 1, 1, 0, 0],
+                            [0, 0, 0, 0, 1]],
+                           dtype=np.float64)
+        self.y2 = np.array([[0, 0, 1, 1, 1],
+                            [0, 0, 0, 0, 1]],
+                           dtype=np.float64)
+        self.yl = np.array([[0, 0],
+                            [0, 1]],
+                           dtype=np.float64)
+
+        self.tx = theano.shared(np.array([[1, 1, 1, 0, 0]], dtype=np.float64))
+        self.ty = theano.shared(np.array([[0, 0, 0, 0, 1]], dtype=np.float64))
+        self.tz = theano.shared(np.array([[0, 0, 0, 0, 1],
+                                          [0, 0, 0, 0, 1],
+                                          [0, 0, 0, 0, 1],
+                                          [0, 0, 0, 0, 1],
+                                          [0, 0, 0, 0, 1]], dtype=np.float64))
+
+        self.tl = theano.shared(np.array([[0, 1],
+                                          [0, 1],
+                                          [0, 1],
+                                          [0, 1],
+                                          [1, 0]], dtype=np.float64))
+
+
+    def test_parameters_order(self):
+        self.setUpAssociativeRBM()
+        rbm = self.rbm
+        self.assertEqual(str(rbm.params[0]), 'W')
+        self.assertEqual(str(rbm.params[1]), 'v_bias')
+        self.assertEqual(str(rbm.params[2]), 'h_bias')
+        self.assertEqual(str(rbm.params[3]), 'U')
+        self.assertEqual(str(rbm.params[4]), 'v_bias2')
+
+    def test_free_energy(self):
+        self.setUpAssociativeRBM()
+        rbm = self.rbm
+        w = rbm.W.get_value(borrow=True)
+        u = rbm.U.get_value(borrow=True)
+        v = T.dmatrix("v")
+        v2 = T.dmatrix("v2")
+        v_bias = rbm.v_bias.eval()
+        v_bias2 = rbm.v_bias2.eval()
+        h_bias = rbm.h_bias.eval()
+
+        res = rbm.free_energy(v, v2)
+        f = theano.function([v, v2], [res])
+        theano_res = f(self.x, self.y)
+
+        # Test for case only v1 is present
+        n1 = - np.dot(self.x, v_bias)
+        n2 = - np.dot(self.y, v_bias2)
+        n3 = - np.sum(np.log(1 + np.exp(h_bias + np.dot(self.x, w) + np.dot(self.y, u))))
+        np_res = n1 + n2 + n3
+
+        print theano_res
+        print np_res
+
+        diff = theano_res == np_res
+        self.assertTrue(np.all(diff))
+
+    def test_negative_statistics(self):
+        self.setUpAssociativeRBM(5, 2, 10)
+        rbm = self.rbm
+        x = T.matrix("x")
+        y = T.matrix("y")
+        res = rbm.negative_statistics(x, y)
+        updates = res[0]
+
+        # Returns chain end
+        f = theano.function([x, y], res[1:], updates=updates)
+
+        # sample, v, vp, vs, h, hp, hs = f(self.x)
+        # print sample
+        # print vs
+
+        result = f(self.y2, self.yl)
+        # print result[0]
+
+        pass
+
+    def test_partial_derivatives(self):
+        self.setUpAssociativeRBM()
+        rbm = self.rbm
+        x = T.dmatrix("x")
+        y = T.dmatrix("y")
+
+        grad_meta = rbm.get_partial_derivitives(x, y)
+        gradients = grad_meta["gradients"]
+        updates = grad_meta["updates"]
+        v_total_inputs = grad_meta["statistics"]
+        g_W, g_v, g_h, g_U, g_v2= gradients
+        f = theano.function([x, y], [g_W, g_v, g_h, g_U, g_v2], updates=updates)
+        g_W, g_v, g_h, g_U, g_v = f(self.x, self.y)
+
+        print g_W
+        print g_v
+        print g_h
+        print g_U
+        print g_v2
+        pass
+
+    def test_get_train_fn(self):
+        self.setUpAssociativeRBM(5, 2, 10)
+        rbm = self.rbm
+        fn = rbm.get_train_fn(self.tz, self.tl)
+        res = fn(0)
+        print res
+
+        pass
 
 
 class RBMMethodTest(unittest.TestCase):
@@ -319,11 +480,8 @@ class RBMMethodTest(unittest.TestCase):
 
         def gibbs(ux, u2):
             h, hp = rbm.prop_up(ux, u2)
-            #hs = rbm.rand.binomial(size=hp.shape, n=1, p=hp, dtype=t_float_x)
             v, vp = rbm.prop_down(hp)
-            #vs = rbm.rand.binomial(size=vp.shape, n=1, p=vp, dtype=t_float_x)
             v2, v2p = rbm.prop_down_assoc(hp)
-            #v2s = rbm.rand.binomial(size=v2p.shape, n=1, p=v2p, dtype=t_float_x)
             return [h, hp, v, ux, v2, v2p]
 
 
@@ -572,7 +730,11 @@ class PreProcessingTest(unittest.TestCase):
         sc = scale_to_unit_interval(arr)
         print sc
 
-
+class NumpyTest(unittest.TestCase):
+    def test_logical_index(self):
+        a = np.array([0, 1,2,3,4,5,0, 1,2,3,4,5])
+        idx = (a == 1) | (a == 0)
+        print a[idx]
 
 
 def np_prop_up(v, w, b, v2=None, u=None):
@@ -592,4 +754,7 @@ def np_prop_down(h, w, b):
 if __name__ == '__main__':
     #suite = unittest.TestLoader().loadTestsFromTestCase(PreProcessingTest)
     suite = unittest.TestLoader().loadTestsFromTestCase(SingleRBMTest)
+    unittest.TextTestRunner(verbosity=2).run(suite)
+
+    suite = unittest.TestLoader().loadTestsFromTestCase(AssociativeRBMTest)
     unittest.TextTestRunner(verbosity=2).run(suite)
