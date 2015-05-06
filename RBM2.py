@@ -262,6 +262,53 @@ class RBM(object):
         return [h_total_input, h_p_activation, h_sample,
                 v_total_input, v_p_activation, v_sample]
 
+    # def gibbs_sampling(self, chain_start, sample_fn, k):
+    #     return theano.scan(
+    #         self.sample_fn,
+    #         outputs_info=[None, None, None, None, None, chain_start],
+    #         n_steps=k
+    #     )
+
+    def pcd_assoc(self, k=1):
+        chain_start = self.persistent
+        (
+            [
+                v_total_inputs,
+                v_p_activations,
+                v_samples,
+                v2_total_inputs,
+                v2_p_activations,
+                v2_samples,
+                h_total_inputs,
+                h_p_activations,
+                h_samples
+            ],
+            updates
+        ) = theano.scan(
+            self.gibbs_hvh_assoc,
+            outputs_info=[None, None, None, None, None,
+                          None, None, None, chain_start],
+            n_steps=k
+        )
+        chain_end = v_samples[-1]
+        chain_end2 = v2_samples[-1]
+
+        updates[self.persistent] = h_samples[-1]
+
+        # Return result of scan
+        return [updates,
+                chain_end,
+                v_total_inputs,
+                v_p_activations,
+                v_samples,
+                chain_end2,
+                v2_total_inputs,
+                v2_p_activations,
+                v2_samples,
+                h_total_inputs,
+                h_p_activations,
+                h_samples]
+
     def pcd(self, k=1):
         chain_start = self.persistent
         (
@@ -364,7 +411,10 @@ class RBM(object):
 
     def negative_statistics(self, x, y=None):
         if self.cd_type is PERSISTENT:
-            return self.pcd(self.cd_steps)
+            if y:
+                return self.pcd_assoc(self.cd_steps)
+            else:
+                return self.pcd(self.cd_steps)
         elif y:
             return self.contrastive_divergence_assoc(x, y, 1)
         else:
@@ -379,7 +429,9 @@ class RBM(object):
 
     def get_pseudo_likelihood(self, x, updates):
         """Stochastic approximation to the pseudo-likelihood.
-        Used to Monitor progress when using PCD-k"""
+        Used to Monitor progress when using PCD-k
+        Only considered the case for modelling P(X)
+        but not joint distribution P(X1, X2) for association """
 
         # index of bit i in expression p(x_i | x_{\i})
         bit_i_idx = theano.shared(value=0, name='bit_i_idx')
@@ -451,8 +503,8 @@ class RBM(object):
         :return: cost, updates
         """
 
-        param = self.train_parameters
         # Cast parameters
+        param = self.train_parameters
         lr = T.cast(param.learning_rate, dtype=t_float_x)
         m = T.cast(param.momentum, dtype=t_float_x)
         weight_decay = T.cast(param.weight_decay, dtype=t_float_x)
@@ -954,13 +1006,13 @@ def test_rbm():
                     plot_during_training=True)
 
     n_visible = train_set_x.get_value().shape[1]
-    n_hidden = 5
+    n_hidden = 15
 
     rbm = RBM(n_visible,
               n_visible,
               n_hidden,
               associative=False,
-              cd_type=CLASSICAL,
+              cd_type=PERSISTENT,
               cd_steps=1,
               train_parameters=tr)
 
@@ -1018,13 +1070,13 @@ def test_rbm_association_with_label():
 
     n_visible = train_set_x.get_value().shape[1]
     n_visible2 = 10
-    n_hidden = 10
+    n_hidden = 100
 
     rbm = RBM(n_visible,
                n_visible2,
               n_hidden,
               associative=True,
-              cd_type=CLASSICAL,
+              cd_type=PERSISTENT,
               cd_steps=1,
               train_parameters=tr)
 
