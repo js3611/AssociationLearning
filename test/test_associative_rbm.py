@@ -115,7 +115,7 @@ class AssociativeRBMTest(unittest.TestCase):
         x = T.dmatrix("x")
         y = T.dmatrix("y")
 
-        grad_meta = rbm.get_partial_derivitives(x, y)
+        grad_meta = rbm.get_partial_derivatives(x, y)
         gradients = grad_meta["gradients"]
         updates = grad_meta["updates"]
         v_total_inputs = grad_meta["statistics"]

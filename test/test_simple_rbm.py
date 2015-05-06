@@ -1,11 +1,10 @@
 import unittest
 from RBM2 import *
 from activationFunction import *
-import theano.sandbox.cuda as cuda
 from utils import *
 import theano.tensor as T
 import numpy as np
-import scipy.stats as ss
+
 
 class SingleRBMTest(unittest.TestCase):
     def setUpRBM(self):
@@ -77,7 +76,7 @@ class SingleRBMTest(unittest.TestCase):
         self.setUpRBM()
         rbm = self.rbm
         w = rbm.W.get_value(borrow=True)
-        v = T.dmatrix("v")
+        v = T.matrix("v")
         v_bias = np.array(rbm.v_bias.eval())
         h_bias = np.array(rbm.h_bias.eval())
 
@@ -100,10 +99,10 @@ class SingleRBMTest(unittest.TestCase):
     def test_partial_derivatives(self):
         self.setUpRBM()
         rbm = self.rbm
-        x = T.dmatrix("x")
-        y = T.dmatrix("y")
+        x = T.matrix("x")
+        y = T.matrix("y")
 
-        grad_meta = rbm.get_partial_derivitives(x, y)
+        grad_meta = rbm.get_partial_derivatives(x, y)
         gradients = grad_meta["gradients"]
         updates = grad_meta["updates"]
         v_total_inputs = grad_meta["statistics"]
@@ -114,6 +113,27 @@ class SingleRBMTest(unittest.TestCase):
         # print g_v
         # print g_h
         pass
+
+    def test_reconstruction_cost(self):
+        self.setUpRBM()
+        rbm = self.rbm
+        x = T.matrix("x")
+        y = T.matrix("sample")
+        x_input = np.array([[10, -1, 0.95, 3, 1]], dtype=np.float32)
+        reconstruction = 1 / (1 + np.exp(-x_input))
+
+        cost = rbm.get_reconstruction_cost(x, y)
+        f = theano.function([x, y], [cost])
+        theano_cost = f(self.x, x_input)
+
+        # Sum over examples
+        np_cross_entropies = - np.nansum(self.x * np.log(reconstruction) + (1-self.x) * np.log(1-reconstruction), axis=1)
+        np_cost = np_cross_entropies.mean()
+
+        # print theano_cost
+        # print np_cost
+
+        self.assertAlmostEqual(theano_cost, np_cost, 5)
 
     def test_get_train_fn(self):
         self.setUpRBM()

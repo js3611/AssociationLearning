@@ -373,13 +373,9 @@ class RBM(object):
     def get_reconstruction_cost(self, x, v_total_inputs):
         """Used to monitor progress when using CD-k"""
         p = self.v_activation_fn(v_total_inputs)
-        cross_entropy = T.mean(
-            T.sum(
-                x * T.log(p) + (1 - x) * T.log(1 - p),
-                axis=1
-            )
-        )
-        return cross_entropy
+        cross_entropy = - T.sum(x * T.log(p) + (1 - x) * T.log(1 - p), axis=1)
+        cost = T.mean(cross_entropy)
+        return cost
 
     def get_pseudo_likelihood(self, x, updates):
         """Stochastic approximation to the pseudo-likelihood.
@@ -410,51 +406,51 @@ class RBM(object):
 
         return cost
 
-    def get_partial_derivitives(self, x, y):
+    def get_partial_derivatives(self, x, y):
         # Differentiate cost function w.r.t params to get gradients for param updates
         if self.associative:
             # Perform Gibbs Sampling to generate negative statistics
             res = self.negative_statistics(x, y)
             v_sample = res[1]
+            v_input = res[2]
             v2_sample = res[5]
+            v2_input = res[6]
             cost = T.mean(self.free_energy(x, y)) - T.mean(self.free_energy(v_sample, v2_sample))
             grads = T.grad(cost, self.params, consider_constant=[v_sample, v2_sample])
+            stats = [v_input, v2_input]
         else:
             res = self.negative_statistics(x)
             v_sample = res[1]
+            v_input = res[2]
             # Differentiate cost function w.r.t params to get gradients for param updates
             cost = T.mean(self.free_energy(x)) - T.mean(self.free_energy(v_sample))
             grads = T.grad(cost, self.params, consider_constant=[v_sample])
+            stats = [v_input]
 
         updates = res[0]
-        v_total_inputs = res[2]
+
         return {"gradients": grads,
                 "updates": updates,
-                "statistics": v_total_inputs}
-
-        # # Perform Gibbs Sampling to generate negative statistics
-        # res = self.negative_statistics(x, y)
-        # updates = res[0]
-        # v_sample = res[1]
-        # v_total_inputs = res[2]
-        # ## ASSOC
-        # v2_sample = res[5]
-        #
-        # print v2_sample
-        #
-        # # Differentiate cost function w.r.t params to get gradients for param updates
-        # # cost = T.mean(self.free_energy(x)) - T.mean(self.free_energy(v_sample))
-        # # g_W, g_v, g_h = T.grad(cost, self.params, consider_constant=[v_sample])
-        # cost = T.mean(self.free_energy(x, y)) - T.mean(self.free_energy(v_sample, v2_sample))
-        # g_W, g_v, g_h, g_U, g_v2 = T.grad(cost, self.params, consider_constant=[v_sample, v2_sample])
-        # grads = T.grad(cost, self.params, consider_constant=[v_sample, v2_sample])
-        #
-        # return {"gradients": grads,
-        #         "updates": updates,
-        #         "statistics": v_total_inputs}
-
+                "statistics": stats}
 
     def get_cost_updates(self, x, param_increments, y=None):
+        """
+        Get Cost function and a list of variables to update. To be called by get_train_fn function.
+        Order of Parameters is fixed:
+        1. W
+        2. v1
+        3. h
+        4. U
+        5. v2
+
+        :param x: Theano symbolic variable for an input
+        :param param_increments: Contains supplemental variables that will be used to update the variables.
+                                 First 5 elements are for momentum, the last element is for sparsity constraint.
+
+        :param y: Theano symbolic variable for an association input
+        :return: cost, updates
+        """
+
         param = self.train_parameters
         # Cast parameters
         lr = T.cast(param.learning_rate, dtype=t_float_x)
@@ -464,85 +460,49 @@ class RBM(object):
         # Declare parameter update variables
         old_ds = param_increments[:-1]
 
-        if self.associative:
-            old_DW, old_Dvbias, old_Dhbias, old_DU, old_Dvbias2 = old_ds
-        else:
-            old_DW, old_Dvbias, old_Dhbias = old_ds
+        # if self.associative:
+        #     old_DW, old_Dvbias, old_Dhbias, old_DU, old_Dvbias2 = old_ds
+        # else:
+        #     old_DW, old_Dvbias, old_Dhbias = old_ds
 
         pre_updates = []
         if param.momentum_type is NESTEROV:
             for (p, old_dp) in zip(self.params, old_ds):
-                pre_updates.append(p, p + m * old_dp)
+                pre_updates.append((p, p + m * old_dp))
 
-            # pre_updates.append((self.W, self.W + m * old_DW))
-            # pre_updates.append((self.h_bias, self.h_bias + m * old_Dhbias))
-            # pre_updates.append((self.v_bias, self.v_bias + m * old_Dvbias))
-            # pre_updates.append((self.U, self.U + m * old_DU))
-            # pre_updates.append((self.v_bias2, self.v2_bias + m * old_Dv2bias))
-
-        grad_meta = self.get_partial_derivitives(x, y)
+        grad_meta = self.get_partial_derivatives(x, y)
         gradients = grad_meta["gradients"]
         updates = grad_meta["updates"]
-        v_total_inputs = grad_meta["statistics"]
-        # g_U, g_W, g_h, g_v, g_v2 = gradients
 
         # For each parameters, compute: new_dx = m * old_dx - lr * grad_x
         new_ds = map(lambda (d, g): m * d - lr * g, zip(old_ds, gradients))
 
-        # new_DW = m * old_DW - lr * g_W
-        # new_Dhbias = m * old_Dhbias - lr * g_h
-        # new_Dvbias = m * old_Dvbias - lr * g_v
-        # new_DU = m * old_DU - lr * g_U
-        # new_Dvbias2 = m * old_Dvbias2 - lr * g_v2
-
         if param.momentum_type is NESTEROV:
-            # Nesterov update:
-            # v_new = m * v_old - lr * Df(x_old + m*v_old)
-            # x_new = x_old + v_new
-            # <=> x_new = [x_old + m * v_old] - lr * Df([x_old + m * v_old])
+
             def nesterov_update(p, grad_p, old_dp):
+                # Nesterov update:
+                # v_new = m * v_old - lr * Df(x_old + m*v_old)
+                # x_new = x_old + v_new
+                # <=> x_new = [x_old + m * v_old] - lr * Df([x_old + m * v_old])
+                # NOTE: there is a hack here -- we compute the partial derivatives wrt. (x + m * v)
+                # It means grad_x = dFd(x+ m*v) and x = (x - m * dx)
                 new_p = p - lr * grad_p
-                new_p -= lr * weight_decay * (p - m * old_dp)
+                new_p = new_p - lr * weight_decay * (p - m * old_dp)
                 return new_p
 
-            new_params = map(nesterov_update, zip(self.params, gradients, old_ds))
+            new_params = map(nesterov_update, self.params, gradients, old_ds)
 
-            new_W = 0
-            new_hbias = 0
-            # new_W = self.W - lr * g_W
-            # new_hbias = self.h_bias - lr * g_h
-            # new_vbias = self.v_bias - lr * g_v
-            #
-            # # Weight Decay
-            # new_W -= lr * weight_decay * (self.W - m * old_DW)
-            # new_hbias -= lr * weight_decay * (self.h_bias - m * old_Dhbias)
-            # new_vbias -= lr * weight_decay * (self.v_bias - m * old_Dvbias)
         else:
-            # Classical Momentum from Sutskever, Hinton.
-            # v_new = momentum * v_old + lr * grad_wrt_w
-            # w_new = w_old + v_new
 
             def classical_update(p, new_dp):
+                # Classical Momentum from Sutskever, Hinton.
+                # v_new = momentum * v_old + lr * grad_wrt_w
+                # w_new = w_old + v_new
                 new_p = p + new_dp
                 new_p -= lr * weight_decay * p
                 return new_p
 
             new_params = map(classical_update, self.params, new_ds)
-
-            # new_W = self.W + new_DW
-            # new_hbias = self.h_bias + new_Dhbias
-            # new_vbias = self.v_bias + new_Dvbias
-            # new_U = self.U + new_DU
-            # new_vbias2 = self.v_bias2 + new_Dvbias2
-            #
-            # # Weight Decay
-            # new_W -= lr * weight_decay * self.W
-            # new_hbias -= lr * weight_decay * self.h_bias
-            # new_vbias -= lr * weight_decay * self.v_bias
-            # new_U -= lr * weight_decay * self.U
-            # new_vbias2 -= lr * weight_decay * self.v_bias2
-
-        # print param.sparsity_constraint
 
         # Sparsity
         if param.sparsity_constraint:
@@ -552,7 +512,10 @@ class RBM(object):
             sparsity_decay_rate = param.sparsity_decay
             # 1. Compute actual probability of hidden unit being active, q
             # 1.1 Get q_current (mean probability that a unit is active in each mini-batch
-            _, h_p_activation = self.prop_up(x)
+            if self.associative:
+                _, h_p_activation = self.prop_up(x, y)
+            else:
+                _, h_p_activation = self.prop_up(x)
             # q is the decaying average of mean active probability in each batch
             q = sparsity_decay_rate * active_probability_h + (1-sparsity_decay_rate) * T.mean(h_p_activation, axis=0)
 
@@ -575,35 +538,36 @@ class RBM(object):
             # new_hbias -= lr * sparsity_cost * d_sparsity
             # new_W -= lr * sparsity_cost * d_sparsity
             # 2. multiply quantity by dq/dw (chain rule)
-            chain_W, chain_h = T.grad(T.sum(q), [self.W, self.h_bias])
-            new_hbias -= lr * sparsity_cost * d_sparsity * chain_h
-            new_W -= lr * sparsity_cost * d_sparsity * chain_W
+            if self.associative:
+                pass
+            else:
+                chain_W, chain_h = T.grad(T.sum(q), [self.W, self.h_bias])
+                new_params[0] -= lr * sparsity_cost * d_sparsity * chain_W
+                new_params[2] -= lr * sparsity_cost * d_sparsity * chain_h
+
+                # chain_W, chain_h = T.grad(T.sum(q), [self.W, self.h_bias])
+                # new_hbias -= lr * sparsity_cost * d_sparsity * chain_h
+                # new_W -= lr * sparsity_cost * d_sparsity * chain_W
 
         # update parameters
         for (p, new_p) in zip(self.params, new_params):
             updates[p] = new_p
 
-        # updates[self.W] = new_W
-        # updates[self.h_bias] = new_hbias
-        # updates[self.v_bias] = new_vbias
-        # updates[self.U] = new_U
-        # updates[self.v_bias2] = new_vbias2
-
-        # update velocities
+        # update velocities (used for momentum)
         for (old_dp, new_dp) in zip(old_ds, new_ds):
             updates[old_dp] = new_dp
 
-        # updates[old_DW] = new_DW
-        # updates[old_Dhbias] = new_Dhbias
-        # updates[old_Dvbias] = new_Dvbias
-        # updates[old_DU] = new_DU
-        # updates[old_Dvbias2] = new_Dvbias2
-
+        # Cost function
+        stats = grad_meta["statistics"]
         if self.cd_type is PERSISTENT:
             # cost = self.get_reconstruction_cost(x, v_total_inputs)
             measure_cost = self.get_pseudo_likelihood(x, updates)
         else:
+            v_total_inputs = stats[0]
             measure_cost = self.get_reconstruction_cost(x, v_total_inputs)
+            if self.associative:
+                v2_total_inputs = stats[1]
+                measure_cost += self.get_reconstruction_cost(y, v2_total_inputs)
 
         return measure_cost, updates, pre_updates
 
@@ -637,7 +601,7 @@ class RBM(object):
                                              name="active_probability_h",
                                              borrow=True)
 
-        # param_increments = [old_DW, old_Dvbias, old_Dhbias, active_probability_h]
+
         param_increments += [active_probability_h]
 
         if self.associative:
@@ -658,35 +622,6 @@ class RBM(object):
             name='train_rbm',
             on_unused_input='warn'
         )
-
-        # if not self.associative:
-        #     cross_entropy, updates, pre_updates = self.get_cost_updates(x, param_increments)
-        #     pre_train = theano.function([], updates=pre_updates)
-        #     train_rbm = theano.function(
-        #         [index],
-        #         cross_entropy,  # use cross entropy to keep track
-        #         updates=updates,
-        #         givens={
-        #             x: train_data[index * batch_size: (index + 1) * batch_size]
-        #         },
-        #         name='train_rbm'
-        #     )
-        # else:
-        #     print "assoc data"
-        #     print assoc_data.get_value().shape
-        #     cross_entropy, updates, pre_updates = self.get_cost_updates(x, param_increments, y)
-        #     pre_train = theano.function([], updates=pre_updates)
-        #     train_rbm = theano.function(
-        #         [index],
-        #         cross_entropy,  # use cross entropy to keep track
-        #         updates=updates,
-        #         givens={
-        #             x: train_data[index * batch_size: (index + 1) * batch_size],
-        #             y: assoc_data[index * batch_size: (index + 1) * batch_size]
-        #         },
-        #         name='train_rbm'
-        #     )
-        #     return train_rbm
 
         def train_fn(i):
             pre_train()
@@ -1001,7 +936,7 @@ def test_rbm():
 
     # Initialise the RBM and training parameters
     tr = TrainParam(learning_rate=0.01,
-                    momentum_type=CLASSICAL,
+                    momentum_type=NESTEROV,
                     momentum=0.5,
                     weight_decay=0.01,
                     sparsity_constraint=False,
@@ -1011,7 +946,7 @@ def test_rbm():
                     plot_during_training=True)
 
     n_visible = train_set_x.get_value().shape[1]
-    n_hidden = 1000
+    n_hidden = 10
 
     rbm = RBM(n_visible,
               n_visible,
@@ -1121,7 +1056,7 @@ def test_rbm_association():
 
     # Even odd test
     testcases = 1000
-    k = 100
+    k = 1
 
     # Load mnist hand digits
     datasets = load_data('mnist.pkl.gz')
@@ -1130,7 +1065,7 @@ def test_rbm_association():
     test_set_x, test_set_y = datasets[2]
 
     # Initialise the RBM and training parameters
-    tr = TrainParam(learning_rate=0.05,
+    tr = TrainParam(learning_rate=0.04,
                     momentum_type=CLASSICAL,
                     momentum=0.01,
                     weight_decay=0.001,
@@ -1141,7 +1076,7 @@ def test_rbm_association():
 
     n_visible = train_set_x.get_value().shape[1]
     n_visible2 = n_visible
-    n_hidden = 1000
+    n_hidden = 10
 
     rbm = RBM(n_visible,
               n_visible2,
