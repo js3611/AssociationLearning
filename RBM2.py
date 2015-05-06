@@ -533,17 +533,25 @@ class RBM(object):
                 # (as non relevant terms in sum vanish because they are constant w.r.t the partial derivatives)
                 d_sparsity = T.grad(T.sum(sparsity_penalty), q)
 
-            # Apply derivitive scaled by sparsity_cost to the weights
+            # Apply derivative scaled by sparsity_cost to the weights
             # 1. use same quantity to adjust each weight
             # new_hbias -= lr * sparsity_cost * d_sparsity
             # new_W -= lr * sparsity_cost * d_sparsity
             # 2. multiply quantity by dq/dw (chain rule)
-            if self.associative:
-                pass
-            else:
-                chain_W, chain_h = T.grad(T.sum(q), [self.W, self.h_bias])
-                new_params[0] -= lr * sparsity_cost * d_sparsity * chain_W
-                new_params[2] -= lr * sparsity_cost * d_sparsity * chain_h
+
+            chain_p = T.grad(T.sum(q), self.params, disconnected_inputs='ignore')
+            for i in xrange(len(new_params)):
+                new_params = [p - lr * sparsity_cost * d_sparsity * chain_p[i] for i, p in enumerate(new_params)]
+
+            # if self.associative:
+            #     chain_W, chain_h, chain_U = T.grad(T.sum(q), [self.W, self.h_bias, self.U])
+            #     new_params[0] -= lr * sparsity_cost * d_sparsity * chain_W
+            #     new_params[2] -= lr * sparsity_cost * d_sparsity * chain_h
+            #     new_params[3] -= lr * sparsity_cost * d_sparsity * chain_U
+            # else:
+            #     chain_W, chain_h, chain_U = T.grad(T.sum(q), [self.W, self.h_bias])
+            #     new_params[0] -= lr * sparsity_cost * d_sparsity * chain_W
+            #     new_params[2] -= lr * sparsity_cost * d_sparsity * chain_h
 
                 # chain_W, chain_h = T.grad(T.sum(q), [self.W, self.h_bias])
                 # new_hbias -= lr * sparsity_cost * d_sparsity * chain_h
@@ -939,14 +947,14 @@ def test_rbm():
                     momentum_type=NESTEROV,
                     momentum=0.5,
                     weight_decay=0.01,
-                    sparsity_constraint=False,
+                    sparsity_constraint=True,
                     sparsity_target=0.01,
                     sparsity_cost=0.01,
                     sparsity_decay=0.1,
                     plot_during_training=True)
 
     n_visible = train_set_x.get_value().shape[1]
-    n_hidden = 10
+    n_hidden = 5
 
     rbm = RBM(n_visible,
               n_visible,
@@ -1000,17 +1008,17 @@ def test_rbm_association_with_label():
 
     # Initialise the RBM and training parameters
     tr = TrainParam(learning_rate=0.05,
-                    momentum_type=CLASSICAL,
-                    momentum=0.01,
+                    momentum_type=NESTEROV,
+                    momentum=0.5,
                     weight_decay=0.001,
                     plot_during_training=True,
                     output_directory="AssociationLabelTest",
-                    sparsity_constraint=False,
+                    sparsity_constraint=True,
                     epochs=15)
 
     n_visible = train_set_x.get_value().shape[1]
     n_visible2 = 10
-    n_hidden = 500
+    n_hidden = 10
 
     rbm = RBM(n_visible,
                n_visible2,
@@ -1042,9 +1050,9 @@ def test_rbm_association_with_label():
         )
     )
 
-    y, ys, out = rbm.reconstruct_association(x_in, None)
+    output_probability = rbm.reconstruct_association(x_in, None)
     sol = test_set_y.eval()
-    guess = [np.argmax(lab == 1) for lab in y]
+    guess = [np.argmax(lab) for lab in output_probability]
     diff = np.count_nonzero(sol - guess)
 
     print diff
@@ -1166,5 +1174,5 @@ def test_rbm_association():
 
 if __name__ == '__main__':
     # test_rbm_association()
-    test_rbm()
-    # test_rbm_association_with_label()
+    # test_rbm()
+    test_rbm_association_with_label()
