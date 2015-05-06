@@ -150,9 +150,9 @@ class RBM(object):
             )
         return theano.shared(value=w, name=name, borrow=True)
 
-    def get_initial_bias(self, bias, n, name, dtype=t_float_x):
+    def get_initial_bias(self, bias, n, name):
         if bias is None:
-            bias = np.zeros(n, dtype=dtype)
+            bias = np.zeros(n, dtype=t_float_x)
         return theano.shared(value=bias, name=name, borrow=True)
 
     def __str__(self):
@@ -856,7 +856,7 @@ class RBM(object):
             return self.reconstruct_association(data, None, k)
 
         # Gibbs sampling
-        x = T.dmatrix("x")
+        x = T.matrix("x")
         chain_start = x
         (res, updates) = theano.scan(self.gibbs_vhv,
                                      outputs_info=[None, None, None,
@@ -920,8 +920,8 @@ class RBM(object):
         data_size = x.get_value().shape[0]
         if not sample_size:
             sample_size = data_size
-        data = T.dmatrix("data_x")
-        association = T.dmatrix("association")
+        data = T.matrix("data_x")
+        association = T.matrix("association")
 
         if not y:
             y = self.rand.binomial(size=(data_size, self.v_n2), n=1, p=bit_p, dtype=t_float_x)
@@ -1011,7 +1011,7 @@ def test_rbm():
                     plot_during_training=True)
 
     n_visible = train_set_x.get_value().shape[1]
-    n_hidden = 10
+    n_hidden = 1000
 
     rbm = RBM(n_visible,
               n_visible,
@@ -1230,6 +1230,6 @@ def test_rbm_association():
 
 
 if __name__ == '__main__':
-    test_rbm_association()
-    # test_rbm()
+    # test_rbm_association()
+    test_rbm()
     # test_rbm_association_with_label()

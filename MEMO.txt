@@ -1,0 +1,18 @@
+6 May 2014
+
+1. PATH
+- edited .zshrc to let PYTHONPATH include path to AssociationLearning module
+
+2. TEST
+- added: __test__.py to test folder to show that it is a test module
+To test for a particular test, run:
+
+python -m unittest <module_name>[.<class_name>[.<method_name>]]
+
+e.g.
+python -m unittest test_simple_rbm.SingleRBMTest.test_negative_statistics
+
+
+
+3. FLOAT32
+Something to do with floattype
