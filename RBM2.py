@@ -786,17 +786,17 @@ class RBM(object):
 
         return 0
 
-    def plot_samples(self, test_data, image_name='samples.png', plot_every=1000):
+    def plot_samples(self, data, image_name='samples.png', plot_every=1000):
         n_chains = 20   # Number of Chains to perform Gibbs Sampling
         n_samples_from_chain = 10  # Number of samples to take from each chain
 
-        test_set_size = test_data.get_value(borrow=True).shape[0]
+        test_set_size = data.get_value(borrow=True).shape[0]
         rand = np.random.RandomState(1234)
         test_input_index = rand.randint(test_set_size - n_chains)
         # Sample after 1000 steps of Gibbs Sampling each time
         persistent_vis_chain = theano.shared(
             np.asarray(
-                test_data.get_value(borrow=True)[test_input_index:test_input_index + n_chains],
+                data.get_value(borrow=True)[test_input_index:test_input_index + n_chains],
                 dtype=theano.config.floatX
             )
         )
@@ -848,7 +848,13 @@ class RBM(object):
         datastorage.store_object(self)
         print "... saved RBM object to " + os.getcwd() + "/" + str(self)
 
-    # Simple test method
+    def sample(self, n=1, k=1):
+        # Generate random "v"
+        activation_probability = 0.1
+        data = self.rand.binomial(size=(n, self.v_n), n=1,
+                                  p=activation_probability, dtype=t_float_x).eval()
+        return self.reconstruct(data, k)
+
     def reconstruct(self, data, k=1, image_name="reconstructions.png"):
         # data_size = data.get_value(borrow=True).shape[0]
         data_size = data.shape[0]
@@ -874,46 +880,47 @@ class RBM(object):
          v_p_activation,
          v_sample] = result
 
-        image_data = np.zeros(
-            (29 * (k+1) + 1, 29 * data_size - 1),
-            dtype='uint8'
-        )
+        if self.v_n == 784:
+            image_data = np.zeros(
+                (29 * (k+1) + 1, 29 * data_size - 1),
+                dtype='uint8'
+            )
 
-        # Original images
-        image_data[0:28, :] = tile_raster_images(
-            X=data,
-            img_shape=(28, 28),
-            tile_shape=(1, data_size),
-            tile_spacing=(1, 1)
-        )
-
-        # Generate image by plotting the sample from the chain
-        for i in xrange(1, k):
-            vis_mf = v_p_activation[i]
-            print ' ... plotting sample ', i
-            image_data[29 * i:29 * i + 28, :] = tile_raster_images(
-                X=vis_mf,
+            # Original images
+            image_data[0:28, :] = tile_raster_images(
+                X=data,
                 img_shape=(28, 28),
                 tile_shape=(1, data_size),
                 tile_spacing=(1, 1)
             )
 
-        # construct image
-        image = Image.fromarray(image_data)
-        image.save(image_name)
+            # Generate image by plotting the sample from the chain
+            for i in xrange(1, k):
+                vis_mf = v_p_activation[i]
+                print ' ... plotting sample ', i
+                image_data[29 * i:29 * i + 28, :] = tile_raster_images(
+                    X=vis_mf,
+                    img_shape=(28, 28),
+                    tile_shape=(1, data_size),
+                    tile_spacing=(1, 1)
+                )
 
-        for i in xrange(k):
-            vis_mf = v_sample[i]
-            print ' ... plotting sample ', i
-            image_data[29 * i:29 * i + 28, :] = tile_raster_images(
-                X=vis_mf,
-                img_shape=(28, 28),
-                tile_shape=(1, data_size),
-                tile_spacing=(1, 1)
-            )
+            # construct image
+            image = Image.fromarray(image_data)
+            image.save(image_name)
 
-        image = Image.fromarray(image_data)
-        image.save("reconstructed_sample.png")
+            for i in xrange(k):
+                vis_mf = v_sample[i]
+                print ' ... plotting sample ', i
+                image_data[29 * i:29 * i + 28, :] = tile_raster_images(
+                    X=vis_mf,
+                    img_shape=(28, 28),
+                    tile_shape=(1, data_size),
+                    tile_spacing=(1, 1)
+                )
+
+            image = Image.fromarray(image_data)
+            image.save("reconstructed_sample.png")
         return v_sample[-1]
 
     def reconstruct_association(self, x, y=None, k=1, bit_p=0, image_name="association.png", sample_size=None):
@@ -959,34 +966,35 @@ class RBM(object):
          h_p_activations,
          h_samples] = result
 
-        image_data = np.zeros(
-            (29 * (k+1) + 1, 29 * sample_size - 1),
-            dtype='uint8'
-        )
+        if self.v_n == 784:
+            image_data = np.zeros(
+                (29 * (k+1) + 1, 29 * sample_size - 1),
+                dtype='uint8'
+            )
 
-        # Original images
-        image_data[0:28, :] = tile_raster_images(
-            X=x.get_value(borrow=True)[0:sample_size],
-            img_shape=(28, 28),
-            tile_shape=(1, sample_size),
-            tile_spacing=(1, 1)
-        )
-
-        # Generate image by plotting the sample from the chain
-        for i in xrange(1, k):
-            # vis_mf = v2_samples[i]
-            vis_mf = v2_p_activations[i]
-            print ' ... plotting sample ', i
-            image_data[29 * i:29 * i + 28, :] = tile_raster_images(
-                X=vis_mf[0:sample_size],
+            # Original images
+            image_data[0:28, :] = tile_raster_images(
+                X=x.get_value(borrow=True)[0:sample_size],
                 img_shape=(28, 28),
                 tile_shape=(1, sample_size),
                 tile_spacing=(1, 1)
             )
 
-        # construct image
-        image = Image.fromarray(image_data)
-        image.save(image_name)
+            # Generate image by plotting the sample from the chain
+            for i in xrange(1, k):
+                # vis_mf = v2_samples[i]
+                vis_mf = v2_p_activations[i]
+                print ' ... plotting sample ', i
+                image_data[29 * i:29 * i + 28, :] = tile_raster_images(
+                    X=vis_mf[0:sample_size],
+                    img_shape=(28, 28),
+                    tile_shape=(1, sample_size),
+                    tile_spacing=(1, 1)
+                )
+
+            # construct image
+            image = Image.fromarray(image_data)
+            image.save(image_name)
 
         return v2_p_activations[-1]
 

@@ -28,8 +28,6 @@ class DBN(object):
         n_ins = topology[1]
         hidden_layers_sizes = topology[1:]
 
-        print hidden_layers_sizes
-
         self.sigmoid_layers = []
         self.rbm_layers = []
         self.params = []
@@ -136,7 +134,7 @@ class DBN(object):
                 print "... loaded trained layer"
                 rbm = store.retrieve_object(str(rbm))
 
-            os.chdir("..")
+            os.chdir('../..')
 
             # Pass the input through sampler method to get next layer input
             sampled_layer = rbm.sample_h_given_v(layer_input)
@@ -216,3 +214,36 @@ class DBN(object):
             return [test_score_i(i) for i in xrange(n_test_batches)]
 
         return train_fn, valid_score, test_score
+
+    def bottom_up_pass(self, x):
+        pass
+
+    def top_down_pass(self, x):
+        '''
+        From top 2-layer to visible layer
+        :param x:
+        :return:
+        '''
+        layer_input = T.matrix('x')
+        chain_next = layer_input
+        for rbm in reversed(self.rbm_layers[:-1]):
+            v, vp, vs = rbm.sample_v_given_h(chain_next)
+            chain_next = vs
+            # layer_input = vp
+
+        gibbs_sampling = theano.function([layer_input], [v, vp, vs])
+        v, vp, vs = gibbs_sampling(x)
+        # For final layer, take the probability vp
+        return vp
+
+    def sample(self, n=1, k=10):
+
+        top_layer = self.rbm_layers[-1]
+
+        # Sample between top two layers
+        x = top_layer.sample(n, k)
+
+        # prop down the output to visible unit
+        sampled = self.top_down_pass(x)
+
+        return sampled

@@ -22,6 +22,7 @@ except ImportError:
 
 from utils import tile_raster_images
 from utils import load_data
+from utils import save_digits
 
 
 def test_DBN(finetune_lr=0.1, pretraining_epochs=100,
@@ -205,25 +206,16 @@ def test_generative_dbn():
                     sparsity_cost=0.01,
                     sparsity_decay=0.1,
                     plot_during_training=True,
-                    epochs=15)
+                    epochs=3)
 
     # Layer 1
     # Layer 2
     # Layer 3
     topology = [784, 10, 10]
-    finetune_lr = 0.1
-    pretraining_epochs = 100
-    pretrain_lr = 0.01
-    k = 1
-    training_epochs = 1000
     batch_size = 10
-    output_folder = 'dbn_plots'
-
-    # compute number of minibatches for training, validation and testing
-    n_train_batches = train_set_x.get_value(borrow=True).shape[0] / batch_size
 
     # construct the Deep Belief Network
-    dbn = DBN(topology=[784, 100, 100], n_outs=10, out_dir='dbn_test', tr=tr)
+    dbn = DBN(topology=topology, n_outs=10, out_dir='dbn_test', tr=tr)
     print "... initialised dbn"
 
     store.move_to(dbn.out_dir)
@@ -231,12 +223,25 @@ def test_generative_dbn():
 
     print '... pre-training the model'
     start_time = time.clock()
-    # dbn.pretrain(train_set_x, [True, False, False, False])
-    dbn.pretrain(train_set_x)
+
+    dbn.pretrain(train_set_x, [True, True])
+    # dbn.pretrain(train_set_x)
+
     end_time = time.clock()
     print >> sys.stderr, ('The pretraining code for file ' +
                           os.path.split(__file__)[1] +
                           ' ran for %.2fm' % ((end_time - start_time) / 60.))
+
+    store.move_to(dbn.out_dir)
+    store.store_object(dbn)
+
+    print "... moved to {}".format(os.getcwd())
+
+    # Sample from top layer to generate data
+    sampled = dbn.sample(10, 100)
+
+    save_digits(sampled)
+
 
     # end-snippet-2
     # subtracted plotting time
