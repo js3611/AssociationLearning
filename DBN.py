@@ -130,7 +130,10 @@ class DBN(object):
             # Check Cache
             loaded = store.retrieve_object(str(rbm))
             if cache and loaded:
+                # TODO override neural network's weights too
                 rbm = loaded
+                # Override the reference
+                self.rbm_layers[i] = rbm
                 print "... loaded trained layer"
             else:
                 rbm.train(layer_input)
