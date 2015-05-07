@@ -148,17 +148,19 @@ class RBM(object):
                 ),
                 dtype=t_float_x
             )
-        if 'numpy' in str(type(w)):
-            w = theano.shared(value=w, name=name, borrow=True)
-        return w
+        if 'Tensor' in str(type(w)):
+            return w
+        else:
+            return theano.shared(value=w, name=name, borrow=True)
 
     def get_initial_bias(self, bias, n, name):
         if bias is None:
             bias = np.zeros(n, dtype=t_float_x)
 
-        if 'numpy' in str(type(bias)):
-            bias = theano.shared(value=bias, name=name, borrow=True)
-        return bias
+        if 'Tensor' in str(type(bias)):
+            return bias
+        else:
+            return theano.shared(value=bias, name=name, borrow=True)
 
     def __str__(self):
         return "rbm_" + str(self.h_n) + \

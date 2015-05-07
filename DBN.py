@@ -120,19 +120,21 @@ class DBN(object):
 
         return pretrain_fns
 
-    def pretrain(self, train_data, trained=None):
+    def pretrain(self, train_data, cache=False):
         layer_input = train_data
         for i in xrange(len(self.rbm_layers)):
             rbm = self.rbm_layers[i]
             print 'training layer {}, {}'.format(str(i), str(rbm))
             store.move_to(self.out_dir + '/layer' + str(i) + '/' + str(rbm))
 
-            if not trained or not trained[i]:
+            # Check Cache
+            loaded = store.retrieve_object(str(rbm))
+            if cache and loaded:
+                rbm = loaded
+                print "... loaded trained layer"
+            else:
                 rbm.train(layer_input)
                 store.store_object(rbm)
-            else:
-                print "... loaded trained layer"
-                rbm = store.retrieve_object(str(rbm))
 
             os.chdir('../..')
 

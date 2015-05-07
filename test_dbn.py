@@ -206,12 +206,12 @@ def test_generative_dbn():
                     sparsity_cost=0.01,
                     sparsity_decay=0.1,
                     plot_during_training=True,
-                    epochs=3)
+                    epochs=2)
 
     # Layer 1
     # Layer 2
     # Layer 3
-    topology = [784, 10, 10]
+    topology = [784, 105, 105]
     batch_size = 10
 
     # construct the Deep Belief Network
@@ -224,8 +224,8 @@ def test_generative_dbn():
     print '... pre-training the model'
     start_time = time.clock()
 
-    dbn.pretrain(train_set_x, [True, True])
-    # dbn.pretrain(train_set_x)
+    # dbn.pretrain(train_set_x, cache=True)
+    dbn.pretrain(train_set_x, cache=Fals)
 
     end_time = time.clock()
     print >> sys.stderr, ('The pretraining code for file ' +
@@ -238,7 +238,7 @@ def test_generative_dbn():
     print "... moved to {}".format(os.getcwd())
 
     # Sample from top layer to generate data
-    sampled = dbn.sample(10, 100)
+    sampled = dbn.sample(10, 1000)
 
     save_digits(sampled)
 
