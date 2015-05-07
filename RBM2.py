@@ -148,19 +148,19 @@ class RBM(object):
                 ),
                 dtype=t_float_x
             )
-        if 'Tensor' in str(type(w)):
-            return w
-        else:
+        if 'numpy' in str(type(w)):
             return theano.shared(value=w, name=name, borrow=True)
+        else:
+            return w
 
     def get_initial_bias(self, bias, n, name):
         if bias is None:
             bias = np.zeros(n, dtype=t_float_x)
 
-        if 'Tensor' in str(type(bias)):
-            return bias
-        else:
+        if 'numpy' in str(type(bias)):
             return theano.shared(value=bias, name=name, borrow=True)
+        else:
+            return bias
 
     def __str__(self):
         return "rbm_" + str(self.h_n) + \
@@ -703,13 +703,13 @@ class RBM(object):
                 os.makedirs("data")
             print "... moved to " + data_dir
             os.chdir(data_dir)
-            
+
         # Move to output dir 
         p = self.train_parameters
         rbm_name = p.output_directory
         if not rbm_name:
             rbm_name = str(self)
-                
+
         if not os.path.isdir(rbm_name):
             os.makedirs(rbm_name)
         os.chdir(rbm_name)

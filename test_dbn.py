@@ -211,7 +211,7 @@ def test_generative_dbn():
     # Layer 1
     # Layer 2
     # Layer 3
-    topology = [784, 105, 105]
+    topology = [784, 110, 110]
     batch_size = 10
 
     # construct the Deep Belief Network
