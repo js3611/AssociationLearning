@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import datastorage as store
 
 import numpy as np
 
@@ -16,25 +17,37 @@ from RBM2 import RBM, TrainParam
 class DBN(object):
     
     def __init__(self, 
-                 numpy_rng,
+                 numpy_rng=None,
                  theano_rng=None,
-                 n_ins=784,
-                 hidden_layers_sizes=[500, 500],
-                 n_outs=10):
-        
+                 topology=[784, 500, 500],
+                 load_layer=None,
+                 n_outs=10,
+                 out_dir='dbn',
+                 tr=TrainParam()):
+
+        n_ins = topology[1]
+        hidden_layers_sizes = topology[1:]
+
+        print hidden_layers_sizes
+
         self.sigmoid_layers = []
         self.rbm_layers = []
         self.params = []
         self.n_layers = len(hidden_layers_sizes)
+        self.topology = topology
+        self.out_dir = out_dir
 
         assert self.n_layers > 0
-        
+
+        if not numpy_rng:
+            numpy_rng = np.random.RandomState(123)
+
         if not theano_rng:
             theano_rng = RandomStreams(numpy_rng.randint(2 ** 30))
 
+        # Create Layers
         self.x = T.matrix('x')
-        self.y = T.ivector('y') #labels presented as 1D vector
-
+        self.y = T.ivector('y')  #labels presented as 1D vector
         for i in xrange(self.n_layers):
             # construct sigmoidal layer
             if i == 0:
@@ -49,25 +62,23 @@ class DBN(object):
 
             sigmoid_layer = HiddenLayer(rng=numpy_rng,
                                          input = layer_input,
-                                         n_in = input_size,
-                                         n_out = hidden_layers_sizes[i],
+                                         n_in = topology[i],
+                                         n_out = topology[i+1],
                                          activation=T.nnet.sigmoid)
 
             self.sigmoid_layers.append(sigmoid_layer)
             self.params.extend(sigmoid_layer.params)
 
             # construct RBM that shared weights with this layer
-            rbm_layer = RBM(numpy_rng=numpy_rng,
-                             theano_rng=theano_rng,
-                             input=layer_input,
-                             n_visible=input_size,
-                             n_hidden=hidden_layers_sizes[i],
-                             W=sigmoid_layer.W,
-                             hbias=sigmoid_layer.b)
+            rbm_layer = RBM(associative=False,
+                            v_n=topology[i],
+                            h_n=topology[i+1],
+                            W=sigmoid_layer.W,
+                            h_bias=sigmoid_layer.b,
+                            train_parameters=tr)
             self.rbm_layers.append(rbm_layer)
             
         # Logistic layer on top of the MLP
-
         self.logLayer = LogisticRegression(
             input=self.sigmoid_layers[-1].output,
             n_in=hidden_layers_sizes[-1],
@@ -79,8 +90,11 @@ class DBN(object):
         # gradient wrt model parameters
         self.errors = self.logLayer.errors(self.y)
 
-    def pretraining_functions(self, train_set_x, batch_size, k):
+    def __str__(self):
+        return 'dbn_l' + str(self.n_layers) + \
+               '_' + '_'.join([str(i) for i in self.topology])
 
+    def pretraining_functions(self, train_set_x, batch_size, k):
         #index to a [mini]batch
         index = T.lscalar('index')
         learning_rate=T.scalar('lr')
@@ -108,7 +122,31 @@ class DBN(object):
 
         return pretrain_fns
 
-            
+    def pretrain(self, train_data, trained=None):
+        layer_input = train_data
+        for i in xrange(len(self.rbm_layers)):
+            rbm = self.rbm_layers[i]
+            print 'training layer {}, {}'.format(str(i), str(rbm))
+            store.move_to(self.out_dir + '/layer' + str(i) + '/' + str(rbm))
+
+            if not trained or not trained[i]:
+                rbm.train(layer_input)
+                store.store_object(rbm)
+            else:
+                print "... loaded trained layer"
+                rbm = store.retrieve_object(str(rbm))
+
+            os.chdir("..")
+
+            # Pass the input via sigmoidal layer
+            sampled_layer = rbm.sample_h_given_v(layer_input)
+            transform_input = sampled_layer[2]
+            f = theano.function([], transform_input)
+            res = f()
+            print res
+            layer_input = theano.shared(res)
+
+
     def build_finetune_functions(self, datasets, batch_size, learning_rate):
         (train_set_x, train_set_y) = datasets[0]
         (valid_set_x, valid_set_y) = datasets[1]

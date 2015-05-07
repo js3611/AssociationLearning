@@ -28,11 +28,11 @@ class SingleRBMTest(unittest.TestCase):
                   train_parameters=tr)
 
         self.rbm = rbm
-        self.x = np.array([[1, 1, 1, 0, 0]], dtype=np.float32)
-        self.tx = theano.shared(np.array([[1, 1, 1, 0, 0]], dtype=np.float32))
+        self.x = np.array([[1, 1, 1, 0, 0]], dtype=t_float_x)
+        self.tx = theano.shared(np.array([[1, 1, 1, 0, 0]], dtype=t_float_x))
         self.x2 = np.array([[1, 1, 1, 0, 0],
                             [0, 0, 0, 0, 1]],
-                           dtype=np.float32)
+                           dtype=t_float_x)
         self.tx2 = theano.shared(np.array([[1, 1, 1, 0, 0],
                              [0, 0, 0, 0, 1],
                              [0, 0, 0, 0, 1],
@@ -44,7 +44,7 @@ class SingleRBMTest(unittest.TestCase):
                              [0, 0, 0, 0, 1],
                              [0, 0, 0, 0, 1],
                             ],
-                            dtype=np.float32))
+                            dtype=t_float_x))
 
     def test_parameters_order(self):
         self.setUpRBM()
@@ -119,7 +119,7 @@ class SingleRBMTest(unittest.TestCase):
         rbm = self.rbm
         x = T.matrix("x")
         y = T.matrix("sample")
-        x_input = np.array([[10, -1, 0.95, 3, 1]], dtype=np.float32)
+        x_input = np.array([[10, -1, 0.95, 3, 1]], dtype=t_float_x)
         reconstruction = 1 / (1 + np.exp(-x_input))
 
         cost = rbm.get_reconstruction_cost(x, y)
@@ -141,7 +141,6 @@ class SingleRBMTest(unittest.TestCase):
         fn = rbm.get_train_fn(self.tx, None)
         res = fn(0)
         print res
-
         pass
 
     def test_train(self):

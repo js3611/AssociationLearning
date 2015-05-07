@@ -24,7 +24,8 @@ class RBMMethodTest(unittest.TestCase):
         rbm = RBM(v, v2, h,
                   cd_type=CLASSICAL,
                   cd_steps=1,
-                  train_parameters=tr)
+                  train_parameters=tr,
+                  associative=True)
 
         self.rbm = rbm
 
@@ -44,11 +45,12 @@ class RBMMethodTest(unittest.TestCase):
         rbm = RBM(v, v2, h,
                   cd_type=CLASSICAL,
                   cd_steps=1,
+                  associative=True,
                   train_parameters=tr)
 
         self.rbm = rbm
-        self.rbmx1 = np.array([[2, 5, 5, 2, 1]], dtype=np.float64)
-        self.rbmx2 = np.array([[5, 2, 3, 8, 1]], dtype=np.float64)
+        self.rbmx1 = np.array([[2, 5, 5, 2, 1]], dtype=t_float_x)
+        self.rbmx2 = np.array([[5, 2, 3, 8, 1]], dtype=t_float_x)
 
     def setUp(self):
         # datasets = load_data('mnist.pkl.gz')
@@ -69,15 +71,15 @@ class RBMMethodTest(unittest.TestCase):
         # Dim(x1) = (1, 2) = (n, v)
         # Dim(x2) = (5, 2) = (n, v)
 
-        self.W = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float64)
-        self.U = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float64)
-        self.c = np.array([1, 10, 100], dtype=np.float64)
-        self.b1 = np.array([-5, 5], dtype=np.float64)
-        self.b2 = np.array([-10, 3], dtype=np.float64)
-        self.x1 = np.array([[2, 5]], dtype=np.float64)
-        self.x12 = np.array([[5, 2]], dtype=np.float64)
-        self.x2 = np.array([[3, 2], [3, 4], [6, 5], [2, 2], [1, 1]], dtype=np.float64)
-        self.x3 = np.array([[3, 9], [3, 3], [1, 5], [7, 2], [1, 1]], dtype=np.float64)
+        self.W = np.array([[1, 2, 3], [4, 5, 6]], dtype=t_float_x)
+        self.U = np.array([[1, 2, 3], [4, 5, 6]], dtype=t_float_x)
+        self.c = np.array([1, 10, 100], dtype=t_float_x)
+        self.b1 = np.array([-5, 5], dtype=t_float_x)
+        self.b2 = np.array([-10, 3], dtype=t_float_x)
+        self.x1 = np.array([[2, 5]], dtype=t_float_x)
+        self.x12 = np.array([[5, 2]], dtype=t_float_x)
+        self.x2 = np.array([[3, 2], [3, 4], [6, 5], [2, 2], [1, 1]], dtype=t_float_x)
+        self.x3 = np.array([[3, 9], [3, 3], [1, 5], [7, 2], [1, 1]], dtype=t_float_x)
 
     def test_simple(self):
         W = T.dmatrix('W')
@@ -456,7 +458,8 @@ class RBMMethodTest(unittest.TestCase):
 class PreProcessingTest(unittest.TestCase):
 
     def test_preprocessing(self):
-        datasets = load_data('mnist.pkl.gz')
+
+        datasets = load_data('../data/mnist.pkl.gz')
         train_set_x, train_set_y = datasets[0]
         valid_set_x, valid_set_y = datasets[1]
         test_set_x, test_set_y = datasets[2]
@@ -472,13 +475,13 @@ class PreProcessingTest(unittest.TestCase):
     def test_scale(self):
         arr = np.array([0.0, 25, 100, 234, 2, 5])
         sc = scale_to_unit_interval(arr)
-        print sc
+        # print sc
 
 class NumpyTest(unittest.TestCase):
     def test_logical_index(self):
         a = np.array([0, 1,2,3,4,5,0, 1,2,3,4,5])
         idx = (a == 1) | (a == 0)
-        print a[idx]
+        # print a[idx]
 
 
 def np_prop_up(v, w, b, v2=None, u=None):
@@ -496,9 +499,4 @@ def np_prop_down(h, w, b):
 
 
 if __name__ == '__main__':
-    #suite = unittest.TestLoader().loadTestsFromTestCase(PreProcessingTest)
-    # suite = unittest.TestLoader().loadTestsFromTestCase(SingleRBMTest) 
-    # unittest.TextTestRunner(verbosity=2).run(suite)
-
-    suite = unittest.TestLoader().loadTestsFromTestCase(AssociativeRBMTest)
-    unittest.TextTestRunner(verbosity=2).run(suite)
+    unittest.main()

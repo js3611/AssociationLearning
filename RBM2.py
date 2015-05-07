@@ -148,12 +148,17 @@ class RBM(object):
                 ),
                 dtype=t_float_x
             )
-        return theano.shared(value=w, name=name, borrow=True)
+        if 'numpy' in str(type(w)):
+            w = theano.shared(value=w, name=name, borrow=True)
+        return w
 
     def get_initial_bias(self, bias, n, name):
         if bias is None:
             bias = np.zeros(n, dtype=t_float_x)
-        return theano.shared(value=bias, name=name, borrow=True)
+
+        if 'numpy' in str(type(bias)):
+            bias = theano.shared(value=bias, name=name, borrow=True)
+        return bias
 
     def __str__(self):
         return "rbm_" + str(self.h_n) + \
@@ -749,7 +754,7 @@ class RBM(object):
 
             print 'Epoch %d, cost is ' % epoch, np.mean(mean_cost)
 
-            if param.plot_during_training:
+            if param.plot_during_training and self.v_n == 784:
                 tile_shape = (self.h_n / 10 + 1, 10)
                 plotting_start = time.clock()       # Measure plotting time
                 image = Image.fromarray(

@@ -26,31 +26,31 @@ class AssociativeRBMTest(unittest.TestCase):
                   train_parameters=tr)
 
         self.rbm = rbm
-        self.x = np.array([[1, 1, 1, 0, 0]], dtype=np.float32)
-        self.y = np.array([[0, 0, 0, 0, 1]], dtype=np.float32)
+        self.x = np.array([[1, 1, 1, 0, 0]], dtype=t_float_x)
+        self.y = np.array([[0, 0, 0, 0, 1]], dtype=t_float_x)
         self.x2 = np.array([[1, 1, 1, 0, 0],
                             [0, 0, 0, 0, 1]],
-                           dtype=np.float32)
+                           dtype=t_float_x)
         self.y2 = np.array([[0, 0, 1, 1, 1],
                             [0, 0, 0, 0, 1]],
-                           dtype=np.float32)
+                           dtype=t_float_x)
         self.yl = np.array([[0, 0],
                             [0, 1]],
-                           dtype=np.float32)
+                           dtype=t_float_x)
 
-        self.tx = theano.shared(np.array([[1, 1, 1, 0, 0]], dtype=np.float32))
-        self.ty = theano.shared(np.array([[0, 0, 0, 0, 1]], dtype=np.float32))
+        self.tx = theano.shared(np.array([[1, 1, 1, 0, 0]], dtype=t_float_x))
+        self.ty = theano.shared(np.array([[0, 0, 0, 0, 1]], dtype=t_float_x))
         self.tz = theano.shared(np.array([[0, 0, 0, 0, 1],
                                           [0, 0, 0, 0, 1],
                                           [0, 0, 0, 0, 1],
                                           [0, 0, 0, 0, 1],
-                                          [0, 0, 0, 0, 1]], dtype=np.float32))
+                                          [0, 0, 0, 0, 1]], dtype=t_float_x))
 
         self.tl = theano.shared(np.array([[0, 1],
                                           [0, 1],
                                           [0, 1],
                                           [0, 1],
-                                          [1, 0]], dtype=np.float32))
+                                          [1, 0]], dtype=t_float_x))
 
 
     def test_parameters_order(self):
