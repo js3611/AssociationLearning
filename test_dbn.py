@@ -205,7 +205,7 @@ def test_generative_dbn():
                     sparsity_cost=0.01,
                     sparsity_decay=0.1,
                     plot_during_training=True,
-                    epochs=2)
+                    epochs=15)
 
     # Layer 1
     # Layer 2

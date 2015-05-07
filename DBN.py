@@ -138,12 +138,11 @@ class DBN(object):
 
             os.chdir("..")
 
-            # Pass the input via sigmoidal layer
+            # Pass the input through sampler method to get next layer input
             sampled_layer = rbm.sample_h_given_v(layer_input)
             transform_input = sampled_layer[2]
             f = theano.function([], transform_input)
             res = f()
-            print res
             layer_input = theano.shared(res)
 
 
