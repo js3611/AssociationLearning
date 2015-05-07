@@ -1059,18 +1059,21 @@ def test_rbm_association_with_label():
     new_train_set_y = theano.shared(new_train_set_y)
 
     # Initialise the RBM and training parameters
-    tr = TrainParam(learning_rate=0.05,
-                    momentum_type=NESTEROV,
-                    momentum=0.5,
-                    weight_decay=0.001,
+    tr = TrainParam(learning_rate=0.001,
+                    momentum_type=CLASSICAL,
+                    momentum=0.1,
+                    weight_decay=0.0005,
                     plot_during_training=True,
                     output_directory="AssociationLabelTest",
                     sparsity_constraint=True,
+                    sparsity_target=0.01,
+                    sparsity_cost=0.5,
+                    sparsity_decay=0.9,
                     epochs=15)
 
     n_visible = train_set_x.get_value().shape[1]
     n_visible2 = 10
-    n_hidden = 100
+    n_hidden = 500
 
     rbm = RBM(n_visible,
                n_visible2,
@@ -1225,6 +1228,6 @@ def test_rbm_association():
 
 
 if __name__ == '__main__':
-    # test_rbm_association()
+    test_rbm_association()
     # test_rbm()
-    test_rbm_association_with_label()
+    # test_rbm_association_with_label()
