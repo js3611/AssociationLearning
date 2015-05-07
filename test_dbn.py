@@ -225,7 +225,7 @@ def test_generative_dbn():
     start_time = time.clock()
 
     # dbn.pretrain(train_set_x, cache=True)
-    dbn.pretrain(train_set_x, cache=Fals)
+    dbn.pretrain(train_set_x, cache=False)
 
     end_time = time.clock()
     print >> sys.stderr, ('The pretraining code for file ' +
