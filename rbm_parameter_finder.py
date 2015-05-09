@@ -1,6 +1,6 @@
 __author__ = 'joschlemper'
 
-from RBM2 import *
+from rbm import *
 
 
 def find_hyper_parameters():

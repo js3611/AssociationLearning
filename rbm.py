@@ -5,7 +5,6 @@ from activationFunction import *
 from theano.tensor.shared_randomstreams import RandomStreams
 from utils import *
 
-import logistic_sgd
 
 import os
 import time
@@ -163,9 +162,11 @@ class RBM(object):
             return bias
 
     def __str__(self):
-        return "rbm_" + str(self.h_n) + \
+        name = 'ass_' if self.associative else ''
+        return name + "rbm_" + str(self.h_n) + \
                "_" + self.cd_type + str(self.cd_steps) + \
                "_" + str(self.train_parameters)
+
 
     def free_energy(self, v, v2=None):
         if self.associative:
@@ -857,7 +858,8 @@ class RBM(object):
                                   p=activation_probability, dtype=t_float_x).eval()
         return self.reconstruct(data, k)
 
-    def reconstruct(self, data, k=1, image_name="reconstructions.png"):
+    def reconstruct(self, data, k=1, image_name="reconstructions.png", plot_every=1):
+        # TODO - change so that it doesn't return all k-steps worth of sample
         # data_size = data.get_value(borrow=True).shape[0]
         data_size = data.shape[0]
         if self.associative:
@@ -1001,6 +1003,15 @@ class RBM(object):
         return v2_p_activations[-1]
 
 
+class GaussianRBM(RBM):
+    def __init__(self):
+        RBM.__init__(self)
+        self.mu = 0
+
+    def __str__(self):
+        return "gaussian_" + RBM.__str__(self)
+
+
 def test_rbm():
     print "Testing RBM"
 
@@ -1053,196 +1064,7 @@ def test_rbm():
     os.chdir(root_dir)
     print "moved to ... " + root_dir
 
-
-def get_target_vector(x):
-    xs = np.zeros(10, dtype=t_float_x)
-    xs[x] = 1
-    return xs
-
-
-def test_rbm_association_with_label():
-    print "Testing Associtive RBM with simple label"
-
-    # Load mnist hand digits
-    datasets = load_data('mnist.pkl.gz')
-    train_set_x, train_set_y = datasets[0]
-    test_set_x, test_set_y = datasets[2]
-
-    # Reformat the train label 2 -> [0, 0, 1, ...., 0 ]
-
-    new_train_set_y = np.matrix(map(lambda x: get_target_vector(x), train_set_y.eval()))
-    new_train_set_y = theano.shared(new_train_set_y)
-
-    # Initialise the RBM and training parameters
-    tr = TrainParam(learning_rate=0.001,
-                    momentum_type=CLASSICAL,
-                    momentum=0.1,
-                    weight_decay=0.0005,
-                    plot_during_training=True,
-                    output_directory="AssociationLabelTest",
-                    sparsity_constraint=True,
-                    sparsity_target=0.01,
-                    sparsity_cost=0.5,
-                    sparsity_decay=0.9,
-                    epochs=15)
-
-    n_visible = train_set_x.get_value().shape[1]
-    n_visible2 = 10
-    n_hidden = 500
-
-    rbm = RBM(n_visible,
-               n_visible2,
-              n_hidden,
-              associative=True,
-              cd_type=PERSISTENT,
-              cd_steps=1,
-              train_parameters=tr)
-
-    rbm.move_to_output_dir()
-
-    loaded = datastorage.retrieve_object(str(rbm))
-    if loaded:
-        rbm = loaded
-        print "... loaded precomputed rbm"
-    else:
-        rbm.train(train_set_x, new_train_set_y)
-        rbm.save()
-
-    rbm.associative = False
-    rbm.reconstruct(test_set_x.get_value(borrow=True)[0:100], 100)
-    rbm.associative = True
-
-    # Classification test - Reconstruct y through x
-    x_in = theano.shared(
-        np.asarray(
-            test_set_x.get_value(borrow=True),
-            dtype=t_float_x
-        )
-    )
-
-    output_probability = rbm.reconstruct_association(x_in, None)
-    sol = test_set_y.eval()
-    guess = [np.argmax(lab) for lab in output_probability]
-    diff = np.count_nonzero(sol - guess)
-
-    print diff
-    print diff / float(test_set_y.eval().shape[0])
-
-
-def test_rbm_association():
-    print "Testing Associative RBM which tries to learn even-oddness of numbers"
-
-    # Even odd test
-    testcases = 1000
-    k = 1
-
-    # Load mnist hand digits
-    datasets = load_data('mnist.pkl.gz')
-    train_set_x, train_set_y = datasets[0]
-    valid_set_x, valid_set_y = datasets[1]
-    test_set_x, test_set_y = datasets[2]
-
-    # Initialise the RBM and training parameters
-    tr = TrainParam(learning_rate=0.04,
-                    momentum_type=CLASSICAL,
-                    momentum=0.01,
-                    weight_decay=0.001,
-                    plot_during_training=True,
-                    output_directory="AssociationTest",
-                    sparsity_constraint=False,
-                    epochs=15)
-
-    n_visible = train_set_x.get_value().shape[1]
-    n_visible2 = n_visible
-    n_hidden = 10
-
-    rbm = RBM(n_visible,
-              n_visible2,
-              n_hidden,
-              associative=True,
-              cd_type=CLASSICAL,
-              cd_steps=1,
-              train_parameters=tr)
-
-    rbm.move_to_output_dir()
-
-    # Find 1 example which train_set_x[i] represents 0 and 1
-    zero_idx = np.where(train_set_y.eval() == 0)[0]
-    one_idx = np.where(train_set_y.eval() == 1)[0]
-    zero_image = train_set_x.get_value(borrow=True)[zero_idx[0]]
-    one_image = train_set_x.get_value(borrow=True)[one_idx[0]]
-
-    save_digit(zero_image, "zero.png")
-    save_digit(one_image, "one.png")
-
-
-    # Repeat and take first 50000
-    def f(x):
-        return zero_image if x % 2 == 0 else one_image
-
-    new_train_set_y = theano.shared(
-        np.matrix(map(f, train_set_y.eval())),
-        name="train_set_y"
-    )
-
-    # print train_set_x.get_value().shape
-    # print new_train_set_y.get_value().shape
-    # print new_train_set_y
-    # print train_set_x
-
-    # Load RBM (test)
-    loaded = datastorage.retrieve_object(str(rbm))
-    if not loaded:
-        # Train RBM - learn joint distribution
-        rbm.train(train_set_x, new_train_set_y)
-        rbm.save()
-    else:
-        rbm = loaded
-        print "... loaded"
-
-    # Reconstruct y through x
-    x_in = theano.shared(
-        np.asarray(
-            test_set_x.get_value(borrow=True)[0:testcases],
-            # test_set_x.get_value(borrow=True),
-            dtype=t_float_x
-        )
-    )
-
-    print "... reconstruction of associated images"
-    reconstructed_y = rbm.reconstruct_association(x_in, None, k, 0.1, sample_size=100)
-    print "... reconstructed"
-
-    # Create Dataset to feed into logistic regression
-
-    # Train data: get only 0's and 1's
-    ty = train_set_y.eval()
-    zero_ones = (ty == 0) | (ty == 1)  # Get indices which the label is 0 or 1
-    train_x = theano.shared(train_set_x.get_value(True)[zero_ones])
-    train_y = theano.shared(ty[zero_ones])
-
-    # Validation setL get only 0's and 1's
-    ty = valid_set_y.eval()
-    zero_ones = (ty == 0) | (ty == 1)
-    valid_x = theano.shared(valid_set_x.get_value(True)[zero_ones])
-    valid_y = theano.shared(ty[zero_ones])
-
-    # Test set: reconstructed y's become the input. Get the corresponding x's and y's
-
-    test_x = theano.shared(reconstructed_y[0:testcases])
-    test_y = theano.shared(np.array(map(lambda x: x % 2, train_set_y.eval()), dtype=np.int32)[0:testcases])
-
-    dataset = ((train_x, train_y), (valid_x, valid_y), (test_x, test_y))
-
-    # Classify the reconstructions
-    logistic_sgd.sgd_optimization_mnist(0.13, 100, dataset, 600)
-
-    # Move back to root
-    os.chdir(root_dir)
-    print "moved to ... " + root_dir
-
-
 if __name__ == '__main__':
-    test_rbm_association()
-    # test_rbm()
+    # test_rbm_association()
+    test_rbm()
     # test_rbm_association_with_label()

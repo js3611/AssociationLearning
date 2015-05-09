@@ -1,5 +1,5 @@
 import unittest
-from RBM2 import *
+from rbm import *
 from activationFunction import *
 from utils import *
 import theano.tensor as T

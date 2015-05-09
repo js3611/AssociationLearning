@@ -1,7 +1,7 @@
 import unittest
 import datastorage as store
 import utils
-import RBM2 as RBM
+import rbm as RBM
 import DBN as DBN
 
 import os

@@ -11,7 +11,7 @@ from theano.tensor.shared_randomstreams import RandomStreams
 
 from logistic_sgd import LogisticRegression
 from mlp import HiddenLayer
-from RBM2 import RBM, TrainParam
+from rbm import RBM, TrainParam
 
 
 class DBN(object):

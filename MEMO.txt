@@ -27,3 +27,8 @@ scp js3611@ray02.doc.ic.ac.uk:/vol/bitbucket/js3611/AssociationLearning/data/rbm
 
 0.5 or 0.9 seems good according to
 https://www.ii.pwr.edu.pl/~gonczarek/papers/drbm_nesterov.pdf
+
+
+6. Numbers
+0.12% is good for randomly activating bits for digits when sampling from scratch
+
