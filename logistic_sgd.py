@@ -435,6 +435,7 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
     print >> sys.stderr, ('The code for file ' +
                           os.path.split(__file__)[1] +
                           ' ran for %.1fs' % ((end_time - start_time)))
+    return test_score
 
 if __name__ == '__main__':
     sgd_optimization_mnist()
