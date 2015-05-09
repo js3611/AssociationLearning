@@ -10,16 +10,17 @@ logging.basicConfig(filename='trace.log', level=logging.INFO)
 
 def find_hyper_parameters():
     logging.info("Start!")
+    f = open('score.txt','w')
 
     print "Testing Associative RBM which tries to learn even-oddness of numbers"
 
     # Load mnist hand digits, class label is already set to binary
-    train, valid, test = loader.load_digits(n=[1000, 100, 100], digits=[0,1], pre={'binary_label': True})
+    train, valid, test = loader.load_digits(n=[5000, 100, 100], digits=[0,1], pre={'binary_label': True})
     train_x, train_y = train
     test_x, test_y = test
     train_x01 = loader.sample_image(train_y)
 
-    dataset01 = loader.load_digits(n=[1000, 100, 100], digits=[0, 1])
+    dataset01 = loader.load_digits(n=[5000, 100, 100], digits=[0, 1])
 
     n_visible = train_x.get_value().shape[1]
     n_visible2 = n_visible
@@ -38,10 +39,10 @@ def find_hyper_parameters():
     # cd_step_range = [1]
     # n_hidden_range = [500, 1000]
 
-    n_hidden_range = [10, 50, 100, 300, 500, 750, 1000]
+    n_hidden_range = [10, 50, 100, 200, 300]
     cd_types = [CLASSICAL, PERSISTENT]
     cd_step_range = [1, 3]
-    learning_rate_options = [0.005, 0.01, 0.05, 0.1, 0.5]#[0.0001, 0.001, 0.01, 0.1] # Histogram
+    learning_rate_options = [0.0001, 0.0003, 0.0005, 0.0007, 0.001, 0.003, 0.005]#[0.0001, 0.001, 0.01, 0.1] # Histogram
     momentum_types = [CLASSICAL, NESTEROV]
     momentum_range = [0.5]  #[0.1, 0.5, 0.9]
     weight_decay_range = [0.001, 0.0001, 0.01]# [0.0001, 0.0005, 0.001]
@@ -49,6 +50,12 @@ def find_hyper_parameters():
     # sparsity_cost_range = [0.01, 0.1, 0.5]    # histogram mean activities of the hidden units
     # sparsity_decay_range = [0.9, 0.95, 0.99]
 
+    possibilities = reduce(lambda x, y: x*y,
+                           map(lambda x: len(x), [n_hidden_range, cd_types, cd_step_range, learning_rate_options,
+                                                  momentum_types, momentum_range, weight_decay_range,
+                                                  sparsity_target_range, sparsity_cost_range, sparsity_decay_range]), 1)
+
+    logging.info(str(possibilities) + " parameter sets to explore")
 
     # Keep track of the best one
     classical_max_cost = - float('-inf')
@@ -110,10 +117,13 @@ def find_hyper_parameters():
 
                                             store.move_to_root()
 
-                                            logging.info(str(rbm) + "\n Rate: " + str(score))
+                                            logging.info(str(rbm) + " : " + str(score))
+                                            f.write(str(rbm) + ':' + str(score) + '\n')
+
                                             print str(rbm)
 
-    logging.info("end!")
+    logging.info("End of finding parameters")
+    f.close()
 
 if __name__ == '__main__':
     find_hyper_parameters()
