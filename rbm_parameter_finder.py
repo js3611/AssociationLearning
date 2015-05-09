@@ -86,11 +86,11 @@ def find_hyper_parameters():
                                                       cd_steps=cd_steps,
                                                       train_parameters=tr)
 
-                                            if os.path.isdir("data/even_odd/"+str(rbm)):
+                                            if os.path.isdir("data/even_odd_simple/"+str(rbm)):
                                                 print "Skipping " + str(rbm) + " as it was already sampled"
                                                 continue                                    
 
-                                            store.move_to('even_odd/' + str(rbm))
+                                            store.move_to('even_odd_simple/' + str(rbm))
 
                                             # Train RBM - learn joint distribution
                                             rbm.train(train_x, train_x01)

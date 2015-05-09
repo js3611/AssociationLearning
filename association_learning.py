@@ -67,30 +67,30 @@ def associate_data2data(cache=False):
     print "Testing Associative RBM which tries to learn even-oddness of numbers"
 
     # Load mnist hand digits, class label is already set to binary
-    train, valid, test = loader.load_digits(n=[1000, 100, 100], digits=[0,1], pre={'binary_label': True})
+    train, valid, test = loader.load_digits(n=[10000, 100, 1000], digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], pre={'binary_label': True})
     train_x, train_y = train
     test_x, test_y = test
     train_x01 = loader.sample_image(train_y)
 
-    dataset01 = loader.load_digits(n=[1000, 100, 100], digits=[0, 1])
+    dataset01 = loader.load_digits(n=[10000, 100, 1000], digits=[0, 1])
 
     # Initialise the RBM and training parameters
-    tr = RBM.TrainParam(learning_rate=0.5,
+    tr = RBM.TrainParam(learning_rate=0.005,
                         momentum_type=RBM.CLASSICAL,
-                        momentum=0.9,
+                        momentum=0.5,
                         weight_decay=0.001,
                         plot_during_training=True,
                         sparsity_constraint=False,
                         sparsity_target=0.01,
                         sparsity_cost=0.5,
                         sparsity_decay=0.9,
-                        epochs=20)
+                        epochs=15)
 
     # Even odd test
     k = 1
     n_visible = train_x.get_value().shape[1]
     n_visible2 = n_visible
-    n_hidden = 10
+    n_hidden = 500
 
     rbm = RBM.RBM(n_visible,
                   n_visible2,
@@ -122,8 +122,9 @@ def associate_data2data(cache=False):
     dataset01[2] = (theano.shared(reconstructed_y), test_y)
 
     # Classify the reconstructions
-    logistic_sgd.sgd_optimization_mnist(0.13, 100, dataset01, 10)
+    score = logistic_sgd.sgd_optimization_mnist(0.13, 100, dataset01, 10)
 
+    print 'Score: {}'.format(str(score))
     print str(rbm)
 
 if __name__ == '__main__':

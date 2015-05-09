@@ -380,7 +380,7 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
                 validation_losses = [validate_model(i)
                                      for i in xrange(n_valid_batches)]
                 this_validation_loss = numpy.mean(validation_losses)
-
+                '''
                 print(
                     'epoch %i, minibatch %i/%i, validation error %f %%' %
                     (
@@ -390,7 +390,7 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
                         this_validation_loss * 100.
                     )
                 )
-
+                '''
                 # if we got the best validation score until now
                 if this_validation_loss < best_validation_loss:
                     #improve patience if loss improvement is good enough
@@ -404,7 +404,7 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
                     test_losses = [test_model(i)
                                    for i in xrange(n_test_batches)]
                     test_score = numpy.mean(test_losses)
-
+                    '''
                     print(
                         (
                             '     epoch %i, minibatch %i/%i, test error of'
@@ -417,12 +417,13 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
                             test_score * 100.
                         )
                     )
-
+                    '''
             if patience <= iter:
                 done_looping = True
                 break
 
     end_time = time.clock()
+    '''
     print(
         (
             'Optimization complete with best validation score of %f %%,'
@@ -435,6 +436,7 @@ def sgd_optimization_mnist(learning_rate=0.13, n_epochs=1000,
     print >> sys.stderr, ('The code for file ' +
                           os.path.split(__file__)[1] +
                           ' ran for %.1fs' % ((end_time - start_time)))
+    '''
     return test_score
 
 if __name__ == '__main__':
