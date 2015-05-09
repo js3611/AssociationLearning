@@ -15,7 +15,7 @@ def find_hyper_parameters():
     print "Testing Associative RBM which tries to learn even-oddness of numbers"
 
     # Load mnist hand digits, class label is already set to binary
-    train, valid, test = loader.load_digits(n=[5000, 100, 100], digits=[0,1], pre={'binary_label': True})
+    train, valid, test = loader.load_digits(n=[5000, 100, 100], pre={'binary_label': True})
     train_x, train_y = train
     test_x, test_y = test
     train_x01 = loader.sample_image(train_y)
@@ -62,6 +62,7 @@ def find_hyper_parameters():
     persistent_max_cost = - float('-inf')
     classical_max_name = ''
     persistent_max_name = ''
+    counter = 1
 
     for sd in sparsity_decay_range:
         for sc in sparsity_cost_range:
@@ -74,6 +75,8 @@ def find_hyper_parameters():
                                     for cd_type in cd_types:
                                         for n_hidden in n_hidden_range:
                                             # Initialise the RBM and training parameters
+                                            logging.info("Search Progress: {} / {}".format(str(counter), possibilities))
+                                            counter+=1
 
                                             tr = TrainParam(learning_rate=lr,
                                                             momentum_type=mt,
@@ -93,7 +96,7 @@ def find_hyper_parameters():
                                                       cd_steps=cd_steps,
                                                       train_parameters=tr)
 
-                                            if os.path.isdir("data/even_odd_simple/"+str(rbm)):
+                                            if os.path.isdir("data/even_odd/"+str(rbm)):
                                                 print "Skipping " + str(rbm) + " as it was already sampled"
                                                 continue                                    
 
