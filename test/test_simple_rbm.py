@@ -15,7 +15,6 @@ class SingleRBMTest(unittest.TestCase):
                         momentum_type=CLASSICAL,
                         momentum=0.5,
                         weight_decay=0.01,
-                        plot_during_training=True,
                         output_directory="Test",
                         sparsity_constraint=False,
                         batch_size=1,
@@ -25,7 +24,8 @@ class SingleRBMTest(unittest.TestCase):
                   associative=False, # for now
                   cd_type=CLASSICAL,
                   cd_steps=10,
-                  train_parameters=tr)
+                  train_parameters=tr,
+                  progress_logger=ProgressLogger())
 
         self.rbm = rbm
         self.x = np.array([[1, 1, 1, 0, 0]], dtype=t_float_x)

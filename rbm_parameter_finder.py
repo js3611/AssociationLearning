@@ -9,18 +9,19 @@ import logging
 logging.basicConfig(filename='trace.log', level=logging.INFO)
 
 def find_hyper_parameters():
+    progress_logger = ProgressLogger()
     logging.info("Start!")
     f = open('score.txt','w')
 
     print "Testing Associative RBM which tries to learn even-oddness of numbers"
 
     # Load mnist hand digits, class label is already set to binary
-    train, valid, test = loader.load_digits(n=[5000, 100, 100], pre={'binary_label': True})
+    train, valid, test = loader.load_digits(n=[20, 100, 100], pre={'binary_label': True})
     train_x, train_y = train
     test_x, test_y = test
     train_x01 = loader.sample_image(train_y)
 
-    dataset01 = loader.load_digits(n=[5000, 100, 100], digits=[0, 1])
+    dataset01 = loader.load_digits(n=[20, 100, 100], digits=[0, 1])
 
     n_visible = train_x.get_value().shape[1]
     n_visible2 = n_visible
@@ -71,9 +72,9 @@ def find_hyper_parameters():
                     for mt in momentum_types:
                         for m in momentum_range:
                             for wd in weight_decay_range:
-                                for lr in learning_rate_options:
-                                    for cd_type in cd_types:
-                                        for n_hidden in n_hidden_range:
+                                for cd_type in cd_types:
+                                    for n_hidden in n_hidden_range:
+                                        for lr in learning_rate_options:
                                             # Initialise the RBM and training parameters
                                             logging.info("Search Progress: {} / {}".format(str(counter), possibilities))
                                             counter+=1
@@ -85,8 +86,7 @@ def find_hyper_parameters():
                                                             sparsity_constraint=False,
                                                             sparsity_target=st,
                                                             sparsity_cost=sc,
-                                                            sparsity_decay=sd,
-                                                            plot_during_training=True)
+                                                            sparsity_decay=sd)
 
                                             rbm = RBM(n_visible,
                                                       n_visible2,
@@ -94,7 +94,8 @@ def find_hyper_parameters():
                                                       associative=True,
                                                       cd_type=cd_type,
                                                       cd_steps=cd_steps,
-                                                      train_parameters=tr)
+                                                      train_parameters=tr,
+                                                      progress_logger=progress_logger)
 
                                             if os.path.isdir("data/even_odd/"+str(rbm)):
                                                 print "Skipping " + str(rbm) + " as it was already sampled"

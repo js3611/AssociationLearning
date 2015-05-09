@@ -3,12 +3,12 @@ import theano
 import theano.tensor as T
 from activationFunction import *
 from theano.tensor.shared_randomstreams import RandomStreams
-from utils import *
-
+import utils
+import mnist_loader as loader
+import datastorage as store
 
 import os
 import time
-import datastorage
 try:
     import PIL.Image as Image
 except ImportError:
@@ -38,16 +38,15 @@ class TrainParam(object):
     def __init__(self,
                  epochs=15,
                  batch_size=20,
-                 plot_during_training=True,
-                 output_directory=None,
                  learning_rate=0.1,
-                 momentum_type='nesterov',
+                 momentum_type=NESTEROV,
                  momentum=0.5,
                  weight_decay=0.001,
                  sparsity_constraint=True,
                  sparsity_target=0.01,      # in range (0.1^9, 0.01)
                  sparsity_cost=0.01,
-                 sparsity_decay=0.1
+                 sparsity_decay=0.1,
+                 output_directory=None
                  ):
 
         self.epochs = epochs
@@ -62,9 +61,8 @@ class TrainParam(object):
         self.sparsity_target = sparsity_target
         self.sparsity_cost = sparsity_cost
         self.sparsity_decay = sparsity_decay
-        # Output Configuration
+        # Meta
         self.output_directory = output_directory
-        self.plot_during_training = plot_during_training
 
     def __str__(self):
         return "epoch" + str(self.epochs) + \
@@ -76,6 +74,69 @@ class TrainParam(object):
                 + "_t" + str(self.sparsity_target)
                 + "_c" + str(self.sparsity_cost) +
                 "_d" + str(self.sparsity_decay) if self.sparsity_constraint else "")
+
+
+class ProgressLogger(object):
+
+        def __init__(self,
+                     likelihood=True,
+                     time_training=True,
+                     plot=True,
+                     plot_info=None,
+                     out_dir=None
+                     ):
+
+            self.likelihood = likelihood
+            self.time_training = time_training
+            self.plot = plot
+            self.plot_info = plot_info
+            self.out_dir = out_dir
+
+        def visualise_weight(self, rbm, image_name):
+            plotting_start = time.clock()  # Measure plotting time
+
+            if rbm.v_n == 784:
+                tile_shape = (rbm.h_n / 10 + 1, 10)
+
+                image = Image.fromarray(
+                    utils.tile_raster_images(
+                        X=rbm.W.get_value(borrow=True).T,
+                        img_shape=(28, 28),
+                        tile_shape=tile_shape,
+                        tile_spacing=(1, 1)
+                    )
+                )
+                image.save(image_name)
+
+            plotting_end = time.clock()
+            return plotting_end - plotting_start
+
+
+class AssociationProgressLogger(ProgressLogger):
+    def visualise_weight(self, rbm, image_name):
+            assert rbm.associative
+            plotting_start = time.clock()  # Measure plotting time
+
+            w = rbm.W.get_value(borrow=True).T
+            u = rbm.U.get_value(borrow=True).T
+
+            weight = np.hstack((w, u))
+
+            tile_shape = (rbm.h_n / 10 + 1, 10)
+
+            image = Image.fromarray(
+                utils.tile_raster_images(
+                    X=weight,
+                    img_shape=(28 * 2, 28),
+                    tile_shape=tile_shape,
+                    tile_spacing=(1, 1)
+                )
+            )
+            image.save(image_name)
+
+            plotting_end = time.clock()
+            return plotting_end - plotting_start
+
 
 
 class RBM(object):
@@ -95,7 +156,8 @@ class RBM(object):
                  v_activation_fn2=log_sig,
                  cd_type=PERSISTENT,
                  cd_steps=1,
-                 train_parameters=None):
+                 train_parameters=None,
+                 progress_logger=None):
 
         self.np_rand = np.random.RandomState(123)
         self.rand = RandomStreams(self.np_rand.randint(2 ** 30))
@@ -136,6 +198,8 @@ class RBM(object):
             self.v_bias2 = self.get_initial_bias(v_bias2, v_n2, 'v_bias2')
             self.v_activation_fn2 = v_activation_fn2
             self.params += [self.U, self.v_bias2]
+
+        self.track_progress = progress_logger
 
     def get_initial_weight(self, w, nrow, ncol, name):
         if w is None:
@@ -697,56 +761,13 @@ class RBM(object):
 
         return train_fn
 
-    def move_to_output_dir(self):
-        # Move to data directory first
-        if os.getcwd() != data_dir:
-            if not os.path.isdir("data"):
-                os.makedirs("data")
-            print "... moved to " + data_dir
-            os.chdir(data_dir)
-
-        # Move to output dir 
-        p = self.train_parameters
-        rbm_name = p.output_directory
-        if not rbm_name:
-            rbm_name = str(self)
-
-        if not os.path.isdir(rbm_name):
-            os.makedirs(rbm_name)
-        os.chdir(rbm_name)
-        print "... moved to " + rbm_name
-
-    def create_and_move_to_output_dir(self):
-        """Create and move to output dir"""
-        param = self.train_parameters
-        # if os.path.isdir("data" + str(self)) or os.path.isdir("data" + param.output_directory):
-        #     return
-
-        if param.plot_during_training:
-            if not os.path.isdir("data"):
-                os.makedirs("data")
-            os.chdir("data")
-            if not param.output_directory:
-                out_dir = str(self)
-            else:
-                out_dir = param.output_directory
-
-            if not os.path.isdir(out_dir):
-                os.makedirs(out_dir)
-            os.chdir(out_dir)
-            print "... moved to: " + out_dir
-
     def train(self, train_data, train_label=None):
         """Trains RBM. For now, input needs to be Theano matrix"""
 
         param = self.train_parameters
         batch_size = param.batch_size
         mini_batches = train_data.get_value(borrow=True).shape[0] / batch_size
-
-        if self.associative:
-            train_fn = self.get_train_fn(train_data, train_label)
-        else:
-            train_fn = self.get_train_fn(train_data, None)
+        train_fn = self.get_train_fn(train_data, train_label)
 
         plotting_time = 0.
         start_time = time.clock()       # Measure training time
@@ -755,27 +776,15 @@ class RBM(object):
             for batch_index in xrange(mini_batches):
                 mean_cost += [train_fn(batch_index)]
 
-            print 'Epoch %d, cost is ' % epoch, np.mean(mean_cost)
-
-            if param.plot_during_training and self.v_n == 784:
-                tile_shape = (self.h_n / 10 + 1, 10)
-                plotting_start = time.clock()       # Measure plotting time
-                image = Image.fromarray(
-                    tile_raster_images(
-                        X=self.W.get_value(borrow=True).T,
-                        img_shape=(28, 28),
-                        tile_shape=tile_shape,
-                        tile_spacing=(1, 1)
-                    )
-                )
-                image.save('epoch_%i.png' % epoch)
-                plotting_stop = time.clock()
-                plotting_time += (plotting_stop - plotting_start)
+            if self.track_progress:
+                print 'Epoch %d, cost is ' % epoch, np.mean(mean_cost)
+                plotting_time += self.track_progress.visualise_weight(self, 'epoch_%i.png' % epoch)
 
         end_time = time.clock()
         pre_training_time = (end_time - start_time) - plotting_time
 
-        print ('Training took %f minutes' % (pre_training_time / 60.))
+        if self.track_progress:
+            print ('Training took %f minutes' % (pre_training_time / 60.))
 
         return [mean_cost]
 
@@ -836,7 +845,7 @@ class RBM(object):
         for i in xrange(n_samples_from_chain):
             vis_mf, vis_sample = sample_fn()
             print ' ... plotting sample ', i
-            image_data[29 * i:29 * i + 28, :] = tile_raster_images(
+            image_data[29 * i:29 * i + 28, :] = utils.tile_raster_images(
                 X=vis_mf,
                 img_shape=(28, 28),
                 tile_shape=(1, n_chains),
@@ -848,7 +857,7 @@ class RBM(object):
         image.save(image_name)
 
     def save(self):
-        datastorage.store_object(self)
+        store.store_object(self)
         print "... saved RBM object to " + os.getcwd() + "/" + str(self)
 
     def sample(self, n=1, k=1):
@@ -891,7 +900,7 @@ class RBM(object):
             )
 
             # Original images
-            image_data[0:28, :] = tile_raster_images(
+            image_data[0:28, :] = utils.tile_raster_images(
                 X=data,
                 img_shape=(28, 28),
                 tile_shape=(1, data_size),
@@ -902,7 +911,7 @@ class RBM(object):
             for i in xrange(1, k):
                 vis_mf = v_p_activation[i]
                 print ' ... plotting sample ', i
-                image_data[29 * i:29 * i + 28, :] = tile_raster_images(
+                image_data[29 * i:29 * i + 28, :] = utils.tile_raster_images(
                     X=vis_mf,
                     img_shape=(28, 28),
                     tile_shape=(1, data_size),
@@ -916,7 +925,7 @@ class RBM(object):
             for i in xrange(k):
                 vis_mf = v_sample[i]
                 print ' ... plotting sample ', i
-                image_data[29 * i:29 * i + 28, :] = tile_raster_images(
+                image_data[29 * i:29 * i + 28, :] = utils.tile_raster_images(
                     X=vis_mf,
                     img_shape=(28, 28),
                     tile_shape=(1, data_size),
@@ -977,7 +986,7 @@ class RBM(object):
             )
 
             # Original images
-            image_data[0:28, :] = tile_raster_images(
+            image_data[0:28, :] = utils.tile_raster_images(
                 X=x.get_value(borrow=True)[0:sample_size],
                 img_shape=(28, 28),
                 tile_shape=(1, sample_size),
@@ -989,7 +998,7 @@ class RBM(object):
                 # vis_mf = v2_samples[i]
                 vis_mf = v2_p_activations[i]
                 print ' ... plotting sample ', i
-                image_data[29 * i:29 * i + 28, :] = tile_raster_images(
+                image_data[29 * i:29 * i + 28, :] = utils.tile_raster_images(
                     X=vis_mf[0:sample_size],
                     img_shape=(28, 28),
                     tile_shape=(1, sample_size),
@@ -1001,6 +1010,10 @@ class RBM(object):
             image.save(image_name)
 
         return v2_p_activations[-1]
+
+
+class AssociativeRBM(RBM):
+    pass
 
 
 class GaussianRBM(RBM):
@@ -1016,7 +1029,7 @@ def test_rbm():
     print "Testing RBM"
 
     # Load mnist hand digits
-    datasets = load_data('mnist.pkl.gz')
+    datasets = loader.load_digits(n=[100, 0, 100], digits=[1])
     train_set_x, train_set_y = datasets[0]
     test_set_x, test_set_y = datasets[2]
 
@@ -1028,11 +1041,10 @@ def test_rbm():
                     sparsity_constraint=True,
                     sparsity_target=0.01,
                     sparsity_cost=0.01,
-                    sparsity_decay=0.1,
-                    plot_during_training=True)
+                    sparsity_decay=0.1)
 
     n_visible = train_set_x.get_value().shape[1]
-    n_hidden = 15
+    n_hidden = 2
 
     rbm = RBM(n_visible,
               n_visible,
@@ -1040,11 +1052,13 @@ def test_rbm():
               associative=False,
               cd_type=PERSISTENT,
               cd_steps=1,
-              train_parameters=tr)
+              train_parameters=tr,
+              progress_logger=ProgressLogger())
 
     print "... initialised RBM"
 
-    rbm.move_to_output_dir()
+    curr_dir = store.move_to(str(rbm))
+    print "... moved to {}".format(curr_dir)
 
     # Train RBM
     rbm.train(train_set_x)
@@ -1056,15 +1070,13 @@ def test_rbm():
     rbm.save()
 
     # Load RBM (test)
-    loaded = datastorage.retrieve_object(str(rbm))
+    loaded = store.retrieve_object(str(rbm))
     if loaded:
         print "... loaded trained RBM"
 
     # Move back to root
     os.chdir(root_dir)
-    print "moved to ... " + root_dir
+    print "... moved to " + root_dir
 
 if __name__ == '__main__':
-    # test_rbm_association()
     test_rbm()
-    # test_rbm_association_with_label()

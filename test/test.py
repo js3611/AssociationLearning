@@ -16,7 +16,6 @@ class RBMMethodTest(unittest.TestCase):
                         momentum_type=CLASSICAL,
                         momentum=0.5,
                         weight_decay=0.01,
-                        plot_during_training=True,
                         output_directory="AssociationTest",
                         sparsity_constraint=False,
                         epochs=15)
@@ -25,7 +24,8 @@ class RBMMethodTest(unittest.TestCase):
                   cd_type=CLASSICAL,
                   cd_steps=1,
                   train_parameters=tr,
-                  associative=True)
+                  associative=True,
+                  progress_logger=ProgressLogger())
 
         self.rbm = rbm
 
@@ -37,7 +37,6 @@ class RBMMethodTest(unittest.TestCase):
                         momentum_type=CLASSICAL,
                         momentum=0.5,
                         weight_decay=0.01,
-                        plot_during_training=True,
                         output_directory="AssociationTest",
                         sparsity_constraint=False,
                         epochs=15)
@@ -46,7 +45,8 @@ class RBMMethodTest(unittest.TestCase):
                   cd_type=CLASSICAL,
                   cd_steps=1,
                   associative=True,
-                  train_parameters=tr)
+                  train_parameters=tr,
+                  progress_logger=ProgressLogger())
 
         self.rbm = rbm
         self.rbmx1 = np.array([[2, 5, 5, 2, 1]], dtype=t_float_x)
