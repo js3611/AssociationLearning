@@ -25,3 +25,14 @@ def pos_lin(x):
     return T.switch(T.lt(x, 0), 0, x)
 
 
+def rectify(x):
+    return T.log(1 + T.exp(x))
+
+
+def softmax(x):
+    return T.nnet.softmax(x)
+
+
+# def softmax(x):
+#     e_x = T.exp(x)
+#     return e_x / e_x.sum(axis=1)

@@ -4,6 +4,7 @@ import time
 
 import numpy as np
 import datastorage as store
+import mnist_loader as loader
 
 import theano
 import theano.tensor as T
@@ -27,7 +28,7 @@ from utils import save_digits
 
 def test_DBN(finetune_lr=0.1, pretraining_epochs=100,
              pretrain_lr=0.01, k=1, training_epochs=1000,
-             dataset='mnist.pkl.gz', batch_size=10, output_folder='dbn_plots'):
+             dataset='mnist.pkl.gz', batch_size=10, output_folder='zero_learner'):
 
     # Load data
     datasets = load_data(dataset)
@@ -191,10 +192,8 @@ def test_DBN(finetune_lr=0.1, pretraining_epochs=100,
 def test_generative_dbn():
 
     # Load data
-    datasets = load_data('mnist.pkl.gz')
-    train_set_x, train_set_y = datasets[0]
-    valid_set_x, valid_set_y = datasets[1]
-    test_set_x, test_set_y = datasets[2]
+    train, valid, test = loader.load_digits(n=[500, 100, 100], digits=[0, 1, 2, 3, 4, 5])
+    train_x, train_y = train
 
     # Initialise RBM parameters
     tr = TrainParam(learning_rate=0.01,
@@ -210,11 +209,11 @@ def test_generative_dbn():
     # Layer 1
     # Layer 2
     # Layer 3
-    topology = [784, 105, 105]
+    topology = [784, 100, 100, 100]
     batch_size = 10
 
     # construct the Deep Belief Network
-    dbn = DBN(topology=topology, n_outs=10, out_dir='dbn_test', tr=tr)
+    dbn = DBN(topology=topology, n_outs=10, out_dir='zero_one_learner', tr=tr)
     print "... initialised dbn"
 
     store.move_to(dbn.out_dir)
@@ -223,8 +222,8 @@ def test_generative_dbn():
     print '... pre-training the model'
     start_time = time.clock()
 
-    # dbn.pretrain(train_set_x, cache=True)
-    dbn.pretrain(train_set_x, cache=True)
+    # dbn.pretrain(train_x, cache=True)
+    dbn.pretrain(train_x, cache=False)
 
     end_time = time.clock()
     print >> sys.stderr, ('The pretraining code for file ' +
@@ -237,9 +236,10 @@ def test_generative_dbn():
     print "... moved to {}".format(os.getcwd())
 
     # Sample from top layer to generate data
-    sampled = dbn.sample(100, 1000)
+    sample_n = 100
+    sampled = dbn.sample(sample_n, 10)
 
-    save_digits(sampled)
+    save_digits(sampled, shape=(sample_n / 10, 10))
 
 
     # end-snippet-2

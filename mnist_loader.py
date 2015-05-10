@@ -5,8 +5,8 @@ import gzip
 import os
 import sys
 import time
+from sklearn import preprocessing
 import numpy as np
-import preprocessing
 import theano
 import theano.tensor as T
 
@@ -51,6 +51,15 @@ def load_digits(shared=True, digits=None, pre=None, n=None):
             pass
         if 'wpca' in pre:
             pass
+        if 'scale' in pre:
+            new_data = []
+            for i, data_xy in enumerate(data):
+                if len(data_xy[0] > 0):
+                    data_x = preprocessing.scale(data_xy[0])
+                else:
+                    data_x = data_xy[0]
+                new_data.append((data_x, data_xy[1]))
+            data = new_data
         if 'center' in pre:
             pass
         if 'threshold' in pre:

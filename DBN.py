@@ -11,7 +11,7 @@ from theano.tensor.shared_randomstreams import RandomStreams
 
 from logistic_sgd import LogisticRegression
 from mlp import HiddenLayer
-from rbm import RBM, TrainParam
+from rbm import RBM, TrainParam, ProgressLogger
 
 
 class DBN(object):
@@ -73,7 +73,8 @@ class DBN(object):
                             h_n=topology[i+1],
                             W=sigmoid_layer.W,
                             h_bias=sigmoid_layer.b,
-                            train_parameters=tr)
+                            train_parameters=tr,
+                            progress_logger=ProgressLogger())
             self.rbm_layers.append(rbm_layer)
             
         # Logistic layer on top of the MLP

@@ -127,14 +127,16 @@ except ImportError:
     import Image
 
 
-def save_digits(x, image_name='digits.png'):
+def save_digits(x, image_name='digits.png', shape=None):
     data_size = x.shape[0]
     image_data = numpy.zeros((29, 29 * data_size - 1), dtype='uint8')
+    if not shape:
+        shape = (1, data_size)
 
-    image_data[0:28, :] = tile_raster_images(
+    image_data = tile_raster_images(
         X=x,
         img_shape=(28, 28),
-        tile_shape=(1, data_size),
+        tile_shape=shape,
         tile_spacing=(1, 1)
     )
 
