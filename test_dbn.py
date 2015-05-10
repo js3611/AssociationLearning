@@ -25,6 +25,7 @@ from utils import tile_raster_images
 from utils import load_data
 from utils import save_digits
 
+theano.config.optimizer = 'None'
 
 def test_DBN(finetune_lr=0.1, pretraining_epochs=100,
              pretrain_lr=0.01, k=1, training_epochs=1000,
@@ -200,7 +201,7 @@ def test_generative_dbn():
                     momentum_type='nesterov',
                     momentum=0.5,
                     weight_decay=0.01,
-                    sparsity_constraint=True,
+                    sparsity_constraint=False,
                     sparsity_target=0.01,
                     sparsity_cost=0.01,
                     sparsity_decay=0.1,
@@ -209,7 +210,7 @@ def test_generative_dbn():
     # Layer 1
     # Layer 2
     # Layer 3
-    topology = [784, 100, 100, 100]
+    topology = [784, 100, 100, 500]
     batch_size = 10
 
     # construct the Deep Belief Network

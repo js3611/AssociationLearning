@@ -63,6 +63,7 @@ def associate_data2label(cache=False):
 
     print "Classification Rate: {}".format((diff / float(test_y.eval().shape[0])))
 
+
 def associate_data2data(cache=False):
     print "Testing Associative RBM which tries to learn even-oddness of numbers"
 
@@ -128,6 +129,59 @@ def associate_data2data(cache=False):
 
     print 'Score: {}'.format(str(score))
     print str(rbm)
+
+
+def associate_data2dataDBN(cache=False):
+    pass
+    # # Load data
+    # train, valid, test = loader.load_digits(n=[500, 100, 100], digits=[0, 1, 2, 3, 4, 5])
+    # train_x, train_y = train
+    #
+    # # Initialise RBM parameters
+    # tr = TrainParam(learning_rate=0.01,
+    #                 momentum_type='nesterov',
+    #                 momentum=0.5,
+    #                 weight_decay=0.01,
+    #                 sparsity_constraint=True,
+    #                 sparsity_target=0.01,
+    #                 sparsity_cost=0.01,
+    #                 sparsity_decay=0.1,
+    #                 epochs=15)
+    #
+    # # Layer 1
+    # # Layer 2
+    # # Layer 3
+    # topology = [784, 100, 100, 100]
+    # batch_size = 10
+    #
+    # # construct the Deep Belief Network
+    # dbn = DBN(topology=topology, n_outs=10, out_dir='zero_one_learner', tr=tr)
+    # print "... initialised dbn"
+    #
+    # store.move_to(dbn.out_dir)
+    # print "... moved to {}".format(os.getcwd())
+    #
+    # print '... pre-training the model'
+    # start_time = time.clock()
+    #
+    # # dbn.pretrain(train_x, cache=True)
+    # dbn.pretrain(train_x, cache=False)
+    #
+    # end_time = time.clock()
+    # print >> sys.stderr, ('The pretraining code for file ' +
+    #                       os.path.split(__file__)[1] +
+    #                       ' ran for %.2fm' % ((end_time - start_time) / 60.))
+    #
+    # store.move_to(dbn.out_dir)
+    # store.store_object(dbn)
+    #
+    # print "... moved to {}".format(os.getcwd())
+    #
+    # # Sample from top layer to generate data
+    # sample_n = 100
+    # sampled = dbn.sample(sample_n, 10)
+    #
+    # save_digits(sampled, shape=(sample_n / 10, 10))
 
 if __name__ == '__main__':
     # associate_data2label()
