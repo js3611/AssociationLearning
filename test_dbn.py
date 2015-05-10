@@ -14,6 +14,9 @@ from logistic_sgd import LogisticRegression
 from mlp import HiddenLayer
 from rbm import RBM
 from rbm import TrainParam
+from rbm import CLASSICAL
+from rbm import NESTEROV
+from rbm import PERSISTENT
 from DBN import DBN
 
 try:
@@ -198,19 +201,19 @@ def test_generative_dbn():
 
     # Initialise RBM parameters
     tr = TrainParam(learning_rate=0.01,
-                    momentum_type='nesterov',
+                    momentum_type=NESTEROV,
                     momentum=0.5,
                     weight_decay=0.01,
                     sparsity_constraint=False,
                     sparsity_target=0.01,
                     sparsity_cost=0.01,
                     sparsity_decay=0.1,
-                    epochs=15)
+                    epochs=50)
 
     # Layer 1
     # Layer 2
     # Layer 3
-    topology = [784, 100, 100, 500]
+    topology = [784, 500, 500, 2000]
     batch_size = 10
 
     # construct the Deep Belief Network
@@ -223,8 +226,8 @@ def test_generative_dbn():
     print '... pre-training the model'
     start_time = time.clock()
 
-    # dbn.pretrain(train_x, cache=True)
-    dbn.pretrain(train_x, cache=False)
+    dbn.pretrain(train_x, cache=True)
+    # dbn.pretrain(train_x, cache=False)
 
     end_time = time.clock()
     print >> sys.stderr, ('The pretraining code for file ' +
@@ -237,8 +240,8 @@ def test_generative_dbn():
     print "... moved to {}".format(os.getcwd())
 
     # Sample from top layer to generate data
-    sample_n = 100
-    sampled = dbn.sample(sample_n, 10)
+    sample_n = 1000
+    sampled = dbn.sample(sample_n, 2)
 
     save_digits(sampled, shape=(sample_n / 10, 10))
 

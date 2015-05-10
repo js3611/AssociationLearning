@@ -39,6 +39,9 @@ class DBN(object):
 
         if not numpy_rng:
             numpy_rng = np.random.RandomState(123)
+        else:
+            numpy_rng = np.random.RandomState(123)
+
 
         if not theano_rng:
             theano_rng = RandomStreams(numpy_rng.randint(2 ** 30))
@@ -69,6 +72,7 @@ class DBN(object):
 
             # construct RBM that shared weights with this layer
             rbm_layer = RBM(associative=False,
+                            cd_type='classical',
                             v_n=topology[i],
                             h_n=topology[i+1],
                             W=sigmoid_layer.W,
