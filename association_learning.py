@@ -71,16 +71,16 @@ def associate_data2data(cache=False):
 
 
     # Load mnist hand digits, class label is already set to binary
-    train, valid, test = loader.load_digits(n=[100, 100, 100], digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], pre={'binary_label': True})
+    train, valid, test = loader.load_digits(n=[500, 100, 100], digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], pre={'binary_label': True})
     train_x, train_y = train
     test_x, test_y = test
     train_x01 = loader.sample_image(train_y)
 
-    dataset01 = loader.load_digits(n=[100, 100, 100], digits=[0, 1])
+    dataset01 = loader.load_digits(n=[500, 100, 100], digits=[0, 1])
 
 
     # Initialise the RBM and training parameters
-    tr = RBM.TrainParam(learning_rate=0.0001,
+    tr = RBM.TrainParam(learning_rate=0.005,
                         momentum_type=RBM.CLASSICAL,
                         momentum=0.5,
                         weight_decay=0.001,
@@ -94,14 +94,14 @@ def associate_data2data(cache=False):
     k = 1
     n_visible = train_x.get_value().shape[1]
     n_visible2 = n_visible
-    n_hidden = 200
+    n_hidden = 100
 
     rbm = RBM.RBM(n_visible,
                   n_visible2,
                   n_hidden,
                   associative=True,
                   cd_type=RBM.CLASSICAL,
-                  cd_steps=1,
+                  cd_steps=k,
                   train_parameters=tr,
                   progress_logger=RBM.AssociationProgressLogger())
 
@@ -116,7 +116,7 @@ def associate_data2data(cache=False):
         rbm.save()
 
     print "... reconstruction of associated images"
-    reconstructed_y = rbm.reconstruct_association(test_x, None, 100, 0.01, plot_n=200, plot_every=5)
+    reconstructed_y = rbm.reconstruct_association(test_x, None, 10, 0.01, plot_n=100, plot_every=1)
     print "... reconstructed"
 
     # TODO use sklearn to obtain accuracy/precision etc
@@ -186,4 +186,4 @@ def associate_data2dataDBN(cache=False):
 
 if __name__ == '__main__':
     # associate_data2label()
-    associate_data2data(True)
+    associate_data2data(False)

@@ -76,9 +76,7 @@ class TrainParam(object):
                 + "_c" + str(self.sparsity_cost) +
                 "_d" + str(self.sparsity_decay) if self.sparsity_constraint else "")
 
-
 def visualise_reconstructions(orig, reconstructions, img_shape, plot_n=None, img_name='reconstruction'):
-            print reconstructions
             k = len(reconstructions)
             assert k > 0
 
@@ -112,6 +110,7 @@ def visualise_reconstructions(orig, reconstructions, img_shape, plot_n=None, img
                 # construct image
                 image = Image.fromarray(image_data)
                 image.save(img_name + '_{}.png'.format(k))
+
 
 class ProgressLogger(object):
 
@@ -908,13 +907,13 @@ class RBM(object):
         (res, updates) = theano.scan(self.gibbs_vhv,
                                      outputs_info=[None, None, None,
                                                    None, None, data],
-                                     n_steps=k_batch,
+                                     n_steps=plot_every,
                                      name="Gibbs_sampling_reconstruction")
         updates.update({data: res[-1][-1]})
         gibbs_sampling = theano.function([], res, updates=updates)
 
         reconstructions = []
-        for i in xrange(plot_every):
+        for i in xrange(k_batch):
             result = gibbs_sampling()
             [_, _, _, _, reconstruction_chain, _] = result
             reconstructions.append(reconstruction_chain[-1])
@@ -940,14 +939,14 @@ class RBM(object):
             self.gibbs_hvh_fixed,
             outputs_info=[None, None, None, None, None,
                           None, None, None, chain_start],
-            non_sequences=[x], n_steps=k_batch, name="Gibbs_sampling_association"
+            non_sequences=[x], n_steps=plot_every, name="Gibbs_sampling_association"
         )
         updates.update({chain_start: res[-1][-1]})
         gibbs_sampling_assoc = theano.function([], res, updates=updates)
 
         # Runner
         reconstructions = []
-        for i in xrange(plot_every):
+        for i in xrange(k_batch):
             result = gibbs_sampling_assoc()
             [_, _, _, _, reconstruction_chain, _, _, _, _] = result
             reconstructions.append(reconstruction_chain[-1])
