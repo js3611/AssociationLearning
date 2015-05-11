@@ -33,11 +33,6 @@ class UtilsTest(unittest.TestCase):
 
         dbn2 = store.retrieve_object(str(dbn))
         self.assertTrue(str(dbn) == str(dbn2))
-
-
-
-
-
         store.move_to_root()
 
 

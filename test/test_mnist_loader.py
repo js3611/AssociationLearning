@@ -100,14 +100,18 @@ class MyTestCase(unittest.TestCase):
         self.assertTrue(test_y.shape[1] == 10)
 
     def test_sample_image(self):
-        train, valid, test = loader.load_digits(digits=[2, 3], n=[100, 0, 0], pre={'binary_label':True})
+        train, valid, test = loader.load_digits(digits=[2, 3], n=[10, 0, 0], pre={'binary_label':True})
         train_x, train_y = train
         valid_x, valid_y = valid
         test_x, test_y = test
 
         train_x01 = loader.sample_image(train_y, shared=False)
-        print train_y
+        print train_y.eval()
         utils.save_digits(train_x01, 'test_image/sampled_img.png')
+
+    def test_binary_label(self):
+        train, valid, test = loader.load_digits(digits=[2, 3], n=[10, 0, 0], pre={'binary_label':True})
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -32,7 +32,7 @@ data_dir = "/".join([root_dir, "data"])
 # compute_test_value is 'off' by default, meaning this feature is inactive
 # theano.config.compute_test_value = 'off' # Use 'warn' to activate this feature
 theano.config.optimizer = 'None'
-# theano.config.exception_verbosity = 'high'
+theano.config.exception_verbosity = 'high'
 
 
 class TrainParam(object):
@@ -77,6 +77,42 @@ class TrainParam(object):
                 "_d" + str(self.sparsity_decay) if self.sparsity_constraint else "")
 
 
+def visualise_reconstructions(orig, reconstructions, img_shape, plot_n=None, img_name='reconstruction'):
+            print reconstructions
+            k = len(reconstructions)
+            assert k > 0
+
+            data_size = plot_n if plot_n else orig.shape[0]
+
+            if img_shape == (28, 28):
+
+                image_data = np.zeros(
+                    (29 * (k+1) + 1, 29 * data_size - 1),
+                    dtype='uint8'
+                )
+
+                # Original images
+                image_data[0:28, :] = utils.tile_raster_images(
+                    X=orig,
+                    img_shape=(28, 28),
+                    tile_shape=(1, data_size),
+                    tile_spacing=(1, 1)
+                )
+
+                # Generate image by plotting the sample from the chain
+                for i in xrange(1, k+1):
+                    print ' ... plotting sample ', i
+                    image_data[29 * i:29 * i + 28, :] = utils.tile_raster_images(
+                        X=(reconstructions[i-1]),
+                        img_shape=(28, 28),
+                        tile_shape=(1, data_size),
+                        tile_spacing=(1, 1)
+                    )
+
+                # construct image
+                image = Image.fromarray(image_data)
+                image.save(img_name + '_{}.png'.format(k))
+
 class ProgressLogger(object):
 
         def __init__(self,
@@ -92,6 +128,7 @@ class ProgressLogger(object):
             self.plot = plot
             self.plot_info = plot_info
             self.out_dir = out_dir
+            self.img_shape = (28, 28)
 
         def visualise_weight(self, rbm, image_name):
             plotting_start = time.clock()  # Measure plotting time
@@ -112,31 +149,39 @@ class ProgressLogger(object):
             plotting_end = time.clock()
             return plotting_end - plotting_start
 
+        def visualise_reconstructions(self, orig, reconstructions, plot_n=None, img_name='reconstruction'):
+            visualise_reconstructions(orig, reconstructions, (28, 28), plot_n, img_name)
+
 
 class AssociationProgressLogger(ProgressLogger):
     def visualise_weight(self, rbm, image_name):
             assert rbm.associative
-            plotting_start = time.clock()  # Measure plotting time
+            if rbm.v_n == 784:
+                plotting_start = time.clock()  # Measure plotting time
 
-            w = rbm.W.get_value(borrow=True).T
-            u = rbm.U.get_value(borrow=True).T
+                w = rbm.W.get_value(borrow=True).T
+                u = rbm.U.get_value(borrow=True).T
 
-            weight = np.hstack((w, u))
+                weight = np.hstack((w, u))
 
-            tile_shape = (rbm.h_n / 10 + 1, 10)
+                tile_shape = (rbm.h_n / 10 + 1, 10)
 
-            image = Image.fromarray(
-                utils.tile_raster_images(
-                    X=weight,
-                    img_shape=(28 * 2, 28),
-                    tile_shape=tile_shape,
-                    tile_spacing=(1, 1)
+                image = Image.fromarray(
+                    utils.tile_raster_images(
+                        X=weight,
+                        img_shape=(28 * 2, 28),
+                        tile_shape=tile_shape,
+                        tile_spacing=(1, 1)
+                    )
                 )
-            )
-            image.save(image_name)
+                image.save(image_name)
 
-            plotting_end = time.clock()
-            return plotting_end - plotting_start
+                plotting_end = time.clock()
+                return plotting_end - plotting_start
+            return 0
+
+    def visualise_reconstructions(self, orig, reconstructions, plot_n=None, img_name='association'):
+        visualise_reconstructions(orig, reconstructions, (28, 28), plot_n, img_name)
 
 
 class RBM(object):
@@ -230,7 +275,6 @@ class RBM(object):
         return name + "rbm_" + str(self.h_n) + \
                "_" + self.cd_type + str(self.cd_steps) + \
                "_" + str(self.train_parameters)
-
 
     def free_energy(self, v, v2=None):
         if self.associative:
@@ -333,13 +377,6 @@ class RBM(object):
         v_total_input, v_p_activation, v_sample = self.sample_v_given_h(h_sample)
         return [h_total_input, h_p_activation, h_sample,
                 v_total_input, v_p_activation, v_sample]
-
-    # def gibbs_sampling(self, chain_start, sample_fn, k):
-    #     return theano.scan(
-    #         self.sample_fn,
-    #         outputs_info=[None, None, None, None, None, chain_start],
-    #         n_steps=k
-    #     )
 
     def pcd_assoc(self, k=1):
         chain_start = self.persistent
@@ -788,16 +825,6 @@ class RBM(object):
 
         return [mean_cost]
 
-    def classify(self, data):
-
-        # obtain from rbm
-
-        # input x, get y out
-
-        # use argmax
-
-        return 0
-
     def plot_samples(self, data, image_name='samples.png', plot_every=1000):
         n_chains = 20   # Number of Chains to perform Gibbs Sampling
         n_samples_from_chain = 10  # Number of samples to take from each chain
@@ -867,154 +894,72 @@ class RBM(object):
                                   p=activation_probability, dtype=t_float_x).eval()
         return self.reconstruct(data, k)
 
-    def reconstruct(self, data, k=1, image_name="reconstructions.png", plot_every=1):
-        # TODO - change so that it doesn't return all k-steps worth of sample
-        # data_size = data.get_value(borrow=True).shape[0]
-        data_size = data.shape[0]
-        if self.associative:
-            return self.reconstruct_association(data, None, k)
+    def reconstruct(self, data, k=1, plot_n=None, plot_every=1):
+        '''
+        Reconstruct image given cd-k
+        - data: theano
+        '''
+        if 'Tensor' not in str(type(data)):
+            data = theano.shared(data, allow_downcast=True)
+        orig = data.get_value(borrow=False)
 
-        # Gibbs sampling
-        x = T.matrix("x")
-        chain_start = x
+         # Gibbs sampling
+        k_batch = k / plot_every
         (res, updates) = theano.scan(self.gibbs_vhv,
                                      outputs_info=[None, None, None,
-                                                   None, None, chain_start],
-                                     n_steps=k,
+                                                   None, None, data],
+                                     n_steps=k_batch,
                                      name="Gibbs_sampling_reconstruction")
+        updates.update({data: res[-1][-1]})
+        gibbs_sampling = theano.function([], res, updates=updates)
 
-        gibbs_sampling = theano.function([x], res, updates=updates)
-        result = gibbs_sampling(data)
+        reconstructions = []
+        for i in xrange(plot_every):
+            result = gibbs_sampling()
+            [_, _, _, _, reconstruction_chain, _] = result
+            reconstructions.append(reconstruction_chain[-1])
 
-        [h_total_input,
-         h_p_activation,
-         h_sample,
-         v_total_input,
-         v_p_activation,
-         v_sample] = result
+        if self.track_progress:
+            self.track_progress.visualise_reconstructions(orig, reconstructions, plot_n)
 
-        if self.v_n == 784:
-            image_data = np.zeros(
-                (29 * (k+1) + 1, 29 * data_size - 1),
-                dtype='uint8'
-            )
+        return reconstructions[-1]
 
-            # Original images
-            image_data[0:28, :] = utils.tile_raster_images(
-                X=data,
-                img_shape=(28, 28),
-                tile_shape=(1, data_size),
-                tile_spacing=(1, 1)
-            )
-
-            # Generate image by plotting the sample from the chain
-            for i in xrange(1, k):
-                vis_mf = v_p_activation[i]
-                print ' ... plotting sample ', i
-                image_data[29 * i:29 * i + 28, :] = utils.tile_raster_images(
-                    X=vis_mf,
-                    img_shape=(28, 28),
-                    tile_shape=(1, data_size),
-                    tile_spacing=(1, 1)
-                )
-
-            # construct image
-            image = Image.fromarray(image_data)
-            image.save(image_name)
-
-            for i in xrange(k):
-                vis_mf = v_sample[i]
-                print ' ... plotting sample ', i
-                image_data[29 * i:29 * i + 28, :] = utils.tile_raster_images(
-                    X=vis_mf,
-                    img_shape=(28, 28),
-                    tile_shape=(1, data_size),
-                    tile_spacing=(1, 1)
-                )
-
-            image = Image.fromarray(image_data)
-            image.save("reconstructed_sample.png")
-        return v_sample[-1]
-
-    def reconstruct_association(self, x, y=None, k=1, bit_p=0, image_name="association.png", sample_size=None):
+    def reconstruct_association(self, x, y=None, k=1, bit_p=0, plot_n=None, plot_every=1):
+        # Initialise parameters
+        if 'Tensor' not in str(type(x)):
+            x = theano.shared(x, allow_downcast=True)
         data_size = x.get_value().shape[0]
-        if not sample_size:
-            sample_size = data_size
-        data = T.matrix("data_x")
-        association = T.matrix("association")
-
         if not y:
             y = self.rand.binomial(size=(data_size, self.v_n2), n=1, p=bit_p, dtype=t_float_x)
 
-        h_total_input, h_p_activation, h_sample = self.sample_h_given_v(data, association)
-        chain_start = h_sample
-        (
-            res,
-            updates
-        ) = theano.scan(
+        # Gibbs sampling
+        _, _, h_sample = self.sample_h_given_v(x, y)
+        chain_start = theano.shared(theano.function([], h_sample)())
+        k_batch = k / plot_every
+        (res, updates) = theano.scan(
             self.gibbs_hvh_fixed,
             outputs_info=[None, None, None, None, None,
                           None, None, None, chain_start],
-            non_sequences=[data],
-            n_steps=k,
-            name="Gibbs_sampling_association"
+            non_sequences=[x], n_steps=k_batch, name="Gibbs_sampling_association"
         )
+        updates.update({chain_start: res[-1][-1]})
+        gibbs_sampling_assoc = theano.function([], res, updates=updates)
 
-        gibbs_sampling_assoc = theano.function([], res,
-                                               updates=updates,
-                                               givens={
-                                                   data: x,
-                                                   association: y
-                                               })
+        # Runner
+        reconstructions = []
+        for i in xrange(plot_every):
+            result = gibbs_sampling_assoc()
+            [_, _, _, _, reconstruction_chain, _, _, _, _] = result
+            reconstructions.append(reconstruction_chain[-1])
 
-        result = gibbs_sampling_assoc()
+        if self.track_progress:
+            self.track_progress.visualise_reconstructions(x.get_value(borrow=True), reconstructions, plot_n)
 
-        [v_total_inputs,
-         v_p_activations,
-         v_samples,
-         v2_total_inputs,
-         v2_p_activations,
-         v2_samples,
-         h_total_inputs,
-         h_p_activations,
-         h_samples] = result
-
-        if self.v_n == 784:
-            image_data = np.zeros(
-                (29 * (k+1) + 1, 29 * sample_size - 1),
-                dtype='uint8'
-            )
-
-            # Original images
-            image_data[0:28, :] = utils.tile_raster_images(
-                X=x.get_value(borrow=True)[0:sample_size],
-                img_shape=(28, 28),
-                tile_shape=(1, sample_size),
-                tile_spacing=(1, 1)
-            )
-
-            # Generate image by plotting the sample from the chain
-            for i in xrange(1, k):
-                # vis_mf = v2_samples[i]
-                vis_mf = v2_p_activations[i]
-                print ' ... plotting sample ', i
-                image_data[29 * i:29 * i + 28, :] = utils.tile_raster_images(
-                    X=vis_mf[0:sample_size],
-                    img_shape=(28, 28),
-                    tile_shape=(1, sample_size),
-                    tile_spacing=(1, 1)
-                )
-
-            # construct image
-            image = Image.fromarray(image_data)
-            image.save(image_name)
-
-        return v2_p_activations[-1]
+        return reconstruction_chain[-1]
 
 
 class AssociativeRBM(RBM):
     pass
-
 
 
 class GaussianRBM(RBM):
@@ -1107,6 +1052,7 @@ class GaussianRBM(RBM):
 
     def sample_v_given_h_assoc(self, h_sample):
         return self.__sample_v_given_h(h_sample, self.prop_down) + self.__sample_v_given_h(h_sample, self.prop_down_assoc)
+
 
 def test_rbm():
     print "Testing RBM"

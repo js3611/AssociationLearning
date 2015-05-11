@@ -10,7 +10,7 @@ import theano
 import theano.tensor as T
 from theano.tensor.shared_randomstreams import RandomStreams
 
-from logistic_sgd import LogisticRegression
+from logistic_sgd import sgd_optimization_mnist as LogisticRegression
 from mlp import HiddenLayer
 from rbm import *
 from DBN import DBN
@@ -24,16 +24,18 @@ from utils import tile_raster_images
 from utils import load_data
 from utils import save_digits
 
+theano.config.optimizer = 'None'
+theano.config.exception_verbosity = 'high'
+
+
 class DefaultADBNConfig(object):
     def __init__(self):
         n_visible = 784
         n_visible2 = n_visible
-        n_top_left = 100
-        n_top_right = 100
         n_association = 300
 
-        self.topology_left = [n_visible, 100, n_top_left]
-        self.topology_right = [n_visible2, 100, n_top_right]
+        self.topology_left = [n_visible, 100, 100]
+        self.topology_right = [n_visible2, 100, 100]
         self.n_association = n_association
         self.reuse_dbn = True
 
@@ -52,24 +54,31 @@ class DefaultADBNConfig(object):
 
         self.n_visible = n_visible
         self.n_visible2 = n_visible2
-        self.n_top_left = n_top_left
-        self.n_top_right = n_top_right
         self.n_association = n_association
 
 
 class AssociativeDBN(object):
 
-    def __init__(self, config=DefaultADBNConfig()):
+    def __init__(self, config=DefaultADBNConfig(), data_manager=None):
         self.config = config
+        self.data_manager=data_manager
 
-        self.dbn_left = DBN(config.topology_left, tr=config.base_rbm_params)
+        self.dbn_left = DBN(topology=config.topology_left,
+                            tr=config.base_rbm_params,
+                            out_dir='left',
+                            data_manager=data_manager)
         if config.reuse_dbn:
             self.dbn_right = self.dbn_left
         else:
-            self.dbn_right = DBN(config.topology_right, tr=config.base_rbm_params)
+            self.dbn_right = DBN(topology=config.topology_right,
+                                 tr=config.base_rbm_params,
+                                 out_dir='right',
+                                 data_manager=data_manager)
+        n_top_left = config.topology_left[-1]
+        n_top_right = config.topology_right[-1]
 
-        ass_rbm = RBM(config.n_top_left,
-                      config.n_top_right,
+        ass_rbm = RBM(n_top_left,
+                      n_top_right,
                       config.n_association,
                       associative=True,
                       cd_type=PERSISTENT,
@@ -78,81 +87,119 @@ class AssociativeDBN(object):
                       progress_logger=AssociationProgressLogger())
 
         self.association_layer = ass_rbm
+        print 'top layer = {}'.format(str(ass_rbm))
 
-    def train(self, x1, x2):
-
-        # check cache
-
-        self.dbn_left.pretrain(x1)
+    def train(self, x1, x2, cache=False):
+        self.dbn_left.pretrain(x1, cache=cache)
 
         if self.config.reuse_dbn:
             self.dbn_right = self.dbn_left
         else:
-            self.dbn_right.pretrain(x2)
+            self.dbn_right.pretrain(x2, cache=cache)
 
-        x1_features = self.dbn_left.bottom_up_pass(x1)
-        x2_features = self.dbn_left.bottom_up_pass(x2)
+        x1_np = self.dbn_left.bottom_up_pass(x1.get_value(True))
+        x2_np = self.dbn_right.bottom_up_pass(x2.get_value(True))
 
-        self.association_layer.train(x1_features, x2_features)
+        x1_features = theano.shared(x1_np)
+        x2_features = theano.shared(x2_np)
 
-    def recall(self, x, associate_steps=3, recall_steps=5):
-        ''' left dbn bottomup -> associate -> right dbn topdown
+        out_dir = 'association_layer/' + str(len(self.dbn_left.rbm_layers)) + '_' + str(len(self.dbn_right.rbm_layers)) + '/'
+        load = self.data_manager.retrieve(str(self.association_layer),out_dir=out_dir)
+        if load and cache:
+            self.association_layer = load
+        else:
+            self.association_layer.train(x1_features, x2_features)
+            self.data_manager.persist(self.association_layer, out_dir=out_dir)
+
+    # TODO clean up input and output of each function (i.e. they should all return theano or optional flag)
+    def recall(self, x, associate_steps=10, recall_steps=5):
+        ''' left dbn bottom-up -> associate -> right dbn top-down
         :param x: data
         :param associate_steps: top level gibbs sampling steps
         :param recall_steps: right dbn sampling
         :return:
         '''
+        self.data_manager.move_to('reconstruct')
+        print '... moved to {}'.format(os.getcwd())
 
         left = self.dbn_left
         top = self.association_layer
         right = self.dbn_right
 
+        if 'Tensor' in str(type(x)):
+            x = x.get_value(borrow=True)
+
         # Pass to association layer
-        left.bottom_up_pass(x)
+        top_out = left.bottom_up_pass(x)
+        assoc_in = theano.shared(top_out, 'top_in', allow_downcast=True)
 
         # Sample from the association layer
-        associate_x = top.reconstruct_association(x, k=associate_steps)
+        associate_x = top.reconstruct_association(assoc_in, k=associate_steps)
+        top_in = theano.shared(associate_x, 'associate_x', allow_downcast=True)
 
         # Allow right dbn to day dream by extracting top layer rbm
         right_top_rbm = right.rbm_layers[-1]
-        associate_x_in = right_top_rbm.sample_v_given_h(associate_x)
+        ass, ass_p, ass_s = right_top_rbm.sample_v_given_h(top_in)
+        associate_x_in = theano.function([], ass_s)()
         associate_x_reconstruct = right_top_rbm.reconstruct(associate_x_in, k=recall_steps)
 
-        # pass down to visible units
-        return right.top_down_pass(associate_x_reconstruct)
+        # pass down to visible units, take the penultimate layer because we sampled at the top layer
+        if len(right.rbm_layers) > 1:
+            res = right.top_down_pass(associate_x_reconstruct, start=len(right.rbm_layers)-1)
+        else:
+            res = associate_x_reconstruct
+        # res = result.get_value(borrow=True)
+        n = res.shape[0]
+
+        save_digits(x, 'dbn_original.png', shape=(n / 10, 10))
+        save_digits(res, 'dbn_reconstruction.png', shape=(n / 10, 10))
+
+        self.data_manager.move_to_project_root()
+
+        return res
 
 
-def test_associative_dbn():
+def test_associative_dbn(i=0):
     print "Testing Associative DBN which tries to learn even-odd of numbers"
-    cache = True
 
-    train, valid, test = loader.load_digits(n=[500, 100, 100], digits=[0, 1, 2, 3], pre={'binary_label': True})
+    # load dataset
+    train, valid, test = loader.load_digits(n=[500, 100, 100], pre={'binary_label': True})
     train_x, train_y = train
     test_x, test_y = test
     train_x01 = loader.sample_image(train_y)
 
-    dataset01 = loader.load_digits(n=[500, 100, 100], digits=[0, 1])
-    train, valid, test = loader.load_digits(n=[500, 100, 100])
+    # project set up
+    project_name = 'AssociationDBNTest/{}'.format(i)
+    data_manager = store.StorageManager(project_name)
+    cache = True
 
-    store.move_to('AssociationDBNTest')
+    # initialise AssociativeDBN
+    config = DefaultADBNConfig()
+    config.reuse_dbn = False
+    config.topology_left = [784, 100, 100]
+    config.topology_right = [784, 100]
+    config.n_association = 500
+    associative_dbn = AssociativeDBN(config=config, data_manager=data_manager)
 
-    associative_dbn = AssociativeDBN()
+    save_digits(train_x.get_value(borrow=True)[1:100], 'n_orig.png',(10, 10))
+    save_digits(train_x01.get_value(borrow=True)[1:100], 'n_ass.png',(10, 10))
 
     # Train RBM - learn joint distribution
-    associative_dbn.train(train_x, train_x01)
+    associative_dbn.train(train_x, train_x01, cache=True)
+    print "... trained associative DBN"
 
-    print "... reconstruction of associated images"
-    reconstructed_y = associative_dbn.recall(test_x)
-    print "... reconstructed"
-
-    # TODO use sklearn to obtain accuracy/precision etc
+    # Reconstruct images
+    reconstructed_y = associative_dbn.recall(test_x, associate_steps=1, recall_steps=10)
+    print "... reconstructed images"
 
     # Create Dataset to feed into logistic regression
     # Test set: reconstructed y's become the input. Get the corresponding x's and y's
+    dataset01 = loader.load_digits(n=[1000, 100, 100], digits=[0, 1])
     dataset01[2] = (theano.shared(reconstructed_y), test_y)
 
     # Classify the reconstructions
-    score = LogisticRegression.sgd_optimization_mnist(0.13, 100, dataset01, 100)
+    # TODO use sklearn to obtain accuracy/precision etc
+    score = LogisticRegression(0.13, 100, dataset01, 100)
 
     print 'Score: {}'.format(str(score))
 

@@ -23,7 +23,8 @@ class DBN(object):
                  load_layer=None,
                  n_outs=10,
                  out_dir='dbn',
-                 tr=TrainParam()):
+                 tr=TrainParam(),
+                 data_manager=None):
 
         n_ins = topology[1]
         hidden_layers_sizes = topology[1:]
@@ -34,6 +35,7 @@ class DBN(object):
         self.n_layers = len(hidden_layers_sizes)
         self.topology = topology
         self.out_dir = out_dir
+        self.data_manager=data_manager
 
         assert self.n_layers > 0
 
@@ -130,7 +132,8 @@ class DBN(object):
         for i in xrange(len(self.rbm_layers)):
             rbm = self.rbm_layers[i]
             print 'training layer {}, {}'.format(str(i), str(rbm))
-            store.move_to(self.out_dir + '/layer' + str(i) + '/' + str(rbm))
+
+            self.data_manager.move_to(self.out_dir + '/layer' + str(i) + '/' + str(rbm))
 
             # Check Cache
             loaded = store.retrieve_object(str(rbm))
@@ -142,9 +145,11 @@ class DBN(object):
                 print "... loaded trained layer"
             else:
                 rbm.train(layer_input)
-                store.store_object(rbm)
+                self.data_manager.persist(rbm)
+                # store.store_object(rbm)
 
-            os.chdir('../..')
+            self.data_manager.move_to_project_root()
+            # os.chdir('../..')
 
             # Pass the input through sampler method to get next layer input
             sampled_layer = rbm.sample_h_given_v(layer_input)
@@ -225,18 +230,45 @@ class DBN(object):
 
         return train_fn, valid_score, test_score
 
-    def bottom_up_pass(self, x):
-        pass
+    def bottom_up_pass(self, x, start=0, end=sys.maxint):
+        '''
+        From visible layer to top layer
+        :param x: numpy input
+        :param start: start_layer
+        :param end: end_layer (default = end)
+        :return:
+        '''
+        n_layer = len(self.rbm_layers)
+        end = min(end, n_layer)
+        assert (0 <= start < end <= n_layer)
 
-    def top_down_pass(self, x):
+        layer_input = T.matrix('x')
+        chain_next = layer_input
+        for i in xrange(start, end):
+            rbm = self.rbm_layers[i]
+            h, hp, hs = rbm.sample_h_given_v(chain_next)
+            chain_next = hs
+            # layer_input = vp
+
+        gibbs_sampling = theano.function([layer_input], [h, hp, hs])
+        h, hp, hs = gibbs_sampling(x)
+        # For final layer, take the probability vp
+        return hs
+
+    def top_down_pass(self, x, start=sys.maxint, end=0):
         '''
         From top 2-layer to visible layer
         :param x:
         :return:
         '''
+        n_layer = len(self.rbm_layers)
+        start = min(start, n_layer)
+        assert (0 <= end < start <= n_layer)
+
         layer_input = T.matrix('x')
         chain_next = layer_input
-        for rbm in reversed(self.rbm_layers[:-1]):
+        for i in reversed(xrange(end, start)):
+            rbm = self.rbm_layers[i]
             v, vp, vs = rbm.sample_v_given_h(chain_next)
             chain_next = vs
             # layer_input = vp

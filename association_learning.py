@@ -52,7 +52,7 @@ def associate_data2label(cache=False):
         rbm.save()
 
     rbm.associative = False
-    rbm.reconstruct(test_x.get_value(borrow=True), 10)
+    rbm.reconstruct(test_x, 10)
     rbm.associative = True
 
     # Classification test - Reconstruct y through x
@@ -66,14 +66,17 @@ def associate_data2label(cache=False):
 
 def associate_data2data(cache=False):
     print "Testing Associative RBM which tries to learn even-oddness of numbers"
+    # project set-up
+    data_manager = store.StorageManager('AssociationTest', log=True)
+
 
     # Load mnist hand digits, class label is already set to binary
-    train, valid, test = loader.load_digits(n=[50000, 100, 10000], digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], pre={'binary_label': True})
+    train, valid, test = loader.load_digits(n=[100, 100, 100], digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], pre={'binary_label': True})
     train_x, train_y = train
     test_x, test_y = test
     train_x01 = loader.sample_image(train_y)
 
-    dataset01 = loader.load_digits(n=[50000, 100, 10000], digits=[0, 1])
+    dataset01 = loader.load_digits(n=[100, 100, 100], digits=[0, 1])
 
 
     # Initialise the RBM and training parameters
@@ -102,8 +105,6 @@ def associate_data2data(cache=False):
                   train_parameters=tr,
                   progress_logger=RBM.AssociationProgressLogger())
 
-    store.move_to('AssociationTest')
-
     # Load RBM (test)
     loaded = store.retrieve_object(str(rbm))
     if loaded and cache:
@@ -115,7 +116,7 @@ def associate_data2data(cache=False):
         rbm.save()
 
     print "... reconstruction of associated images"
-    reconstructed_y = rbm.reconstruct_association(test_x, None, 5, 0.01, sample_size=200)
+    reconstructed_y = rbm.reconstruct_association(test_x, None, 100, 0.01, plot_n=200, plot_every=5)
     print "... reconstructed"
 
     # TODO use sklearn to obtain accuracy/precision etc

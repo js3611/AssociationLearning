@@ -2,6 +2,7 @@ import os
 
 
 # Get current directory
-os.getcwd()
-os.path.realpath(__file__)
+print os.getcwd()
+print os.path.realpath(__file__)
 
+print os.path.split(__file__)
