@@ -195,6 +195,7 @@ def test_DBN(finetune_lr=0.1, pretraining_epochs=100,
 
 def test_generative_dbn():
 
+    manager = store.StorageManager('generative_dbn_test')
     # Load data
     train, valid, test = loader.load_digits(n=[500, 100, 100], digits=[0, 1, 2, 3, 4, 5])
     train_x, train_y = train
@@ -208,7 +209,7 @@ def test_generative_dbn():
                     sparsity_target=0.01,
                     sparsity_cost=0.01,
                     sparsity_decay=0.1,
-                    epochs=50)
+                    epochs=5)
 
     # Layer 1
     # Layer 2
@@ -217,16 +218,14 @@ def test_generative_dbn():
     batch_size = 10
 
     # construct the Deep Belief Network
-    dbn = DBN(topology=topology, n_outs=10, out_dir='zero_one_learner', tr=tr)
-    print "... initialised dbn"
+    dbn = DBN(topology=topology, n_outs=10, out_dir='zero_one_learner', tr=tr, data_manager=manager)
 
-    store.move_to(dbn.out_dir)
-    print "... moved to {}".format(os.getcwd())
+    print "... initialised dbn"
 
     print '... pre-training the model'
     start_time = time.clock()
 
-    dbn.pretrain(train_x, cache=True)
+    dbn.pretrain(train_x, cache=False)
     # dbn.pretrain(train_x, cache=False)
 
     end_time = time.clock()
@@ -234,16 +233,12 @@ def test_generative_dbn():
                           os.path.split(__file__)[1] +
                           ' ran for %.2fm' % ((end_time - start_time) / 60.))
 
-    store.move_to(dbn.out_dir)
-    store.store_object(dbn)
-
-    print "... moved to {}".format(os.getcwd())
 
     # Sample from top layer to generate data
     sample_n = 1000
     sampled = dbn.sample(sample_n, 2)
 
-    save_digits(sampled, shape=(sample_n / 10, 10))
+    save_digits(sampled, shape=(sample_n / 10, 10), image_name="smapled")
 
 
     # end-snippet-2

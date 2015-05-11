@@ -82,7 +82,7 @@ def visualise_reconstructions(orig, reconstructions, img_shape, plot_n=None, img
 
             data_size = plot_n if plot_n else orig.shape[0]
 
-            if img_shape == (28, 28):
+            if img_shape == (28, 28) and orig.shape[1] == 784:
 
                 image_data = np.zeros(
                     (29 * (k+1) + 1, 29 * data_size - 1),
@@ -699,19 +699,19 @@ class RBM(object):
             # new_W -= lr * sparsity_cost * d_sparsity
             # 2. multiply quantity by dq/dw (chain rule)
 
-            chain_p = T.grad(T.sum(q), self.params, disconnected_inputs='ignore')
-            for i in xrange(len(new_params)):
-                new_params = [p - lr * sparsity_cost * d_sparsity * chain_p[i] for i, p in enumerate(new_params)]
+            # chain_p = T.grad(T.sum(q), self.params, disconnected_inputs='ignore')
+            # for i in xrange(len(new_params)):
+            #     new_params = [p - lr * sparsity_cost * d_sparsity * chain_p[i] for i, p in enumerate(new_params)]
 
-            # if self.associative:
-            #     chain_W, chain_h, chain_U = T.grad(T.sum(q), [self.W, self.h_bias, self.U])
-            #     new_params[0] -= lr * sparsity_cost * d_sparsity * chain_W
-            #     new_params[2] -= lr * sparsity_cost * d_sparsity * chain_h
-            #     new_params[3] -= lr * sparsity_cost * d_sparsity * chain_U
-            # else:
-            #     chain_W, chain_h, chain_U = T.grad(T.sum(q), [self.W, self.h_bias])
-            #     new_params[0] -= lr * sparsity_cost * d_sparsity * chain_W
-            #     new_params[2] -= lr * sparsity_cost * d_sparsity * chain_h
+            if self.associative:
+                chain_W, chain_h, chain_U = T.grad(T.sum(q), [self.W, self.h_bias, self.U])
+                new_params[0] -= lr * sparsity_cost * d_sparsity * chain_W
+                new_params[2] -= lr * sparsity_cost * d_sparsity * chain_h
+                new_params[3] -= lr * sparsity_cost * d_sparsity * chain_U
+            else:
+                chain_W, chain_h = T.grad(T.sum(q), [self.W, self.h_bias])
+                new_params[0] -= lr * sparsity_cost * d_sparsity * chain_W
+                new_params[2] -= lr * sparsity_cost * d_sparsity * chain_h
 
                 # chain_W, chain_h = T.grad(T.sum(q), [self.W, self.h_bias])
                 # new_hbias -= lr * sparsity_cost * d_sparsity * chain_h

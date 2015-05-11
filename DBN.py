@@ -44,9 +44,11 @@ class DBN(object):
         else:
             numpy_rng = np.random.RandomState(123)
 
-
         if not theano_rng:
             theano_rng = RandomStreams(numpy_rng.randint(2 ** 30))
+
+        if not (type(tr) is list):
+            tr = [tr for i in xrange(self.n_layers)]
 
         # Create Layers
         self.x = T.matrix('x')
@@ -79,7 +81,7 @@ class DBN(object):
                             h_n=topology[i+1],
                             W=sigmoid_layer.W,
                             h_bias=sigmoid_layer.b,
-                            train_parameters=tr,
+                            train_parameters=tr[i],
                             progress_logger=ProgressLogger())
             self.rbm_layers.append(rbm_layer)
             
@@ -286,6 +288,6 @@ class DBN(object):
         x = top_layer.sample(n, k)
 
         # prop down the output to visible unit
-        sampled = self.top_down_pass(x)
+        sampled = self.top_down_pass(x, self.n_layers-1)
 
         return sampled
