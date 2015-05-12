@@ -81,7 +81,7 @@ class AssociativeDBN(object):
                       n_top_right,
                       config.n_association,
                       associative=True,
-                      cd_type=PERSISTENT,
+                      cd_type=CLASSICAL,
                       cd_steps=1,
                       train_parameters=config.top_rbm_params,
                       progress_logger=AssociationProgressLogger())
@@ -137,20 +137,23 @@ class AssociativeDBN(object):
         associate_x = top.reconstruct_association(assoc_in, k=associate_steps)
         top_in = theano.shared(associate_x, 'associate_x', allow_downcast=True)
 
-        # Allow right dbn to day dream by extracting top layer rbm
-        right_top_rbm = right.rbm_layers[-1]
-        ass, ass_p, ass_s = right_top_rbm.sample_v_given_h(top_in)
-        associate_x_in = theano.function([], ass_s)()
-        associate_x_reconstruct = right_top_rbm.reconstruct(associate_x_in, k=recall_steps)
+        if recall_steps > 0:
+            # Allow right dbn to day dream by extracting top layer rbm
+            right_top_rbm = right.rbm_layers[-1]
+            ass, ass_p, ass_s = right_top_rbm.sample_v_given_h(top_in)
+            associate_x_in = theano.function([], ass_s)()
+            associate_x_reconstruct = right_top_rbm.reconstruct(associate_x_in, k=recall_steps)
 
-        # pass down to visible units, take the penultimate layer because we sampled at the top layer
-        if len(right.rbm_layers) > 1:
-            res = right.top_down_pass(associate_x_reconstruct, start=len(right.rbm_layers)-1)
+            # pass down to visible units, take the penultimate layer because we sampled at the top layer
+            if len(right.rbm_layers) > 1:
+                res = right.top_down_pass(associate_x_reconstruct, start=len(right.rbm_layers)-1)
+            else:
+                res = associate_x_reconstruct
+            # res = result.get_value(borrow=True)
         else:
-            res = associate_x_reconstruct
-        # res = result.get_value(borrow=True)
-        n = res.shape[0]
+            res = right.top_down_pass(top_in)
 
+        n = res.shape[0]
         save_digits(x, 'dbn_original.png', shape=(n / 10, 10))
         save_digits(res, 'dbn_reconstruction.png', shape=(n / 10, 10))
 

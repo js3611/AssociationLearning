@@ -250,3 +250,4 @@ if __name__ == '__main__':
 #              dataset='mnist.pkl.gz', batch_size=20)
 
     test_generative_dbn()
+

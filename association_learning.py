@@ -3,10 +3,15 @@ import theano.tensor as T
 import numpy as np
 import logistic_sgd
 import rbm as RBM
+import DBN as DBN
+import associative_dbn
 import utils
 import mnist_loader as loader
 import datastorage as store
 
+import logging
+
+logging.basicConfig(filename='trace.log', level=logging.INFO)
 
 def associate_data2label(cache=False):
     print "Testing ClassRBM with generative target (i.e. AssociativeRBM with picture-label association)"
@@ -133,57 +138,84 @@ def associate_data2data(cache=False):
 
 
 def associate_data2dataDBN(cache=False):
-    pass
-    # # Load data
-    # train, valid, test = loader.load_digits(n=[500, 100, 100], digits=[0, 1, 2, 3, 4, 5])
-    # train_x, train_y = train
-    #
-    # # Initialise RBM parameters
-    # tr = TrainParam(learning_rate=0.01,
-    #                 momentum_type='nesterov',
-    #                 momentum=0.5,
-    #                 weight_decay=0.01,
-    #                 sparsity_constraint=True,
-    #                 sparsity_target=0.01,
-    #                 sparsity_cost=0.01,
-    #                 sparsity_decay=0.1,
-    #                 epochs=15)
-    #
-    # # Layer 1
-    # # Layer 2
-    # # Layer 3
-    # topology = [784, 100, 100, 100]
-    # batch_size = 10
-    #
-    # # construct the Deep Belief Network
-    # dbn = DBN(topology=topology, n_outs=10, out_dir='zero_one_learner', tr=tr)
-    # print "... initialised dbn"
-    #
-    # store.move_to(dbn.out_dir)
-    # print "... moved to {}".format(os.getcwd())
-    #
-    # print '... pre-training the model'
-    # start_time = time.clock()
-    #
-    # # dbn.pretrain(train_x, cache=True)
-    # dbn.pretrain(train_x, cache=False)
-    #
-    # end_time = time.clock()
-    # print >> sys.stderr, ('The pretraining code for file ' +
-    #                       os.path.split(__file__)[1] +
-    #                       ' ran for %.2fm' % ((end_time - start_time) / 60.))
-    #
-    # store.move_to(dbn.out_dir)
-    # store.store_object(dbn)
-    #
-    # print "... moved to {}".format(os.getcwd())
-    #
-    # # Sample from top layer to generate data
-    # sample_n = 100
-    # sampled = dbn.sample(sample_n, 10)
-    #
-    # save_digits(sampled, shape=(sample_n / 10, 10))
+    print "Testing Associative DBN which tries to learn even-oddness of numbers"
+    # project set-up
+    data_manager = store.StorageManager('associative_dbn_test', log=True)
+
+
+    # Load mnist hand digits, class label is already set to binary
+    train, valid, test = loader.load_digits(n=[5000, 100, 100], digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], pre={'binary_label': True})
+    train_x, train_y = train
+    test_x, test_y = test
+    train_x01 = loader.sample_image(train_y)
+
+    dataset01 = loader.load_digits(n=[5000, 100, 100], digits=[0, 1])
+
+    # Initialise RBM parameters
+    # fixed base train param
+    base_tr = RBM.TrainParam(learning_rate=0.01,
+                    momentum_type=RBM.CLASSICAL,
+                    momentum=0.5,
+                    weight_decay=0.0005,
+                    sparsity_constraint=False,
+                    epochs=20)
+
+    # top layer parameters
+    tr = RBM.TrainParam(learning_rate=0.0005,
+                    momentum_type=RBM.NESTEROV,
+                    momentum=0.5,
+                    weight_decay=0.001,
+                    sparsity_constraint=False,
+                    epochs=20)
+
+    tr_top = RBM.TrainParam(learning_rate=0.01,
+                    momentum_type=RBM.CLASSICAL,
+                    momentum=0.5,
+                    weight_decay=0.001,
+                    sparsity_constraint=False,
+                    epochs=20)
+
+
+    # Layer 1
+    # Layer 2
+    # Layer 3
+    topology = [784, 500, 500, 100]
+
+    config = associative_dbn.DefaultADBNConfig()
+    config.topology_left = [784, 500, 500, 100]
+    config.topology_right = [784, 500, 500, 100]
+    config.reuse_dbn = False
+    config.top_rbm_params = tr_top
+    config.base_rbm_params = [base_tr, tr, tr]
+
+    for cd_type in [RBM.CLASSICAL, RBM.PERSISTENT]:
+        for n_ass in [100, 250, 500, 750, 1000]:
+            config.n_association = n_ass
+
+            # Construct DBN
+            ass_dbn = associative_dbn.AssociativeDBN(config=config, data_manager=data_manager)
+
+            # Train
+            ass_dbn.train(train_x, train_x01, cache=cache)
+
+            for n_recall in [1, 3, 5, 7, 10]:
+                for n_think in [0, 1, 3, 5, 7, 10]: #1, 3, 5, 7, 10]:
+                    # Reconstruct
+                    sampled = ass_dbn.recall(test_x, n_recall, n_think)
+
+                    # Sample from top layer to generate data
+                    sample_n = 100
+                    utils.save_digits(sampled, image_name='reconstruced_{}_{}_{}.png'.format(n_ass, n_recall, n_think), shape=(sample_n / 10, 10))
+
+                    dataset01[2] = (theano.shared(sampled), test_y)
+
+                    # Classify the reconstructions
+                    score = logistic_sgd.sgd_optimization_mnist(0.13, 100, dataset01, 100)
+
+                    print 'Score: {}'.format(str(score))
+                    logging.info('{}, {}, {}, {}: {}'.format(cd_type, n_ass, n_recall, n_think, score))
+
 
 if __name__ == '__main__':
     # associate_data2label()
-    associate_data2data(False)
+    associate_data2dataDBN(True)

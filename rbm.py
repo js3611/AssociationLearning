@@ -8,6 +8,7 @@ import utils
 import mnist_loader as loader
 import datastorage as store
 
+import sys
 import os
 import time
 try:
@@ -116,6 +117,7 @@ class ProgressLogger(object):
 
         def __init__(self,
                      likelihood=True,
+                     monitor_weights=True,
                      time_training=True,
                      plot=True,
                      plot_info=None,
@@ -127,6 +129,8 @@ class ProgressLogger(object):
             self.plot = plot
             self.plot_info = plot_info
             self.out_dir = out_dir
+            self.monitor_weights = monitor_weights
+            self.weight_hist = {'avg': [], 'std': [], 'min': sys.maxint, 'max': -sys.maxint - 1}
             self.img_shape = (28, 28)
 
         def visualise_weight(self, rbm, image_name):
@@ -150,6 +154,16 @@ class ProgressLogger(object):
 
         def visualise_reconstructions(self, orig, reconstructions, plot_n=None, img_name='reconstruction'):
             visualise_reconstructions(orig, reconstructions, (28, 28), plot_n, img_name)
+
+        def monitor_wt(self, rbm):
+            self.weight_hist['avg'].append(np.mean(rbm.W.get_value(borrow=True)))
+            self.weight_hist['std'].append(np.std(rbm.W.get_value(borrow=True)))
+            self.weight_hist['min'] = min(np.min(rbm.W.get_value(borrow=True)), self.weight_hist['min'])
+            self.weight_hist['max'] = max(np.max(rbm.W.get_value(borrow=True)), self.weight_hist['max'])
+
+
+class TrainParamFinder(object):
+    pass
 
 
 class AssociationProgressLogger(ProgressLogger):
@@ -811,6 +825,9 @@ class RBM(object):
             mean_cost = []
             for batch_index in xrange(mini_batches):
                 mean_cost += [train_fn(batch_index)]
+                if self.track_progress and self.track_progress.monitor_weights:
+                    self.track_progress.monitor_wt(self)
+
 
             if self.track_progress:
                 print 'Epoch %d, cost is ' % epoch, np.mean(mean_cost)
@@ -821,6 +838,14 @@ class RBM(object):
 
         if self.track_progress:
             print ('Training took %f minutes' % (pre_training_time / 60.))
+            if self.track_progress.monitor_weights:
+                print 'weight histogram'
+                avg_hist, avg_bins = np.histogram(np.abs(self.track_progress.weight_hist['avg']), bins=[0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000])
+                std_hist, std_bins = np.histogram(np.abs(self.track_progress.weight_hist['std']))
+                print avg_hist, avg_bins
+                print std_hist, avg_bins
+                print self.track_progress.weight_hist['min']
+                print self.track_progress.weight_hist['max']
 
         return [mean_cost]
 
