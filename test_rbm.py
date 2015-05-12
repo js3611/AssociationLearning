@@ -98,28 +98,30 @@ def test_rbm():
     data_manager = store.StorageManager('SimpleRBMTest')
 
     # Load mnist hand digits
-    datasets = loader.load_digits(n=[100, 0, 100], digits=[0, 1])
+    datasets = loader.load_digits(n=[5000, 0, 100], digits=[0, 1])
     train_set_x, train_set_y = datasets[0]
     test_set_x, test_set_y = datasets[2]
 
     # Initilise the RBM and training parameters
-    tr = RBM.TrainParam(learning_rate=0.01,
+    tr = RBM.TrainParam(learning_rate=0,
+                        find_learning_rate=True,
                         momentum_type=CLASSICAL,
                         momentum=0.1,
                         weight_decay=0,
                         sparsity_constraint=False,
                         sparsity_target=0.01,
                         sparsity_cost=0.5,
-                        sparsity_decay=0.9)
+                        sparsity_decay=0.9,
+                        epochs=20)
 
     n_visible = train_set_x.get_value().shape[1]
-    n_hidden = 10
+    n_hidden = 1000
 
     rbm = RBM.RBM(n_visible,
                   n_visible,
                   n_hidden,
                   associative=False,
-                  cd_type=PERSISTENT,
+                  cd_type=CLASSICAL,
                   cd_steps=1,
                   v_activation_fn=log_sig,
                   h_activation_fn=log_sig,
@@ -128,6 +130,8 @@ def test_rbm():
 
     print "... initialised RBM"
 
+    # adjust learning rate
+    rbm.pretrain_lr(train_set_x)
 
     # Train RBM
     rbm.train(train_set_x)
@@ -135,7 +139,7 @@ def test_rbm():
 
     rbm.W
     # Test RBM
-    rbm.reconstruct(test_set_x, k=2, plot_n=500, plot_every=1)
+    rbm.reconstruct(test_set_x, k=1, plot_n=500, plot_every=1)
 
     # Store Parameters
     rbm.save()

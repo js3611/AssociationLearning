@@ -158,22 +158,24 @@ def associate_data2dataDBN(cache=False):
                     momentum=0.5,
                     weight_decay=0.0005,
                     sparsity_constraint=False,
-                    epochs=5)
+                    epochs=20)
 
     # top layer parameters
-    tr = RBM.TrainParam(learning_rate=0.0005,
-                    momentum_type=RBM.NESTEROV,
-                    momentum=0.5,
-                    weight_decay=0.001,
-                    sparsity_constraint=False,
-                    epochs=5)
+    tr = RBM.TrainParam(learning_rate=0.1,
+                        find_learning_rate=True,
+                        momentum_type=RBM.NESTEROV,
+                        momentum=0.5,
+                        weight_decay=0.001,
+                        sparsity_constraint=False,
+                        epochs=20)
 
     tr_top = RBM.TrainParam(learning_rate=0.01,
-                    momentum_type=RBM.CLASSICAL,
-                    momentum=0.5,
-                    weight_decay=0.001,
-                    sparsity_constraint=False,
-                    epochs=5)
+                            find_learning_rate=True,
+                            momentum_type=RBM.CLASSICAL,
+                            momentum=0.5,
+                            weight_decay=0.001,
+                            sparsity_constraint=False,
+                            epochs=20)
 
 
     # Layer 1
@@ -197,7 +199,7 @@ def associate_data2dataDBN(cache=False):
             ass_dbn = associative_dbn.AssociativeDBN(config=config, data_manager=data_manager)
 
             # Train
-            ass_dbn.train(train_x, train_x01, cache=cache)
+            ass_dbn.train(train_x, train_x01, cache=cache, optimise=True)
 
             for n_recall in [1, 3, 5, 7, 10]:
                 for n_think in [0, 1, 3, 5, 7, 10]: #1, 3, 5, 7, 10]:
@@ -219,4 +221,4 @@ def associate_data2dataDBN(cache=False):
 
 if __name__ == '__main__':
     # associate_data2label()
-    associate_data2dataDBN(True)
+    associate_data2dataDBN(False)

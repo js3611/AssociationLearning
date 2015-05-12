@@ -129,7 +129,7 @@ class DBN(object):
 
         return pretrain_fns
 
-    def pretrain(self, train_data, cache=False):
+    def pretrain(self, train_data, cache=False, optimise=False):
         layer_input = train_data
         for i in xrange(len(self.rbm_layers)):
             rbm = self.rbm_layers[i]
@@ -146,6 +146,8 @@ class DBN(object):
                 self.rbm_layers[i] = rbm
                 print "... loaded trained layer"
             else:
+                if optimise:
+                    rbm.pretrain_lr(layer_input)
                 rbm.train(layer_input)
                 self.data_manager.persist(rbm)
                 # store.store_object(rbm)

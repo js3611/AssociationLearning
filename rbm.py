@@ -40,6 +40,7 @@ class TrainParam(object):
     def __init__(self,
                  epochs=15,
                  batch_size=20,
+                 find_learning_rate=True,
                  learning_rate=0.1,
                  momentum_type=NESTEROV,
                  momentum=0.5,
@@ -51,6 +52,7 @@ class TrainParam(object):
                  output_directory=None
                  ):
 
+        self.find_learning_rate = find_learning_rate
         self.epochs = epochs
         self.batch_size = batch_size
         # Weight Update Parameters
@@ -77,11 +79,15 @@ class TrainParam(object):
                 + "_c" + str(self.sparsity_cost) +
                 "_d" + str(self.sparsity_decay) if self.sparsity_constraint else "")
 
+
 def visualise_reconstructions(orig, reconstructions, img_shape, plot_n=None, img_name='reconstruction'):
             k = len(reconstructions)
             assert k > 0
 
-            data_size = plot_n if plot_n else orig.shape[0]
+            if plot_n:
+                data_size = min(plot_n, orig.shape[0])
+            else:
+                data_size = orig.shape[0]
 
             if img_shape == (28, 28) and orig.shape[1] == 784:
 
@@ -811,9 +817,42 @@ class RBM(object):
 
         return train_fn
 
+
+    def pretrain_lr(self, train_data, train_label=None):
+        '''
+        From Hinton -- learning rate should be weights * 10^-3
+        :param train_data:
+        :param train_label:
+        :return:
+        '''
+        # train with subdata
+        l= train_data.get_value(borrow=True).shape[0]
+        nl = max(1, int(l/10))
+        sub_data = theano.shared(train_data.get_value(borrow=True)[0: nl])
+        sub_label = None
+        if train_label:
+           sub_label = theano.shared(train_label.get_value(borrow=True)[0: nl])
+
+        # Retrieve parameters
+        train_params = self.train_parameters
+        self.train_parameters.learning_rate = 0.1
+
+        # Train
+        self.train(sub_data, sub_label)
+
+        # Analyse
+        avg_hist, avg_bins = np.histogram(np.abs(self.track_progress.weight_hist['avg']),
+                                          bins=[0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000])
+        adjusted_lr = np.mean(np.abs(self.track_progress.weight_hist['avg'])) * 0.001
+        print "new learning rate: {}".format(adjusted_lr)
+
+        # update the learning rate
+        train_params.learning_rate = adjusted_lr
+        self.train_parameters =train_params
+
+
     def train(self, train_data, train_label=None):
         """Trains RBM. For now, input needs to be Theano matrix"""
-
         param = self.train_parameters
         batch_size = param.batch_size
         mini_batches = train_data.get_value(borrow=True).shape[0] / batch_size

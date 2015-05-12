@@ -91,13 +91,13 @@ class AssociativeDBN(object):
         self.association_layer = ass_rbm
         print 'top layer = {}'.format(str(ass_rbm))
 
-    def train(self, x1, x2, cache=False):
-        self.dbn_left.pretrain(x1, cache=cache)
+    def train(self, x1, x2, cache=False, optimise=False):
+        self.dbn_left.pretrain(x1, cache=cache, optimise=optimise)
 
         if self.config.reuse_dbn:
             self.dbn_right = self.dbn_left
         else:
-            self.dbn_right.pretrain(x2, cache=cache)
+            self.dbn_right.pretrain(x2, cache=cache, optimise=optimise)
 
         x1_np = self.dbn_left.bottom_up_pass(x1.get_value(True))
         x2_np = self.dbn_right.bottom_up_pass(x2.get_value(True))
