@@ -72,20 +72,20 @@ def associate_data2label(cache=False):
 def associate_data2data(cache=False):
     print "Testing Associative RBM which tries to learn even-oddness of numbers"
     # project set-up
-    data_manager = store.StorageManager('AssociationTest', log=True)
+    data_manager = store.StorageManager('AssociationRBMTest', log=True)
 
 
     # Load mnist hand digits, class label is already set to binary
-    train, valid, test = loader.load_digits(n=[500, 100, 100], digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], pre={'binary_label': True})
+    train, valid, test = loader.load_digits(n=[5000, 100, 500], digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], pre={'binary_label': True})
     train_x, train_y = train
     test_x, test_y = test
     train_x01 = loader.sample_image(train_y)
 
-    dataset01 = loader.load_digits(n=[500, 100, 100], digits=[0, 1])
+    dataset01 = loader.load_digits(n=[5000, 100, 100], digits=[0, 1])
 
 
     # Initialise the RBM and training parameters
-    tr = RBM.TrainParam(learning_rate=0.005,
+    tr = RBM.TrainParam(learning_rate=0.1,
                         momentum_type=RBM.CLASSICAL,
                         momentum=0.5,
                         weight_decay=0.001,
@@ -94,12 +94,21 @@ def associate_data2data(cache=False):
                         sparsity_cost=0.5,
                         sparsity_decay=0.9,
                         epochs=20)
+    # tr = RBM.TrainParam(learning_rate=0.005,
+                        # momentum_type=RBM.CLASSICAL,
+                        # momentum=0.5,
+                        # weight_decay=0.001,
+                        # sparsity_constraint=False,
+                        # sparsity_target=0.01,
+                        # sparsity_cost=0.5,
+                        # sparsity_decay=0.9,
+                        # epochs=20)
 
     # Even odd test
     k = 1
     n_visible = train_x.get_value().shape[1]
     n_visible2 = n_visible
-    n_hidden = 100
+    n_hidden = 200
 
     rbm = RBM.RBM(n_visible,
                   n_visible2,
@@ -117,11 +126,12 @@ def associate_data2data(cache=False):
         print "... loaded precomputed rbm"
     else:
         # Train RBM - learn joint distribution
+        rbm.pretrain_lr(train_x, train_x01)
         rbm.train(train_x, train_x01)
         rbm.save()
 
     print "... reconstruction of associated images"
-    reconstructed_y = rbm.reconstruct_association(test_x, None, 10, 0.01, plot_n=100, plot_every=1)
+    reconstructed_y = rbm.reconstruct_association(test_x, None, 30, 0.01, plot_n=100, plot_every=1)
     print "... reconstructed"
 
     # TODO use sklearn to obtain accuracy/precision etc
@@ -169,7 +179,7 @@ def associate_data2dataDBN(cache=False):
                         sparsity_constraint=False,
                         epochs=20)
 
-    tr_top = RBM.TrainParam(learning_rate=0.01,
+    tr_top = RBM.TrainParam(learning_rate=0.1,
                             find_learning_rate=True,
                             momentum_type=RBM.CLASSICAL,
                             momentum=0.5,
@@ -221,4 +231,5 @@ def associate_data2dataDBN(cache=False):
 
 if __name__ == '__main__':
     # associate_data2label()
-    associate_data2dataDBN(False)
+    associate_data2data(True)
+    # associate_data2dataDBN(False)

@@ -201,15 +201,15 @@ def test_generative_dbn():
     train_x, train_y = train
 
     # Initialise RBM parameters
-    tr = TrainParam(learning_rate=0.01,
+    tr = TrainParam(learning_rate=0.1,
                     momentum_type=NESTEROV,
                     momentum=0.5,
-                    weight_decay=0.01,
+                    weight_decay=0.001,
                     sparsity_constraint=False,
                     sparsity_target=0.01,
                     sparsity_cost=0.01,
                     sparsity_decay=0.1,
-                    epochs=5)
+                    epochs=50)
 
     # Layer 1
     # Layer 2
@@ -225,7 +225,7 @@ def test_generative_dbn():
     print '... pre-training the model'
     start_time = time.clock()
 
-    dbn.pretrain(train_x, cache=False)
+    dbn.pretrain(train_x, cache=False, optimise=True)
     # dbn.pretrain(train_x, cache=False)
 
     end_time = time.clock()
@@ -238,7 +238,7 @@ def test_generative_dbn():
     sample_n = 1000
     sampled = dbn.sample(sample_n, 2)
 
-    save_digits(sampled, shape=(sample_n / 10, 10), image_name="smapled")
+    save_digits(sampled, shape=(sample_n / 10, 10), image_name="smapled.png")
 
 
     # end-snippet-2

@@ -98,16 +98,15 @@ def test_rbm():
     data_manager = store.StorageManager('SimpleRBMTest')
 
     # Load mnist hand digits
-    datasets = loader.load_digits(n=[5000, 0, 100], digits=[0, 1])
+    datasets = loader.load_digits(n=[5000, 0, 100])
     train_set_x, train_set_y = datasets[0]
     test_set_x, test_set_y = datasets[2]
 
     # Initilise the RBM and training parameters
     tr = RBM.TrainParam(learning_rate=0,
-                        find_learning_rate=True,
                         momentum_type=CLASSICAL,
-                        momentum=0.1,
-                        weight_decay=0,
+                        momentum=0.5,
+                        weight_decay=0.001,
                         sparsity_constraint=False,
                         sparsity_target=0.01,
                         sparsity_cost=0.5,

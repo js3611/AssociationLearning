@@ -40,7 +40,6 @@ class TrainParam(object):
     def __init__(self,
                  epochs=15,
                  batch_size=20,
-                 find_learning_rate=True,
                  learning_rate=0.1,
                  momentum_type=NESTEROV,
                  momentum=0.5,
@@ -52,7 +51,7 @@ class TrainParam(object):
                  output_directory=None
                  ):
 
-        self.find_learning_rate = find_learning_rate
+        self.adj_lr = 0.001
         self.epochs = epochs
         self.batch_size = batch_size
         # Weight Update Parameters
@@ -817,7 +816,6 @@ class RBM(object):
 
         return train_fn
 
-
     def pretrain_lr(self, train_data, train_label=None):
         '''
         From Hinton -- learning rate should be weights * 10^-3
@@ -834,7 +832,7 @@ class RBM(object):
            sub_label = theano.shared(train_label.get_value(borrow=True)[0: nl])
 
         # Retrieve parameters
-        train_params = self.train_parameters
+        tr = self.train_parameters
         self.train_parameters.learning_rate = 0.1
 
         # Train
@@ -843,13 +841,20 @@ class RBM(object):
         # Analyse
         avg_hist, avg_bins = np.histogram(np.abs(self.track_progress.weight_hist['avg']),
                                           bins=[0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000])
-        adjusted_lr = np.mean(np.abs(self.track_progress.weight_hist['avg'])) * 0.001
+        adjusted_lr = np.mean(np.abs(self.track_progress.weight_hist['avg'])) * tr.adj_lr
         print "new learning rate: {}".format(adjusted_lr)
 
         # update the learning rate
-        train_params.learning_rate = adjusted_lr
-        self.train_parameters =train_params
-
+        tr.learning_rate = adjusted_lr
+        self.train_parameters =tr
+        self.W = self.get_initial_weight(None, self.v_n, self.h_n, 'W')
+        self.v_bias = self.get_initial_bias(None, self.v_n, 'v_bias')
+        self.h_bias = self.get_initial_bias(None, self.h_n, 'h_bias')
+        self.params = [self.W, self.v_bias, self.h_bias]
+        if self.associative:
+            self.U = self.get_initial_weight(None, self.v_n, self.h_n, 'U')
+            self.v_bias2 = self.get_initial_bias(None, self.v_n2, 'v_bias2')
+            self.params = self.params + [self.U, self.v_bias2]
 
     def train(self, train_data, train_label=None):
         """Trains RBM. For now, input needs to be Theano matrix"""
