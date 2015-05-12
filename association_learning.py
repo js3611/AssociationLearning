@@ -191,12 +191,13 @@ def associate_data2dataDBN(cache=False):
     for cd_type in [RBM.CLASSICAL, RBM.PERSISTENT]:
         for n_ass in [100, 250, 500, 750, 1000]:
             config.n_association = n_ass
+            config.top_cd_type = cd_type
 
             # Construct DBN
             ass_dbn = associative_dbn.AssociativeDBN(config=config, data_manager=data_manager)
 
             # Train
-            ass_dbn.train(train_x, train_x01, cache=cache)
+            ass_dbn.train(train_x, train_x01, cache=False)
 
             for n_recall in [1, 3, 5, 7, 10]:
                 for n_think in [0, 1, 3, 5, 7, 10]: #1, 3, 5, 7, 10]:

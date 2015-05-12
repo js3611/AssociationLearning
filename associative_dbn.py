@@ -38,6 +38,7 @@ class DefaultADBNConfig(object):
         self.topology_right = [n_visible2, 100, 100]
         self.n_association = n_association
         self.reuse_dbn = True
+        self.top_cd_type = 'classical'
 
         tr = TrainParam(learning_rate=0.01,
                         momentum_type=NESTEROV,
@@ -55,6 +56,7 @@ class DefaultADBNConfig(object):
         self.n_visible = n_visible
         self.n_visible2 = n_visible2
         self.n_association = n_association
+
 
 
 class AssociativeDBN(object):
@@ -81,7 +83,7 @@ class AssociativeDBN(object):
                       n_top_right,
                       config.n_association,
                       associative=True,
-                      cd_type=CLASSICAL,
+                      cd_type=config.top_cd_type,
                       cd_steps=1,
                       train_parameters=config.top_rbm_params,
                       progress_logger=AssociationProgressLogger())
