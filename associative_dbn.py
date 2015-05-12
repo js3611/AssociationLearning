@@ -137,9 +137,10 @@ class AssociativeDBN(object):
 
         # Sample from the association layer
         associate_x = top.reconstruct_association(assoc_in, k=associate_steps)
-        top_in = theano.shared(associate_x, 'associate_x', allow_downcast=True)
+
 
         if recall_steps > 0:
+            top_in = theano.shared(associate_x, 'associate_x', allow_downcast=True)
             # Allow right dbn to day dream by extracting top layer rbm
             right_top_rbm = right.rbm_layers[-1]
             ass, ass_p, ass_s = right_top_rbm.sample_v_given_h(top_in)
@@ -153,7 +154,7 @@ class AssociativeDBN(object):
                 res = associate_x_reconstruct
             # res = result.get_value(borrow=True)
         else:
-            res = right.top_down_pass(top_in)
+            res = right.top_down_pass(associate_x)
 
         n = res.shape[0]
         save_digits(x, 'dbn_original.png', shape=(n / 10, 10))

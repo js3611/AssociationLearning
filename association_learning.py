@@ -144,12 +144,12 @@ def associate_data2dataDBN(cache=False):
 
 
     # Load mnist hand digits, class label is already set to binary
-    train, valid, test = loader.load_digits(n=[5000, 100, 100], digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], pre={'binary_label': True})
+    train, valid, test = loader.load_digits(n=[500, 100, 100], digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], pre={'binary_label': True})
     train_x, train_y = train
     test_x, test_y = test
     train_x01 = loader.sample_image(train_y)
 
-    dataset01 = loader.load_digits(n=[5000, 100, 100], digits=[0, 1])
+    dataset01 = loader.load_digits(n=[500, 100, 100], digits=[0, 1])
 
     # Initialise RBM parameters
     # fixed base train param
