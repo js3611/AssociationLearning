@@ -923,7 +923,7 @@ class RBM(object):
         Reconstruct image given cd-k
         - data: theano
         '''
-        if 'Tensor' not in str(type(data)):
+        if not utils.isSharedType(data):
             data = theano.shared(data, allow_downcast=True)
         orig = data.get_value(borrow=False)
 
@@ -950,7 +950,7 @@ class RBM(object):
 
     def reconstruct_association(self, x, y=None, k=1, bit_p=0, plot_n=None, plot_every=1):
         # Initialise parameters
-        if 'Tensor' not in str(type(x)):
+        if not utils.isSharedType(x):
             x = theano.shared(x, allow_downcast=True)
         data_size = x.get_value().shape[0]
         if not y:

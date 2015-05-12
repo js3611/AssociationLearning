@@ -278,3 +278,8 @@ def tile_raster_images(X, img_shape, tile_shape, tile_spacing=(0, 0),
                         tile_col * (W + Ws): tile_col * (W + Ws) + W
                     ] = this_img * c
         return out_array
+
+
+def isSharedType(x_in):
+    type_s = str(type(x_in))
+    return any(map(lambda x: x in type_s, ['Tensor', 'cuda', 'Shared']))

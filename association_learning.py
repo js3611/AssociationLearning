@@ -197,7 +197,7 @@ def associate_data2dataDBN(cache=False):
             ass_dbn = associative_dbn.AssociativeDBN(config=config, data_manager=data_manager)
 
             # Train
-            ass_dbn.train(train_x, train_x01, cache=False)
+            ass_dbn.train(train_x, train_x01, cache=cache)
 
             for n_recall in [1, 3, 5, 7, 10]:
                 for n_think in [0, 1, 3, 5, 7, 10]: #1, 3, 5, 7, 10]:
@@ -219,4 +219,4 @@ def associate_data2dataDBN(cache=False):
 
 if __name__ == '__main__':
     # associate_data2label()
-    associate_data2dataDBN(False)
+    associate_data2dataDBN(True)

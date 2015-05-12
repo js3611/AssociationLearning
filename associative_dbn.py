@@ -128,7 +128,7 @@ class AssociativeDBN(object):
         top = self.association_layer
         right = self.dbn_right
 
-        if 'Tensor' in str(type(x)):
+        if utils.isSharedType(x):
             x = x.get_value(borrow=True)
 
         # Pass to association layer
