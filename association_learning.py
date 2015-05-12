@@ -158,7 +158,7 @@ def associate_data2dataDBN(cache=False):
                     momentum=0.5,
                     weight_decay=0.0005,
                     sparsity_constraint=False,
-                    epochs=20)
+                    epochs=5)
 
     # top layer parameters
     tr = RBM.TrainParam(learning_rate=0.0005,
@@ -166,14 +166,14 @@ def associate_data2dataDBN(cache=False):
                     momentum=0.5,
                     weight_decay=0.001,
                     sparsity_constraint=False,
-                    epochs=20)
+                    epochs=5)
 
     tr_top = RBM.TrainParam(learning_rate=0.01,
                     momentum_type=RBM.CLASSICAL,
                     momentum=0.5,
                     weight_decay=0.001,
                     sparsity_constraint=False,
-                    epochs=20)
+                    epochs=5)
 
 
     # Layer 1
@@ -219,4 +219,4 @@ def associate_data2dataDBN(cache=False):
 
 if __name__ == '__main__':
     # associate_data2label()
-    associate_data2dataDBN(True)
+    associate_data2dataDBN(False)
