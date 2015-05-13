@@ -166,6 +166,9 @@ class ProgressLogger(object):
             self.weight_hist['min'] = min(np.min(rbm.W.get_value(borrow=True)), self.weight_hist['min'])
             self.weight_hist['max'] = max(np.max(rbm.W.get_value(borrow=True)), self.weight_hist['max'])
 
+        def monitor_mean_activity(self, rbm, x, y):
+            _, hp = rbm.prop_up(x, y)
+            pass
 
 class TrainParamFinder(object):
     pass
@@ -235,6 +238,11 @@ class RBM(object):
         persistent = theano.shared(value=np.zeros((train_parameters.batch_size, h_n),
                                                   dtype=t_float_x), name="persistent")
 
+                # For sparsity cost
+        active_probability_h = theano.shared(value=np.zeros(h_n, dtype=t_float_x),
+                                             name="active_probability_h")
+
+
         self.train_parameters = train_parameters
 
         # Weights
@@ -252,6 +260,8 @@ class RBM(object):
         self.cd_steps = cd_steps
         self.persistent = persistent
         self.params = [self.W, self.v_bias, self.h_bias]
+        # For hyperparameters
+        self.active_probability_h = active_probability_h
 
         self.associative = associative
         if associative:
@@ -783,10 +793,12 @@ class RBM(object):
                                        name='old_Dvbias2', borrow=True)
             param_increments += [old_DU, old_Dvbias2]
 
-        # For sparsity cost
-        active_probability_h = theano.shared(value=np.zeros(self.h_n, dtype=t_float_x),
-                                             name="active_probability_h",
-                                             borrow=True)
+        active_probability_h = self.active_probability_h
+
+        # # For sparsity cost
+        # active_probability_h = theano.shared(value=np.zeros(self.h_n, dtype=t_float_x),
+        #                                      name="active_probability_h",
+        #                                      borrow=True)
 
 
         param_increments += [active_probability_h]
@@ -816,20 +828,80 @@ class RBM(object):
 
         return train_fn
 
-    def pretrain_lr(self, train_data, train_label=None):
-        '''
-        From Hinton -- learning rate should be weights * 10^-3
-        :param train_data:
-        :param train_label:
-        :return:
-        '''
-        # train with subdata
-        l= train_data.get_value(borrow=True).shape[0]
-        nl = max(1, int(l/10))
+    def get_sub_data(self, train_data, train_label, factor=10):
+        l = train_data.get_value(borrow=True).shape[0]
+        nl = max(1, int(l / factor))
         sub_data = theano.shared(train_data.get_value(borrow=True)[0: nl])
         sub_label = None
         if train_label:
-           sub_label = theano.shared(train_label.get_value(borrow=True)[0: nl])
+            sub_label = theano.shared(train_label.get_value(borrow=True)[0: nl])
+
+        return sub_data, sub_label
+
+    def pretrain(self, x, y=None):
+        self.pretrain_lr(x, y)
+        self.pretrain_mean_activity_h(x, y)
+
+    def get_initial_mean_activity(self, x, y=None):
+        print '... setting initial mean activity'
+        sub_x, sub_y = self.get_sub_data(x, y)
+        self.train_parameters.sparsity_constraint = False
+        self.train_parameters.sparsity_cost = 0.01
+        self.train(x, y)
+        _, ph = self.prop_up(sub_x, sub_y)
+        mean_ph = T.mean(ph, axis=0)
+        f = theano.function([], mean_ph)
+        active_probability_h = f()
+        self.active_probability_h = theano.shared(active_probability_h, 'active_probability_h')
+        self.train_parameters.sparsity_constraint = True
+        self.set_default_weights()
+
+    def pretrain_mean_activity_h(self, x, y=None):
+        print '... adjusting mean activity'
+        sub_x, sub_y = self.get_sub_data(x, y)
+        self.train_parameters.sparsity_constraint = True
+        self.train_parameters.sparsity_cost = 0.01
+
+        for i in xrange(10):
+            print 'attempt {}'.format(i)
+            self.train(x, y)
+
+            _, ph = self.prop_up(sub_x, sub_y)
+            mean_ph = T.mean(ph, axis=0)
+            f = theano.function([], mean_ph)
+            active_probability_h = f()
+            self.active_probability_h = theano.shared(active_probability_h, 'active_probability_h')
+
+            print 'mean, max, min', np.mean(active_probability_h), np.max(active_probability_h), np.min(active_probability_h)
+
+            self.set_default_weights()
+            if np.mean(np.abs(active_probability_h - self.train_parameters.sparsity_target)) < 0.1:
+                print 'Sparsity cost set to: {}'.format(self.train_parameters.sparsity_cost)
+                break
+
+            self.train_parameters.sparsity_cost *= 10
+            print 'sparsity cost updated to {}'.format(self.train_parameters.sparsity_cost)
+
+
+    def set_default_weights(self):
+        self.W = self.get_initial_weight(None, self.v_n, self.h_n, 'W')
+        self.v_bias = self.get_initial_bias(None, self.v_n, 'v_bias')
+        self.h_bias = self.get_initial_bias(None, self.h_n, 'h_bias')
+        self.params = [self.W, self.v_bias, self.h_bias]
+        if self.associative:
+            self.U = self.get_initial_weight(None, self.v_n, self.h_n, 'U')
+            self.v_bias2 = self.get_initial_bias(None, self.v_n2, 'v_bias2')
+            self.params = self.params + [self.U, self.v_bias2]
+
+    def pretrain_lr(self, x, y=None):
+        '''
+        From Hinton -- learning rate should be weights * 10^-3
+        :param x:
+        :param y:
+        :return:
+        '''
+        # train with subdata
+        sub_data, sub_label = self.get_sub_data(x, y)
 
         # Retrieve parameters
         tr = self.train_parameters
@@ -847,14 +919,7 @@ class RBM(object):
         # update the learning rate
         tr.learning_rate = adjusted_lr
         self.train_parameters =tr
-        self.W = self.get_initial_weight(None, self.v_n, self.h_n, 'W')
-        self.v_bias = self.get_initial_bias(None, self.v_n, 'v_bias')
-        self.h_bias = self.get_initial_bias(None, self.h_n, 'h_bias')
-        self.params = [self.W, self.v_bias, self.h_bias]
-        if self.associative:
-            self.U = self.get_initial_weight(None, self.v_n, self.h_n, 'U')
-            self.v_bias2 = self.get_initial_bias(None, self.v_n2, 'v_bias2')
-            self.params = self.params + [self.U, self.v_bias2]
+        self.set_default_weights()
 
     def train(self, train_data, train_label=None):
         """Trains RBM. For now, input needs to be Theano matrix"""
@@ -871,7 +936,7 @@ class RBM(object):
                 mean_cost += [train_fn(batch_index)]
                 if self.track_progress and self.track_progress.monitor_weights:
                     self.track_progress.monitor_wt(self)
-
+                    self.track_progress.monitor_mean_activity(self, train_data, train_label)
 
             if self.track_progress:
                 print 'Epoch %d, cost is ' % epoch, np.mean(mean_cost)

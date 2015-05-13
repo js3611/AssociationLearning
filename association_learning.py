@@ -76,12 +76,12 @@ def associate_data2data(cache=False):
 
 
     # Load mnist hand digits, class label is already set to binary
-    train, valid, test = loader.load_digits(n=[5000, 100, 500], digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], pre={'binary_label': True})
+    train, valid, test = loader.load_digits(n=[500, 100, 500], digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], pre={'binary_label': True})
     train_x, train_y = train
     test_x, test_y = test
     train_x01 = loader.sample_image(train_y)
 
-    dataset01 = loader.load_digits(n=[5000, 100, 100], digits=[0, 1])
+    dataset01 = loader.load_digits(n=[500, 100, 100], digits=[0, 1])
 
 
     # Initialise the RBM and training parameters
@@ -89,11 +89,11 @@ def associate_data2data(cache=False):
                         momentum_type=RBM.CLASSICAL,
                         momentum=0.5,
                         weight_decay=0.001,
-                        sparsity_constraint=False,
-                        sparsity_target=0.01,
-                        sparsity_cost=0.5,
-                        sparsity_decay=0.9,
-                        epochs=20)
+                        sparsity_constraint=True,
+                        sparsity_target=0.1 ** 9,
+                        sparsity_cost=0.9,
+                        sparsity_decay=0.99,
+                        epochs=50)
     # tr = RBM.TrainParam(learning_rate=0.005,
                         # momentum_type=RBM.CLASSICAL,
                         # momentum=0.5,

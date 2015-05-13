@@ -103,18 +103,18 @@ def test_rbm():
     test_set_x, test_set_y = datasets[2]
 
     # Initilise the RBM and training parameters
-    tr = RBM.TrainParam(learning_rate=0,
+    tr = RBM.TrainParam(learning_rate=0.001,
                         momentum_type=CLASSICAL,
                         momentum=0.5,
                         weight_decay=0.001,
-                        sparsity_constraint=False,
-                        sparsity_target=0.01,
-                        sparsity_cost=0.5,
+                        sparsity_constraint=True,
+                        sparsity_target=0.1 ** 9,
+                        sparsity_cost=10 ** 8,
                         sparsity_decay=0.9,
                         epochs=20)
 
     n_visible = train_set_x.get_value().shape[1]
-    n_hidden = 1000
+    n_hidden = 300
 
     rbm = RBM.RBM(n_visible,
                   n_visible,
@@ -130,13 +130,15 @@ def test_rbm():
     print "... initialised RBM"
 
     # adjust learning rate
-    rbm.pretrain_lr(train_set_x)
+    # rbm.pretrain_lr(train_set_x)
+
+    # rbm.pretrain_mean_activity_h(train_set_x)
+
+    rbm.get_initial_mean_activity(train_set_x)
 
     # Train RBM
     rbm.train(train_set_x)
 
-
-    rbm.W
     # Test RBM
     rbm.reconstruct(test_set_x, k=1, plot_n=500, plot_every=1)
 
