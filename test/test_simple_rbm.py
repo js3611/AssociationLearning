@@ -2,7 +2,9 @@ import unittest
 from rbm import *
 from activationFunction import *
 from utils import *
+import theano
 import theano.tensor as T
+from theano.tensor.shared_randomstreams import RandomStreams
 import numpy as np
 
 
@@ -147,6 +149,36 @@ class SingleRBMTest(unittest.TestCase):
         self.setUpRBM()
         rbm = self.rbm
         pass
+
+    def test_dropout(self):
+        srng = RandomStreams(seed=234)
+
+        x = T.matrix('x')
+        dropout_mask = srng.binomial(size=(5,), p=0.5)
+
+        fixed_dropout_mask = dropout_mask
+
+        y = x * dropout_mask
+        f = theano.function([x], y)
+
+        z = x * fixed_dropout_mask
+        z2 = x * dropout_mask
+        g = theano.function([x],[y, z, z2])
+
+        print f([[1,1,1,1,1],[1,1,1,1,1],[1,1,1,1,1]])
+
+        print f([[1,1,1,1,1],[1,1,1,1,1],[1,1,1,1,1]])
+
+        print g([[1,1,1,1,1],[1,1,1,1,1],[1,1,1,1,1]])
+
+
+        # rv_u = srng.uniform((2,2))
+        # rv_n = srng.normal((2,2))
+        # f = theano.function([], rv_u)
+        # g = theano.function([], rv_n, no_default_updates=True)    #Not updating rv_n.rng
+        # nearly_zeros = theano.function([], rv_u + rv_u - 2 * rv_u)
+        # print f()
+        # print f()
 
 if __name__ == '__main__':
     print "Test Simple RBM"

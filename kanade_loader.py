@@ -32,6 +32,10 @@ def load_kanade(shared=True, resolution='25_25', emotions=None, pre=None, n=None
     '''
     data = __load(resolution)
 
+    # Shuffle data
+    idx = np.random.choice(range(0, len(data[1])), size=len(data[1]), replace=False)
+    data = (data[0][idx], data[1][idx])
+
     # pre-processing
     if emotions:  #filter
         x, y = data

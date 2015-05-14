@@ -18,24 +18,25 @@ def train_kanade():
 
     sparsity_constraint = False
     # Initialise the RBM and training parameters
-    tr = RBM.TrainParam(learning_rate=0.1,
+    tr = RBM.TrainParam(learning_rate=0.01,
                         momentum_type=RBM.NESTEROV,
                         momentum=0.5,
-                        weight_decay=0.0001,
+                        weight_decay=0.001,
                         sparsity_constraint=sparsity_constraint,
                         sparsity_target=0.001,
                         sparsity_cost=1,
                         sparsity_decay=0.9,
-                        epochs=100)
+                        epochs=20)
 
     n_visible = train_x.get_value().shape[1]
-    n_hidden = 100
+    n_hidden = 1000
 
     rbm = RBM.RBM(n_visible,
                   n_visible,
                   n_hidden,
                   associative=False,
-                  cd_type=RBM.CLASSICAL,
+                  dropout=True,
+                  cd_type=RBM.NESTEROV,
                   cd_steps=1,
                   train_parameters=tr,
                   progress_logger=RBM.ProgressLogger(img_shape=(25, 25)))
@@ -47,14 +48,14 @@ def train_kanade():
 
 
     # adjust learning rate
-    rbm.pretrain_lr(train_x)
+    # rbm.pretrain_lr(train_x)
     # rbm.pretrain_mean_activity_h(train_x)
 
     # Train RBM
     rbm.train(train_x)
 
     # Test RBM
-    rbm.reconstruct(train_x, k=10, plot_n=10, plot_every=1)
+    rbm.reconstruct(train_x, k=5, plot_n=10, plot_every=1)
 
     # Store Parameters
     data_manager.persist(rbm)

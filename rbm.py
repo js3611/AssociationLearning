@@ -41,6 +41,7 @@ class TrainParam(object):
                  epochs=15,
                  batch_size=20,
                  learning_rate=0.1,
+                 adj_lr=0.001,
                  momentum_type=NESTEROV,
                  momentum=0.5,
                  weight_decay=0.001,
@@ -51,7 +52,7 @@ class TrainParam(object):
                  output_directory=None
                  ):
 
-        self.adj_lr = 0.001
+        self.adj_lr = adj_lr
         self.epochs = epochs
         self.batch_size = batch_size
         # Weight Update Parameters
@@ -227,6 +228,7 @@ class RBM(object):
                  h_activation_fn=log_sig,
                  v_activation_fn=log_sig,
                  v_activation_fn2=log_sig,
+                 dropout=False,
                  cd_type=PERSISTENT,
                  cd_steps=1,
                  train_parameters=None,
@@ -249,8 +251,11 @@ class RBM(object):
         active_probability_h = theano.shared(value=np.zeros(h_n, dtype=t_float_x),
                                              name="active_probability_h")
 
+        if dropout:
+            self.dropout_mask = self.rand.binomial(size=(h_n,), p=0.8)
 
         self.train_parameters = train_parameters
+        self.dropout = dropout
 
         # Weights
         self.W = W
@@ -342,6 +347,8 @@ class RBM(object):
         if np.any(v2):
             h_total_input += T.dot(v2, self.U)
         h_p_activation = self.h_activation_fn(h_total_input)
+        if self.dropout:
+            h_p_activation *= self.dropout_mask
         return [h_total_input, h_p_activation]
 
     def __prop_down(self, h, connectivity, bias, activation_fn):
@@ -859,6 +866,7 @@ class RBM(object):
         mean_ph = T.mean(ph, axis=0)
         f = theano.function([], mean_ph)
         active_probability_h = f()
+        print active_probability_h
         self.active_probability_h = theano.shared(active_probability_h, 'active_probability_h')
         self.train_parameters.sparsity_constraint = True
         self.set_default_weights()
