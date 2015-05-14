@@ -36,7 +36,7 @@ def train_kanade():
                   n_hidden,
                   associative=False,
                   dropout=True,
-                  cd_type=RBM.NESTEROV,
+                  cd_type=RBM.CLASSICAL,
                   cd_steps=1,
                   train_parameters=tr,
                   progress_logger=RBM.ProgressLogger(img_shape=(25, 25)))
@@ -48,7 +48,7 @@ def train_kanade():
 
 
     # adjust learning rate
-    # rbm.pretrain_lr(train_x)
+    rbm.pretrain_lr(train_x)
     # rbm.pretrain_mean_activity_h(train_x)
 
     # Train RBM
