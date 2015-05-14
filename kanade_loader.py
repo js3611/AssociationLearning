@@ -34,11 +34,11 @@ def load_kanade(shared=True, resolution='25_25', emotions=None, pre=None, n=None
 
     # pre-processing
     if emotions:  #filter
-        data, y = data
+        x, y = data
         filter_keys = map(lambda x: emotion_dict[x], emotions)
         filtered = filter(lambda (x, y): y in filter_keys, enumerate(y))
         idx = [s[0] for s in filtered]
-        data = (data[idx], y[idx])
+        data = (x[idx], y[idx])
 
     if n:
         idx = np.random.randint(0, len(data[1]), size=n)
@@ -50,14 +50,11 @@ def load_kanade(shared=True, resolution='25_25', emotions=None, pre=None, n=None
         if 'wpca' in pre:
             pass
         if 'scale' in pre:
-            new_data = []
-            for i, data_xy in enumerate(data):
-                if len(data_xy[0] > 0):
-                    data_x = preprocessing.scale(data_xy[0])
-                else:
-                    data_x = data_xy[0]
-                new_data.append((data_x, data_xy[1]))
-            data = new_data
+            x = preprocessing.scale(data[0].astype(np.float64))
+            data = (x, data[1])
+        if 'scale2unit' in pre:
+            x = data[0] / 255.0
+            data = (x, data[1])
         if 'center' in pre:
             pass
         if 'threshold' in pre:
@@ -184,7 +181,6 @@ def scale_to_unit_interval(ndar, eps=1e-8):
     ndar -= ndar.min()
     ndar *= 1.0 / (ndar.max() + eps)
     return ndar
-
 
 def get_binary_label(data):
     new_data = []

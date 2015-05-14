@@ -88,17 +88,22 @@ def visualise_reconstructions(orig, reconstructions, img_shape, plot_n=None, img
             else:
                 data_size = orig.shape[0]
 
-            if img_shape == (28, 28) and orig.shape[1] == 784:
+            print 'reconstruction ----'
+            print orig.shape
+            print reconstructions[0].shape
+
+            if orig.shape[1] in [784, 625, 2500]:
+                nrow, ncol = img_shape
 
                 image_data = np.zeros(
-                    (29 * (k+1) + 1, 29 * data_size - 1),
+                    ((nrow+1) * (k+1) + 1, (ncol+1) * data_size - 1),
                     dtype='uint8'
                 )
 
                 # Original images
-                image_data[0:28, :] = utils.tile_raster_images(
+                image_data[0:nrow, :] = utils.tile_raster_images(
                     X=orig,
-                    img_shape=(28, 28),
+                    img_shape=img_shape,
                     tile_shape=(1, data_size),
                     tile_spacing=(1, 1)
                 )
@@ -106,9 +111,10 @@ def visualise_reconstructions(orig, reconstructions, img_shape, plot_n=None, img
                 # Generate image by plotting the sample from the chain
                 for i in xrange(1, k+1):
                     print ' ... plotting sample ', i
-                    image_data[29 * i:29 * i + 28, :] = utils.tile_raster_images(
+                    idx = (nrow+1) * i
+                    image_data[idx:(idx+nrow), :] = utils.tile_raster_images(
                         X=(reconstructions[i-1]),
-                        img_shape=(28, 28),
+                        img_shape=img_shape,
                         tile_shape=(1, data_size),
                         tile_spacing=(1, 1)
                     )
@@ -126,6 +132,7 @@ class ProgressLogger(object):
                      time_training=True,
                      plot=True,
                      plot_info=None,
+                     img_shape=(28, 28),
                      out_dir=None
                      ):
 
@@ -136,18 +143,18 @@ class ProgressLogger(object):
             self.out_dir = out_dir
             self.monitor_weights = monitor_weights
             self.weight_hist = {'avg': [], 'std': [], 'min': sys.maxint, 'max': -sys.maxint - 1}
-            self.img_shape = (28, 28)
+            self.img_shape = img_shape
 
         def visualise_weight(self, rbm, image_name):
             plotting_start = time.clock()  # Measure plotting time
 
-            if rbm.v_n == 784:
+            if rbm.v_n in [784, 625, 2500]:
                 tile_shape = (rbm.h_n / 10 + 1, 10)
 
                 image = Image.fromarray(
                     utils.tile_raster_images(
                         X=rbm.W.get_value(borrow=True).T,
-                        img_shape=(28, 28),
+                        img_shape=self.img_shape,
                         tile_shape=tile_shape,
                         tile_spacing=(1, 1)
                     )
@@ -158,7 +165,7 @@ class ProgressLogger(object):
             return plotting_end - plotting_start
 
         def visualise_reconstructions(self, orig, reconstructions, plot_n=None, img_name='reconstruction'):
-            visualise_reconstructions(orig, reconstructions, (28, 28), plot_n, img_name)
+            visualise_reconstructions(orig, reconstructions, self.img_shape, plot_n, img_name)
 
         def monitor_wt(self, rbm):
             self.weight_hist['avg'].append(np.mean(rbm.W.get_value(borrow=True)))
@@ -177,7 +184,7 @@ class TrainParamFinder(object):
 class AssociationProgressLogger(ProgressLogger):
     def visualise_weight(self, rbm, image_name):
             assert rbm.associative
-            if rbm.v_n == 784:
+            if rbm.v_n in [784, 625, 2500]:
                 plotting_start = time.clock()  # Measure plotting time
 
                 w = rbm.W.get_value(borrow=True).T
@@ -190,7 +197,7 @@ class AssociationProgressLogger(ProgressLogger):
                 image = Image.fromarray(
                     utils.tile_raster_images(
                         X=weight,
-                        img_shape=(28 * 2, 28),
+                        img_shape=self.img_shape,
                         tile_shape=tile_shape,
                         tile_spacing=(1, 1)
                     )
@@ -202,7 +209,7 @@ class AssociationProgressLogger(ProgressLogger):
             return 0
 
     def visualise_reconstructions(self, orig, reconstructions, plot_n=None, img_name='association'):
-        visualise_reconstructions(orig, reconstructions, (28, 28), plot_n, img_name)
+        visualise_reconstructions(orig, reconstructions, self.img_shape, plot_n, img_name)
 
 
 class RBM(object):
@@ -958,63 +965,6 @@ class RBM(object):
 
         return [mean_cost]
 
-    def plot_samples(self, data, image_name='samples.png', plot_every=1000):
-        n_chains = 20   # Number of Chains to perform Gibbs Sampling
-        n_samples_from_chain = 10  # Number of samples to take from each chain
-
-        test_set_size = data.get_value(borrow=True).shape[0]
-        rand = np.random.RandomState(1234)
-        test_input_index = rand.randint(test_set_size - n_chains)
-        # Sample after 1000 steps of Gibbs Sampling each time
-        persistent_vis_chain = theano.shared(
-            np.asarray(
-                data.get_value(borrow=True)[test_input_index:test_input_index + n_chains],
-                dtype=theano.config.floatX
-            )
-        )
-
-        # Expression which performs Gibbs Sampling
-        (
-            [
-                presig_hids,
-                hid_mfs,
-                hid_samples,
-                presig_vis,
-                vis_mfs,
-                vis_samples
-            ],
-            updates
-        ) = theano.scan(
-            self.gibbs_vhv,
-            outputs_info=[None, None, None, None, None, persistent_vis_chain],
-            n_steps=plot_every
-        )
-
-        updates.update({persistent_vis_chain: vis_samples[-1]})
-
-        # Function that runs above Gibbs sampling
-        sample_fn = theano.function([], [vis_mfs[-1], vis_samples[-1]],
-                                    updates=updates, name='sample_fn')
-
-        image_data = np.zeros(
-            (29 * n_samples_from_chain + 1, 29 * n_chains - 1),
-            dtype='uint8'
-        )
-
-        # Generate image by plotting the sample from the chain
-        for i in xrange(n_samples_from_chain):
-            vis_mf, vis_sample = sample_fn()
-            print ' ... plotting sample ', i
-            image_data[29 * i:29 * i + 28, :] = utils.tile_raster_images(
-                X=vis_mf,
-                img_shape=(28, 28),
-                tile_shape=(1, n_chains),
-                tile_spacing=(1, 1)
-            )
-
-        # construct image
-        image = Image.fromarray(image_data)
-        image.save(image_name)
 
     def save(self):
         store.store_object(self)
@@ -1228,19 +1178,8 @@ def test_rbm():
     rbm.train(train_set_x)
 
     # Test RBM
-    rbm.plot_samples(test_set_x)
+    rbm.reconstruct(test_set_x, k=1, n=20)
 
-    # Store Parameters
-    rbm.save()
-
-    # Load RBM (test)
-    loaded = store.retrieve_object(str(rbm))
-    if loaded:
-        print "... loaded trained RBM"
-
-    # Move back to root
-    os.chdir(root_dir)
-    print "... moved to " + root_dir
 
 if __name__ == '__main__':
     test_rbm()

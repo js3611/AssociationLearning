@@ -3,8 +3,10 @@ __author__ = 'joschlemper'
 import unittest
 import cv2
 import numpy as np
+import theano
 import kanade_loader as loader
 from matplotlib import pyplot as plt
+from scipy.stats import itemfreq
 
 class MyTestCase(unittest.TestCase):
     def test_sth(self):
@@ -36,6 +38,22 @@ class MyTestCase(unittest.TestCase):
     def test_load_n(self):
         dataset = loader.load_kanade(shared=False, resolution='50_50', n=100)
         self.assertTrue(len(dataset[0]) == 100)
+
+    def test_scale(self):
+        dataset = loader.load_kanade(shared=False, n=2, pre={'scale2unit':True})
+
+        self.assertTrue(len(dataset[0]) == 2 and len(dataset[1]) == 2)
+
+        print dataset[0]
+        print itemfreq(dataset[0])
+
+    def test_shared(self):
+        dataset = loader.load_kanade(n=10)
+        train_x, train_y = dataset
+
+        # print type(train_x)
+        # print type(train_y)
+        self.assertTrue(isinstance(train_x, theano.tensor.sharedvar.TensorSharedVariable))
 
 if __name__ == '__main__':
     unittest.main()
