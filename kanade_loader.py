@@ -5,6 +5,7 @@ import gzip
 import os
 import sys
 import time
+import cv2
 from sklearn import preprocessing
 import numpy as np
 import theano
@@ -18,8 +19,10 @@ except ImportError:
 BASE_DIR = os.path.dirname(__file__)
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 
+emotion_dict = {'anger': 1, 'contempt': 2, 'disgust': 3, 'fear': 4, 'happy': 5, 'sadness': 6, 'surprise': 7}
 
-def load_kanade(shared=True, emotions=None, pre=None, n=None):
+
+def load_kanade(shared=True, resolution='25_25', emotions=None, pre=None, n=None):
     '''
     :param shared: To return theano shared variable. If false, returns in numpy
     :param digits: filter. if none, all digits will be returned
@@ -27,25 +30,19 @@ def load_kanade(shared=True, emotions=None, pre=None, n=None):
     :param n: (a single digit or) an array showing how many samples to get
     :return: [(train_x, train_y), (valid_x, valid_y), (test_x, test_y)]
     '''
-    data = __load()
+    data = __load(resolution)
 
     # pre-processing
-
     if emotions:  #filter
-        new_data = []
-        for data_xy in data:
-            data_y = data_xy[1]
-            filtered = filter(lambda (x, y): y in digits, enumerate(data_y))
-            idx = [s[0] for s in filtered]
-            new_data.append((data_xy[0][idx], data_xy[1][idx]))
-        data = new_data
+        data, y = data
+        filter_keys = map(lambda x: emotion_dict[x], emotions)
+        filtered = filter(lambda (x, y): y in filter_keys, enumerate(y))
+        idx = [s[0] for s in filtered]
+        data = (data[idx], y[idx])
 
     if n:
-        new_data = []
-        for i, data_xy in enumerate(data):
-            idx = np.random.randint(0, len(data_xy[1]), size=n[i])
-            new_data.append((data_xy[0][idx], data_xy[1][idx]))
-        data = new_data
+        idx = np.random.randint(0, len(data[1]), size=n)
+        data = (data[0][idx], data[1][idx])
 
     if pre:
         if 'pca' in pre:
@@ -71,40 +68,65 @@ def load_kanade(shared=True, emotions=None, pre=None, n=None):
             data = vectorise_label(data)
 
     if shared:
-        data = get_shared(data)
+        data = shared_dataset(data)
 
     return data
 
+
 def __load(resolution='25_25'):
     ''' Loads the mnist data set '''
+    print BASE_DIR
 
-    dataset_name = 'kanade/' + resolution
-    emotions = ['anger', 'contempt', 'disgust', 'fear', 'happy', 'sadness', 'surprise']
+    dataset_name = 'kanade' + resolution + '.save'
 
     # look for the location
-    possible_locations = ['', '/data/']
-
+    possible_locations = ['', 'data']
     dataset = DATA_DIR
     for location in possible_locations:
         data_location = os.path.join(BASE_DIR, location, dataset_name)
         if os.path.isfile(data_location):
+            print '... dataset found at {}'.format(data_location)
             dataset = data_location
+            break
 
-    # Download the MNIST dataset if it is not present
-    if not os.path.isfile(dataset):
-        import urllib
-        origin = ('http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz')
-        print '... downloading data from %s' % origin
-        urllib.urlretrieve(origin, dataset)
+    # If the saved file doesn't exist, create one
+    if not os.path.isfile(data_location):
+        dir_name = 'kanade/' + resolution
+        for location in possible_locations:
+            data_location = os.path.join(BASE_DIR, location, dir_name)
+            if os.path.isdir(data_location):
+                dataset = data_location
+                break
 
-    print '... loading data'
+        assert os.path.isdir(dataset)
+        print '... creating data'
 
-    # Load the dataset
-    f = gzip.open(dataset, 'rb')
-    train_set, valid_set, test_set = cPickle.load(f)
+        data = []
+        label = []
+        for emotion in emotion_dict.keys():
+            for img in os.listdir(dataset + '/' + emotion):
+                img_name = os.path.join(dataset, emotion, img)
+                img_array = cv2.imread(img_name, 0)
+                data.append(np.asarray(img_array).reshape(-1))
+                label.append(emotion_dict[emotion])
+
+        dataset = os.path.join(DATA_DIR, 'kanade' + resolution + '.save')
+
+        # print data
+        # print label
+        # print os.getcwd()
+
+        f = open(dataset, 'wb')
+        cPickle.dump((np.array(data), np.array(label)), f, protocol=cPickle.HIGHEST_PROTOCOL)
+        f.close()
+
+    # open
+    f = open(dataset, 'rb')
+    data, label = cPickle.load(f)
     f.close()
 
-    return train_set, valid_set, test_set
+    return data, label
+
 
 
 def shared_dataset(data_xy, borrow=True):

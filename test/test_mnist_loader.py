@@ -9,7 +9,7 @@ import mnist_loader as loader
 import utils
 
 
-class MyTestCase(unittest.TestCase):
+class TestMNistLoader(unittest.TestCase):
     def test_load_raw(self):
         dataset = loader.load_digits(shared=False)
         self.assertTrue(len(dataset) == 3)
@@ -111,7 +111,6 @@ class MyTestCase(unittest.TestCase):
 
     def test_binary_label(self):
         train, valid, test = loader.load_digits(digits=[2, 3], n=[10, 0, 0], pre={'binary_label':True})
-
 
 if __name__ == '__main__':
     unittest.main()
