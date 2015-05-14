@@ -75,6 +75,8 @@ class DBN(object):
             self.params.extend(sigmoid_layer.params)
 
             # construct RBM that shared weights with this layer
+            logger = ProgressLogger(img_shape=(25,25))
+
             rbm_layer = RBM(associative=False,
                             cd_type='classical',
                             v_n=topology[i],
@@ -82,7 +84,7 @@ class DBN(object):
                             W=sigmoid_layer.W,
                             h_bias=sigmoid_layer.b,
                             train_parameters=tr[i],
-                            progress_logger=ProgressLogger())
+                            progress_logger=logger)
             self.rbm_layers.append(rbm_layer)
             
         # Logistic layer on top of the MLP

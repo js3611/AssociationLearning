@@ -89,10 +89,6 @@ def visualise_reconstructions(orig, reconstructions, img_shape, plot_n=None, img
             else:
                 data_size = orig.shape[0]
 
-            print 'reconstruction ----'
-            print orig.shape
-            print reconstructions[0].shape
-
             if orig.shape[1] in [784, 625, 2500]:
                 nrow, ncol = img_shape
 
@@ -198,7 +194,7 @@ class AssociationProgressLogger(ProgressLogger):
                 image = Image.fromarray(
                     utils.tile_raster_images(
                         X=weight,
-                        img_shape=self.img_shape,
+                        img_shape=(self.img_shape[0] *2, self.img_shape[1]),
                         tile_shape=tile_shape,
                         tile_spacing=(1, 1)
                     )
@@ -1015,7 +1011,7 @@ class RBM(object):
 
         return reconstructions[-1]
 
-    def reconstruct_association(self, x, y=None, k=1, bit_p=0, plot_n=None, plot_every=1):
+    def reconstruct_association(self, x, y=None, k=1, bit_p=0, plot_n=None, plot_every=1, img_name='association_reconstruction.png'):
         # Initialise parameters
         if not utils.isSharedType(x):
             x = theano.shared(x, allow_downcast=True)
@@ -1044,7 +1040,7 @@ class RBM(object):
             reconstructions.append(reconstruction_chain[-1])
 
         if self.track_progress:
-            self.track_progress.visualise_reconstructions(x.get_value(borrow=True), reconstructions, plot_n)
+            self.track_progress.visualise_reconstructions(x.get_value(borrow=True), reconstructions, plot_n, img_name=img_name)
 
         return reconstruction_chain[-1]
 

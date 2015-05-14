@@ -20,7 +20,7 @@ BASE_DIR = os.path.dirname(__file__)
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 
 emotion_dict = {'anger': 1, 'contempt': 2, 'disgust': 3, 'fear': 4, 'happy': 5, 'sadness': 6, 'surprise': 7}
-
+emotion_rev_dict =  {1: 'anger', 2: 'contempt', 3: 'disgust', 4: 'fear', 5: 'happy', 6: 'sadness', 7: 'surprise'}
 
 def load_kanade(shared=True, resolution='25_25', emotions=None, pre=None, n=None):
     '''
@@ -206,20 +206,22 @@ def sample_image(data, shared=True):
     else:
         seq = data
 
-    digits = np.unique(seq).tolist()
+    emotion_vals = np.unique(seq).tolist()
+    emotions = map(lambda x: emotion_rev_dict[x], emotion_vals)
     image_pool = {}
-    for d in digits:
-        train, _, _ = load_digits(shared=False, digits=[d], n=[len(seq), 0, 0])
-        image_pool[d] = train[0]
+    for d in emotions:
+        dataset = load_kanade(shared=False, emotions=[d], n=len(seq), pre={'scale2unit':True})
+        image_pool[d] = dataset[0]
 
     sample_data = []
     rand_seq = np.random.randint(0, len(seq), size=len(seq))
 
     for d, r in zip(seq.tolist(), rand_seq.tolist()):
-        sample_data.append(image_pool[d][(r % len(image_pool[d]))])
+        pool = image_pool[emotion_rev_dict[d]]
+        sample_data.append(image_pool[emotion_rev_dict[d]][(r % len(image_pool[emotion_rev_dict[d]]))])
 
     if shared:
-        return theano.shared(np.asarray(sample_data, dtype=theano.config.floatX), borrow=True)
+        return theano.shared(np.array(sample_data, dtype=theano.config.floatX), borrow=True)
     else:
         return np.asarray(sample_data, dtype=theano.config.floatX)
 

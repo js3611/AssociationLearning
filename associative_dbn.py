@@ -114,7 +114,7 @@ class AssociativeDBN(object):
             self.data_manager.persist(self.association_layer, out_dir=out_dir)
 
     # TODO clean up input and output of each function (i.e. they should all return theano or optional flag)
-    def recall(self, x, associate_steps=10, recall_steps=5):
+    def recall(self, x, associate_steps=10, recall_steps=5, img_name='default'):
         ''' left dbn bottom-up -> associate -> right dbn top-down
         :param x: data
         :param associate_steps: top level gibbs sampling steps
@@ -157,8 +157,8 @@ class AssociativeDBN(object):
             res = right.top_down_pass(associate_x)
 
         n = res.shape[0]
-        save_digits(x, 'dbn_original.png', shape=(n / 10, 10))
-        save_digits(res, 'dbn_reconstruction.png', shape=(n / 10, 10))
+        save_digits(x, img_name+'original.png', shape=(n / 10, 10), img_shape=(25, 25))
+        save_digits(res, img_name+'dbn_reconstruction.png', shape=(n / 10, 10), img_shape=(25, 25))
 
         self.data_manager.move_to_project_root()
 
