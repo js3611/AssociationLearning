@@ -206,8 +206,8 @@ def associate_data2dataDBN(cache=False):
             for trainN in xrange(0, 5):
                 ass_dbn.train(train_x, train_x01, cache=cache)#, optimise=True)
 
-                for n_recall in [1, 3, 5, 7, 10]:
-                    for n_think in [0, 1, 3, 5, 7, 10]: #1, 3, 5, 7, 10]:
+                for n_recall in [1, 3, 10]:
+                    for n_think in [0, 1, 3, 7]: #1, 3, 5, 7, 10]:
                         # Reconstruct
                         sampled = ass_dbn.recall(train_x, n_recall, n_think)
 
