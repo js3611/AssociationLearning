@@ -3,11 +3,12 @@ import theano
 import theano.tensor as T
 from activationFunction import *
 from rbm_units import *
-from progress_logger import *
+from rbm_logger import *
 from theano.tensor.shared_randomstreams import RandomStreams
 import utils
 import mnist_loader as loader
 import datastorage as store
+import rbm_config
 
 import sys
 import os
@@ -37,70 +38,24 @@ theano.config.optimizer = 'None'
 theano.config.exception_verbosity = 'high'
 
 
-class TrainParam(object):
-    def __init__(self,
-                 epochs=15,
-                 batch_size=20,
-                 learning_rate=0.1,
-                 adj_lr=0.001,
-                 momentum_type=NESTEROV,
-                 momentum=0.5,
-                 weight_decay=0.001,
-                 sparsity_constraint=True,
-                 sparsity_target=0.01,      # in range (0.1^9, 0.01)
-                 sparsity_cost=0.01,
-                 sparsity_decay=0.1,
-                 output_directory=None
-                 ):
-
-        self.adj_lr = adj_lr
-        self.epochs = epochs
-        self.batch_size = batch_size
-        # Weight Update Parameters
-        self.learning_rate = learning_rate
-        self.momentum_type = momentum_type
-        self.momentum = momentum
-        self.weight_decay = weight_decay
-        # Sparsity Constraint Parameters
-        self.sparsity_constraint = sparsity_constraint
-        self.sparsity_target = sparsity_target
-        self.sparsity_cost = sparsity_cost
-        self.sparsity_decay = sparsity_decay
-        # Meta
-        self.output_directory = output_directory
-
-    def __str__(self):
-        return "epoch" + str(self.epochs) + \
-               "_batch" + str(self.batch_size) + \
-               "_lr" + str(self.learning_rate) + \
-               "_" + self.momentum_type + str(self.momentum) + \
-               "_wd" + str(self.weight_decay) + \
-               ("_sparsity"
-                + "_t" + str(self.sparsity_target)
-                + "_c" + str(self.sparsity_cost) +
-                "_d" + str(self.sparsity_decay) if self.sparsity_constraint else "")
-
-
 class RBM(object):
 
     def __init__(self,
-                 v_n=10,
-                 v_n2=10,
-                 h_n=10,
-                 associative=False,
+                 config,
                  W=None,
                  U=None,
                  h_bias=None,
                  v_bias=None,
-                 v_bias2=None,
-                 h_activation_fn=log_sig,
-                 v_activation_fn=log_sig,
-                 v_activation_fn2=log_sig,
-                 dropout=False,
-                 cd_type=PERSISTENT,
-                 cd_steps=1,
-                 train_parameters=None,
-                 progress_logger=None):
+                 v_bias2=None):
+
+        cd_type = config.cd_type
+        cd_steps = config.cd_steps
+        associative = config.associative
+        dropout = config.dropout
+
+        v_n = config.v_n
+        v_n2 = config.v2_n
+        h_n = config.h_n
 
         self.np_rand = np.random.RandomState(123)
         self.rand = RandomStreams(self.np_rand.randint(2 ** 30))
@@ -109,37 +64,39 @@ class RBM(object):
         v_bias = self.get_initial_bias(v_bias, v_n, 'v_bias')
         h_bias = self.get_initial_bias(h_bias, h_n, 'h_bias')
 
-        if train_parameters is None:
-            train_parameters = TrainParam()
+        train_params = config.train_params
 
-        persistent = theano.shared(value=np.zeros((train_parameters.batch_size, h_n),
+        persistent = theano.shared(value=np.zeros((train_params.batch_size, h_n),
                                                   dtype=t_float_x), name="persistent")
 
-                # For sparsity cost
+        # For sparsity cost
         active_probability_h = theano.shared(value=np.zeros(h_n, dtype=t_float_x),
                                              name="active_probability_h")
 
         if dropout:
             self.dropout_mask = self.rand.binomial(size=(h_n,), p=0.8)
 
-        self.train_parameters = train_parameters
+        self.train_parameters = train_params
         self.dropout = dropout
 
         # Weights
         self.W = W
+
         # Visible Layer
         self.v_n = v_n
         self.v_bias = v_bias
-        self.v_activation_fn = v_activation_fn
+        self.v_unit = config.v_unit()
+
         # Hidden Layer
         self.h_n = h_n
         self.h_bias = h_bias
-        self.h_activation_fn = h_activation_fn
+        self.h_unit = config.h_unit(self.h_n)
         # Gibbs Sampling Method
         self.cd_type = cd_type
         self.cd_steps = cd_steps
         self.persistent = persistent
         self.params = [self.W, self.v_bias, self.h_bias]
+
         # For hyperparameters
         self.active_probability_h = active_probability_h
 
@@ -149,10 +106,13 @@ class RBM(object):
             # Visible Layer 2
             self.v_n2 = v_n2
             self.v_bias2 = self.get_initial_bias(v_bias2, v_n2, 'v_bias2')
-            self.v_activation_fn2 = v_activation_fn2
+            self.v_unit2 = config.v2_unit()
             self.params += [self.U, self.v_bias2]
 
-        self.track_progress = progress_logger
+
+        self.track_progress = config.progress_logger
+        self.config = config
+
 
     def get_initial_weight(self, w, nrow, ncol, name):
         if w is None:
@@ -211,43 +171,36 @@ class RBM(object):
     def prop_up(self, v, v2=None):
         """Propagates v to the hidden layer. """
         h_total_input = T.dot(v, self.W) + self.h_bias
-        # Associative
-        if np.any(v2):
+
+        if np.any(v2): # Associative
             h_total_input += T.dot(v2, self.U)
-        h_p_activation = self.h_activation_fn(h_total_input)
-        if self.dropout:
+
+        h_p_activation = self.h_unit.scale(h_total_input)
+        if self.train and self.dropout:
             h_p_activation *= self.dropout_mask
+
         return [h_total_input, h_p_activation]
 
-    def __prop_down(self, h, connectivity, bias, activation_fn):
+    def __prop_down(self, h, connectivity, bias, v_unit):
         """Propagates h to the visible layer. """
-        v_total_input = T.dot(h, connectivity.T) + bias
-        v_p_activation = activation_fn(v_total_input)
-        return [v_total_input, v_p_activation]
+        v_in = T.dot(h, connectivity.T) + bias
+        return [v_in, (v_unit.scale(v_in))]
 
     def prop_down(self, h):
-        return self.__prop_down(h, self.W, self.v_bias, self.v_activation_fn)
+        return self.__prop_down(h, self.W, self.v_bias, self.v_unit)
 
     def prop_down_assoc(self, h):
-        return self.__prop_down(h, self.U, self.v_bias2, self.v_activation_fn2)
+        return self.__prop_down(h, self.U, self.v_bias2, self.v_unit2)
 
     def sample_h_given_v(self, v, v2=None):
         h_total_input, h_p_activation = self.prop_up(v, v2)
-        h_sample = self.rand.binomial(size=h_p_activation.shape,
-                                      n=1,
-                                      p=h_p_activation,
-                                      dtype=t_float_x)
+        h_sample = self.h_unit.activate(h_p_activation)
         return [h_total_input, h_p_activation, h_sample]
 
     def __sample_v_given_h(self, h_sample, prop_down_fn):
         v_total_input, v_p_activation = prop_down_fn(h_sample)
-        v_sample = self.rand.binomial(size=v_p_activation.shape,
-                                      n=1,
-                                      p=v_p_activation,
-                                      dtype=t_float_x)
+        v_sample = self.v_unit.activate(v_p_activation)
         return [v_total_input, v_p_activation, v_sample]
-
-## REFACTOR ALL THIS SHIT
 
     def sample_v_given_h(self, h_sample):
         return self.__sample_v_given_h(h_sample, self.prop_down)
@@ -441,7 +394,7 @@ class RBM(object):
 
     def get_reconstruction_cost(self, x, v_total_inputs):
         """Used to monitor progress when using CD-k"""
-        p = self.v_activation_fn(v_total_inputs)
+        p = self.v_unit.scale(v_total_inputs)
         cross_entropy = - T.sum(x * T.log(p) + (1 - x) * T.log(1 - p), axis=1)
         cost = T.mean(cross_entropy)
         return cost
@@ -1026,7 +979,7 @@ def test_rbm():
     test_set_x, test_set_y = datasets[2]
 
     # Initialise the RBM and training parameters
-    tr = TrainParam(learning_rate=0.01,
+    tr = rbm_config.TrainParam(learning_rate=0.01,
                     momentum_type=NESTEROV,
                     momentum=0.5,
                     weight_decay=0.01,

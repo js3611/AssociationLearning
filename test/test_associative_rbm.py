@@ -1,11 +1,13 @@
 import unittest
-from rbm import *
-from activationFunction import *
+from rbm import RBM
+from rbm_config import *
+from rbm_logger import *
 from utils import *
 import theano.tensor as T
 import numpy as np
 import scipy.stats as ss
 theano.config.optimizer = 'None'
+
 
 class AssociativeRBMTest(unittest.TestCase):
     def setUpAssociativeRBM(self, v=5, v2=5, h=10):
@@ -13,19 +15,18 @@ class AssociativeRBMTest(unittest.TestCase):
                         momentum_type=CLASSICAL,
                         momentum=0.5,
                         weight_decay=0.01,
-                        output_directory="AssociativeRBMTest",
                         sparsity_constraint=False,
                         batch_size=1,
-                        epochs=15)
+                        epochs=5)
 
-        rbm = RBM(v, v2, h,
-                  associative=True,
-                  cd_type=CLASSICAL,
-                  cd_steps=1,
-                  train_parameters=tr,
-                  progress_logger=ProgressLogger())
-
-        self.rbm = rbm
+        config = RBMConfig()
+        config.associative = True
+        config.v_n = v
+        config.v2_n = v2
+        config.h_n = h
+        config.train_params = tr
+        config.progress_logger = AssociationProgressLogger()
+        self.rbm = RBM(config)
         self.x = np.array([[1, 1, 1, 0, 0]], dtype=t_float_x)
         self.y = np.array([[0, 0, 0, 0, 1]], dtype=t_float_x)
         self.x2 = np.array([[1, 1, 1, 0, 0],

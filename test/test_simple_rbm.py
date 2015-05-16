@@ -1,7 +1,7 @@
 import unittest
-from rbm import *
-from activationFunction import *
-from utils import *
+from rbm import RBM
+from rbm_config import *
+from rbm_logger import *
 import theano
 import theano.tensor as T
 from theano.tensor.shared_randomstreams import RandomStreams
@@ -17,36 +17,34 @@ class SingleRBMTest(unittest.TestCase):
                         momentum_type=CLASSICAL,
                         momentum=0.5,
                         weight_decay=0.01,
-                        output_directory="Test",
                         sparsity_constraint=False,
                         batch_size=1,
                         epochs=15)
 
-        rbm = RBM(v, v2, h,
-                  associative=False, # for now
-                  cd_type=CLASSICAL,
-                  cd_steps=10,
-                  train_parameters=tr,
-                  progress_logger=ProgressLogger())
-
-        self.rbm = rbm
+        config = RBMConfig()
+        config.v_n = v
+        config.v2_n = v2
+        config.h_n = h
+        config.train_params = tr
+        config.progress_logger = ProgressLogger()
+        self.rbm = RBM(config)
         self.x = np.array([[1, 1, 1, 0, 0]], dtype=t_float_x)
         self.tx = theano.shared(np.array([[1, 1, 1, 0, 0]], dtype=t_float_x))
         self.x2 = np.array([[1, 1, 1, 0, 0],
                             [0, 0, 0, 0, 1]],
                            dtype=t_float_x)
         self.tx2 = theano.shared(np.array([[1, 1, 1, 0, 0],
-                             [0, 0, 0, 0, 1],
-                             [0, 0, 0, 0, 1],
-                             [0, 0, 0, 0, 1],
-                             [0, 0, 0, 0, 1],
-                             [0, 0, 0, 0, 1],
-                             [0, 0, 0, 0, 1],
-                             [0, 0, 0, 0, 1],
-                             [0, 0, 0, 0, 1],
-                             [0, 0, 0, 0, 1],
-                            ],
-                            dtype=t_float_x))
+                                           [0, 0, 0, 0, 1],
+                                           [0, 0, 0, 0, 1],
+                                           [0, 0, 0, 0, 1],
+                                           [0, 0, 0, 0, 1],
+                                           [0, 0, 0, 0, 1],
+                                           [0, 0, 0, 0, 1],
+                                           [0, 0, 0, 0, 1],
+                                           [0, 0, 0, 0, 1],
+                                           [0, 0, 0, 0, 1],
+                                           ],
+                                          dtype=t_float_x))
 
     def test_parameters_order(self):
         self.setUpRBM()
@@ -129,7 +127,8 @@ class SingleRBMTest(unittest.TestCase):
         theano_cost = f(self.x, x_input)
 
         # Sum over examples
-        np_cross_entropies = - np.nansum(self.x * np.log(reconstruction) + (1-self.x) * np.log(1-reconstruction), axis=1)
+        np_cross_entropies = - np.nansum(self.x * np.log(reconstruction) + (1 - self.x) * np.log(1 - reconstruction),
+                                         axis=1)
         np_cost = np_cross_entropies.mean()
 
         # print theano_cost
@@ -163,13 +162,13 @@ class SingleRBMTest(unittest.TestCase):
 
         z = x * fixed_dropout_mask
         z2 = x * dropout_mask
-        g = theano.function([x],[y, z, z2])
+        g = theano.function([x], [y, z, z2])
 
-        print f([[1,1,1,1,1],[1,1,1,1,1],[1,1,1,1,1]])
+        print f([[1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1]])
 
-        print f([[1,1,1,1,1],[1,1,1,1,1],[1,1,1,1,1]])
+        print f([[1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1]])
 
-        print g([[1,1,1,1,1],[1,1,1,1,1],[1,1,1,1,1]])
+        print g([[1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1]])
 
 
         # rv_u = srng.uniform((2,2))
@@ -179,6 +178,7 @@ class SingleRBMTest(unittest.TestCase):
         # nearly_zeros = theano.function([], rv_u + rv_u - 2 * rv_u)
         # print f()
         # print f()
+
 
 if __name__ == '__main__':
     print "Test Simple RBM"
