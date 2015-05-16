@@ -13,7 +13,7 @@ class MyTestCase(unittest.TestCase):
         self.assertTrue(True)
 
     def test_load(self):
-        dataset = loader.load_kanade(shared=False, resolution='50_50')
+        dataset = loader.load_kanade(shared=False, set_name='50_50')
         x = dataset[0]
         y = dataset[1]
 
@@ -28,15 +28,15 @@ class MyTestCase(unittest.TestCase):
         # plt.show()
 
     def test_filter(self):
-        dataset = loader.load_kanade(shared=False, resolution='50_50', emotions=['anger'])
+        dataset = loader.load_kanade(shared=False, set_name='50_50', emotions=['anger'])
         self.assertTrue(np.unique(dataset[1]) == 1)
 
-        dataset = loader.load_kanade(shared=False, resolution='50_50', emotions=['anger', 'contempt'])
+        dataset = loader.load_kanade(shared=False, set_name='50_50', emotions=['anger', 'contempt'])
         labels = np.unique(dataset[1])
         self.assertTrue(len(labels) == 2 and 1 in labels and 2 in labels)
 
     def test_load_n(self):
-        dataset = loader.load_kanade(shared=False, resolution='50_50', n=100)
+        dataset = loader.load_kanade(shared=False, set_name='50_50', n=100)
         self.assertTrue(len(dataset[0]) == 100)
 
     def test_scale(self):

@@ -8,111 +8,10 @@ import preprocessing
 
 import theano
 import theano.tensor as T
-
-def load_data_from_file(dataset):
-    ''' Loads the dataset
-
-    :type dataset: string
-    :param dataset: the path to the dataset (here MNIST)
-    '''
-
-    # Download the MNIST dataset if it is not present
-    data_dir, data_file = os.path.split(dataset)
-    if data_dir == "" and not os.path.isfile(dataset):
-        # Check if dataset is in the data directory.
-        new_path = os.path.join(
-            os.path.split(__file__)[0],
-            "..",
-            "data",
-            dataset
-        )
-        if os.path.isfile(new_path) or data_file == 'mnist.pkl.gz':
-            dataset = new_path
-
-    if (not os.path.isfile(dataset)) and data_file == 'mnist.pkl.gz':
-        import urllib
-        origin = (
-            'http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz'
-        )
-        print 'Downloading data from %s' % origin
-        urllib.urlretrieve(origin, dataset)
-
-    print '... loading data'
-
-    # Load the dataset
-    f = gzip.open(dataset, 'rb')
-    train_set, valid_set, test_set = cPickle.load(f)
-    f.close()
-
-    # train_set, valid_set, test_set format: tuple(input, target)
-    # input is an numpy.ndarray of 2 dimensions (a matrix)
-    # which each row corresponds to an example.
-    # target is a numpy.ndarray of 1 dimensions (vector)
-    # that have the same length as the number of rows in the input.
-    return train_set, valid_set, test_set
-
-def shared_dataset(data_xy, borrow=True):
-    """ Function that loads the dataset into shared variables
-
-    The reason we store our dataset in shared variables is to allow
-    Theano to copy it into the GPU memory (when code is run on GPU).
-    Since copying data into the GPU is slow, copying a minibatch everytime
-    is needed (the default behaviour if the data is not in a shared
-    variable) would lead to a large decrease in performance.
-    """
-    data_x, data_y = data_xy
-    shared_x = theano.shared(numpy.asarray(data_x,
-                                           dtype=theano.config.floatX),
-                             borrow=borrow)
-    shared_y = theano.shared(numpy.asarray(data_y,
-                                           dtype=theano.config.floatX),
-                             borrow=borrow)
-    # When storing data on the GPU it has to be stored as floats
-    # therefore we will store the labels as ``floatX`` as well
-    # (``shared_y`` does exactly that). But during our computations
-    # we need them as ints (we use labels as index, and if they are
-    # floats it doesn't make sense) therefore instead of returning
-    # ``shared_y`` we will have to cast it to int. This little hack
-    # lets ous get around this issue
-    return shared_x, T.cast(shared_y, 'int32')
-
-def load_data(dataset):
-    train_set, valid_set, test_set = load_data_from_file(dataset)
-
-    # Preprocessing
-    train_set = (to_binary(train_set[0]), train_set[1])
-    valid_set =  (to_binary(valid_set[0]), valid_set[1])
-    test_set = (to_binary(test_set[0]), test_set[1])
-
-    # Convert to theano shared variables
-    train_set_x, train_set_y = shared_dataset(train_set)
-    valid_set_x, valid_set_y = shared_dataset(valid_set)
-    test_set_x, test_set_y = shared_dataset(test_set)
-
-    rval = [(train_set_x, train_set_y), (valid_set_x, valid_set_y),
-            (test_set_x, test_set_y)]
-    return rval
-
-def load_data_threshold(dataset, t=0.5):
-    [(train_set_x, train_set_y), (valid_set_x, valid_set_y),
-            (test_set_x, test_set_y)] = load_data(dataset)
-    new_train_x = to_binary(train_set_x, t)
-    new_valid_x = to_binary(valid_set_x, t)
-    new_test_x = to_binary(test_set_x, t)
-
-    return [(new_train_x, train_set_y), (new_valid_x, valid_set_y),
-            (new_test_x, test_set_y)]
-
-def to_binary(data, t=0.5):
-    """
-    :param data: 2 dimensional numpy array
-    :param t: threshold value
-    :return: data with binary data, 1 if data[i] > t, 0 otherwise
-    """
-    data[data >= t] = 1
-    data[data < t] = 0
-    return data
-
+try:
+    import PIL.Image as Image
+except ImportError:
+    import Image
 
 def scale_to_unit_interval(ndar, eps=1e-8):
     """ Scales all values in the ndarray ndar to be between 0 and 1 """
@@ -120,12 +19,6 @@ def scale_to_unit_interval(ndar, eps=1e-8):
     ndar -= ndar.min()
     ndar *= 1.0 / (ndar.max() + eps)
     return ndar
-
-try:
-    import PIL.Image as Image
-except ImportError:
-    import Image
-
 
 def save_digits(x, image_name='digits.png', shape=None, img_shape=(28, 28)):
     data_size = x.shape[0]

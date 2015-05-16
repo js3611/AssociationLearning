@@ -11,7 +11,7 @@ logging.basicConfig(filename='trace.log', level=logging.INFO)
 
 def find_hyper_parameters():
     progress_logger = ProgressLogger()
-    logging.info("Start!")
+    logging.info("Start Parameter Finder")
     f = open('dbn_score.txt','w')
     manager = store.StorageManager('dbn_params_finder')
 

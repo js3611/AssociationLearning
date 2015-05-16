@@ -177,7 +177,6 @@ class ProgressLogger(object):
 class TrainParamFinder(object):
     pass
 
-
 class AssociationProgressLogger(ProgressLogger):
     def visualise_weight(self, rbm, image_name):
             assert rbm.associative
@@ -981,23 +980,27 @@ class RBM(object):
                                   p=activation_probability, dtype=t_float_x).eval()
         return self.reconstruct(data, k)
 
-    def reconstruct(self, data, k=1, plot_n=None, plot_every=1):
+    def reconstruct(self, data, k=1, plot_n=None, plot_every=1, img_name='reconstruction.png'):
         '''
         Reconstruct image given cd-k
         - data: theano
         '''
-        if not utils.isSharedType(data):
-            data = theano.shared(data, allow_downcast=True)
-        orig = data.get_value(borrow=False)
+        if utils.isSharedType(data):
+            orig = data.get_value(borrow=True)
+        else:
+            orig = data
+
+        # Set the initial chain
+        chain_state = theano.shared(np.asarray(orig,dtype=theano.config.floatX),name='reconstruct_root')
 
          # Gibbs sampling
         k_batch = k / plot_every
         (res, updates) = theano.scan(self.gibbs_vhv,
                                      outputs_info=[None, None, None,
-                                                   None, None, data],
+                                                   None, None, chain_state],
                                      n_steps=plot_every,
                                      name="Gibbs_sampling_reconstruction")
-        updates.update({data: res[-1][-1]})
+        updates.update({chain_state: res[-1][-1]})
         gibbs_sampling = theano.function([], res, updates=updates)
 
         reconstructions = []

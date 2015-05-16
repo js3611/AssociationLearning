@@ -455,28 +455,6 @@ class RBMMethodTest(unittest.TestCase):
         pass
 
 
-class PreProcessingTest(unittest.TestCase):
-
-    def test_preprocessing(self):
-
-        datasets = load_data('../data/mnist.pkl.gz')
-        train_set_x, train_set_y = datasets[0]
-        valid_set_x, valid_set_y = datasets[1]
-        test_set_x, test_set_y = datasets[2]
-        x = test_set_x.get_value(borrow=True)
-        # print ss.itemfreq(np.round(x, 2))
-        pass
-
-    def test_binary(self):
-        arr = np.array([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
-        t = to_binary(arr, 0.5)
-        self.assertTrue(np.all(t == np.array([0, 0, 0, 0, 0, 1, 1, 1, 1, 1])))
-
-    def test_scale(self):
-        arr = np.array([0.0, 25, 100, 234, 2, 5])
-        sc = scale_to_unit_interval(arr)
-        # print sc
-
 class NumpyTest(unittest.TestCase):
     def test_logical_index(self):
         a = np.array([0, 1,2,3,4,5,0, 1,2,3,4,5])

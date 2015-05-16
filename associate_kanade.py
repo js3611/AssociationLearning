@@ -14,7 +14,7 @@ def train_kanade():
     data_manager = store.StorageManager('Kanade/SimpleRBMTest')
 
     # Load mnist hand digits
-    datasets = loader.load_kanade(n=500, resolution='50_50', emotions=['happy','sadness'], pre={'scale2unit': True})
+    datasets = loader.load_kanade(n=500, set_name='50_50', emotions=['happy','sadness'], pre={'scale2unit': True})
     train_x, train_y = datasets
 
     sparsity_constraint = False
@@ -71,7 +71,7 @@ def associate_data2data(cache=False):
     img_shape = (25, 25)
 
     # Load mnist hand digits, class label is already set to binary
-    dataset = loader.load_kanade(n=500, resolution=resolution, emotions=['anger','happy','sadness'], pre={'scale2unit': True})
+    dataset = loader.load_kanade(n=500, set_name=resolution, emotions=['anger','happy','sadness'], pre={'scale2unit': True})
     train_x, train_y = dataset
     # for now id map
     train_x01 = loader.sample_image(train_y)
@@ -207,7 +207,7 @@ def associate_data2dataDBN(cache=False):
                 ass_dbn.train(train_x, train_x01, cache=cache)#, optimise=True)
 
                 for n_recall in [1, 3, 10]:
-                    for n_think in [0, 1, 3, 7]: #1, 3, 5, 7, 10]:
+                    for n_think in [0, 1, 3, 5, 10]: #1, 3, 5, 7, 10]:
                         # Reconstruct
                         sampled = ass_dbn.recall(train_x, n_recall, n_think)
 

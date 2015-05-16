@@ -30,12 +30,12 @@ from utils import save_digits
 
 theano.config.optimizer = 'None'
 
-def test_DBN(finetune_lr=0.1, pretraining_epochs=100,
+def test_DBN_classifier(finetune_lr=0.1, pretraining_epochs=100,
              pretrain_lr=0.01, k=1, training_epochs=1000,
              dataset='mnist.pkl.gz', batch_size=10, output_folder='zero_learner'):
 
     # Load data
-    datasets = load_data(dataset)
+    datasets = loader.load_digits(dataset)
     train_set_x, train_set_y = datasets[0]
     valid_set_x, valid_set_y = datasets[1]
     test_set_x, test_set_y = datasets[2]

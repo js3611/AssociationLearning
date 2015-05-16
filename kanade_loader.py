@@ -7,6 +7,7 @@ import sys
 import time
 import cv2
 from sklearn import preprocessing
+from sklearn import cross_validation
 import numpy as np
 import theano
 import theano.tensor as T
@@ -20,17 +21,19 @@ BASE_DIR = os.path.dirname(__file__)
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 
 emotion_dict = {'anger': 1, 'contempt': 2, 'disgust': 3, 'fear': 4, 'happy': 5, 'sadness': 6, 'surprise': 7}
-emotion_rev_dict =  {1: 'anger', 2: 'contempt', 3: 'disgust', 4: 'fear', 5: 'happy', 6: 'sadness', 7: 'surprise'}
+emotion_rev_dict = {1: 'anger', 2: 'contempt', 3: 'disgust', 4: 'fear', 5: 'happy', 6: 'sadness', 7: 'surprise'}
 
-def load_kanade(shared=True, resolution='25_25', emotions=None, pre=None, n=None):
+
+def load_kanade(shared=True, set_name='sharp_equi25_25', emotions=None, pre=None, n=None):
     '''
     :param shared: To return theano shared variable. If false, returns in numpy
     :param digits: filter. if none, all digits will be returned
-    :param pre: a dictionary of preprocessing. Options: pca, white-pca, center, threshold
+    :param pre: a dictionary of pre-processing. Options: pca, white-pca, center, threshold
     :param n: (a single digit or) an array showing how many samples to get
     :return: [(train_x, train_y), (valid_x, valid_y), (test_x, test_y)]
     '''
-    data = __load(resolution)
+
+    data = __load(set_name)
 
     # Shuffle data
     idx = np.random.choice(range(0, len(data[1])), size=len(data[1]), replace=False)
@@ -68,17 +71,26 @@ def load_kanade(shared=True, resolution='25_25', emotions=None, pre=None, n=None
         if 'label_vector' in pre:
             data = vectorise_label(data)
 
+    # split to train and test
+    rand = 123
+    tr_te = cross_validation.train_test_split(data[0], data[1], test_size=(2.0/7), random_state=rand)
+    tr_x, te_x, tr_y, te_y = tr_te
+    vl_x, te_x, vl_y, te_y = cross_validation.train_test_split(te_x, te_y, test_size=0.5, random_state=rand)
+
+    data = [(tr_x, tr_y), (vl_x, vl_y), (te_x, te_y)]
+
     if shared:
-        data = shared_dataset(data)
+        data = get_shared(data)
+        # data = shared_dataset(data)
 
     return data
 
 
-def __load(resolution='25_25'):
+def __load(set_name='25_25'):
     ''' Loads the mnist data set '''
     print BASE_DIR
 
-    dataset_name = 'kanade' + resolution + '.save'
+    dataset_name = 'kanade' + set_name + '.save'
 
     # look for the location
     possible_locations = ['', 'data']
@@ -92,7 +104,7 @@ def __load(resolution='25_25'):
 
     # If the saved file doesn't exist, create one
     if not os.path.isfile(data_location):
-        dir_name = 'kanade/' + resolution
+        dir_name = 'kanade/' + set_name
         for location in possible_locations:
             data_location = os.path.join(BASE_DIR, location, dir_name)
             if os.path.isdir(data_location):
@@ -111,7 +123,7 @@ def __load(resolution='25_25'):
                 data.append(np.asarray(img_array).reshape(-1))
                 label.append(emotion_dict[emotion])
 
-        dataset = os.path.join(DATA_DIR, 'kanade' + resolution + '.save')
+        dataset = os.path.join(DATA_DIR, 'kanade' + set_name + '.save')
 
         # print data
         # print label
@@ -199,26 +211,31 @@ def get_target_vector(x):
     return xs
 
 
-def sample_image(data, shared=True):
+def sample_image(data, shared=True, mapping=None):
     # convert to numpy first
     if 'Tensor' in str(type(data)):
         seq = data.eval()
     else:
         seq = data
 
-    emotion_vals = np.unique(seq).tolist()
-    emotions = map(lambda x: emotion_rev_dict[x], emotion_vals)
+    if not mapping:
+        mapping = {}
+        for emo in emotion_dict.keys():
+            mapping[emo] = emo
+
+    source_emotions = np.unique(seq).tolist()
+    target_emotions = map(lambda x: mapping[emotion_rev_dict[x]], source_emotions)
     image_pool = {}
-    for d in emotions:
-        dataset = load_kanade(shared=False, emotions=[d], n=len(seq), pre={'scale2unit':True})
-        image_pool[d] = dataset[0]
+    for d in target_emotions:
+        dataset = load_kanade(shared=False, set_name='sharp_equi25_25', emotions=[d], n=len(seq), pre={'scale2unit':True})
+        image_pool[d] = dataset[0][0]
 
     sample_data = []
     rand_seq = np.random.randint(0, len(seq), size=len(seq))
 
     for d, r in zip(seq.tolist(), rand_seq.tolist()):
-        pool = image_pool[emotion_rev_dict[d]]
-        sample_data.append(image_pool[emotion_rev_dict[d]][(r % len(image_pool[emotion_rev_dict[d]]))])
+        pool = image_pool[mapping[emotion_rev_dict[d]]]
+        sample_data.append(pool[r % len(pool)])
 
     if shared:
         return theano.shared(np.array(sample_data, dtype=theano.config.floatX), borrow=True)

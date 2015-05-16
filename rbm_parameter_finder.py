@@ -1,56 +1,53 @@
 __author__ = 'joschlemper'
 
-import mnist_loader as loader
-import logistic_sgd
 import datastorage as store
+from simple_classifiers import SimpleClassifier
 from rbm import *
+import kanade_loader as loader
 import logging
 
-logging.basicConfig(filename='trace.log', level=logging.INFO)
+
 
 def find_hyper_parameters():
-    progress_logger = ProgressLogger()
-    logging.info("Start!")
-    f = open('score.txt','w')
+    proj_name = 'AssociativeRBM_params'
 
-    print "Testing Associative RBM which tries to learn even-oddness of numbers"
+    # Create project manager, loggers
+    manager = store.StorageManager(proj_name)
+    f = open('score.txt', 'wr')
+    logging.basicConfig(filename=proj_name+'.log', level=logging.INFO)
+    logging.info("Starting the project: " + proj_name)
 
-    # Load mnist hand digits, class label is already set to binary
-    train, valid, test = loader.load_digits(n=[20, 100, 100], pre={'binary_label': True})
+    # Load kanade database
+    mapping = {'anger': 'sadness', 'contempt': 'happy', 'disgust': 'sadness', 'fear': 'sadness', 'happy': 'happy', 'sadness': 'sadness', 'surprise': 'happy'}
+    train, valid, test = loader.load_kanade(set_name='sharp_equi25_25', pre={'scale2unit': True})
     train_x, train_y = train
     test_x, test_y = test
-    train_x01 = loader.sample_image(train_y)
+    train_x01 = loader.sample_image(train_y, mapping=mapping)  # Sample associated image
+    dataset01 = loader.load_kanade(set_name='sharp_equi25_25', emotions=['sadness','happy'], pre={'scale2unit': True})  # Target Image
 
-    dataset01 = loader.load_digits(n=[20, 100, 100], digits=[0, 1])
+    # Create Classifier
+    clf = SimpleClassifier(classifier='logistic', train_x=dataset01[0][0], train_y=dataset01[0][1])
 
+    # AssociativeRBM Parameter
     n_visible = train_x.get_value().shape[1]
     n_visible2 = n_visible
-
-
-    # 2. for loop each optimal parameter
-    # learning_rate_options = [0.1]  # Histogram
-    # momentum_types = [NESTEROV]
-    # momentum_range = [0.5]
-    # weight_decay_range = [0.001]
     sparsity_target_range = [0.01]  # [0.01, 0.001]
     sparsity_cost_range = [0.5]    # histogram mean activities of the hidden units
     sparsity_decay_range = [0.9]
-    #
-    # cd_types = [CLASSICAL, PERSISTENT]
-    # cd_step_range = [1]
-    # n_hidden_range = [500, 1000]
-
-    n_hidden_range = [10, 50, 100, 200, 300]
+    n_hidden_range = [10, 50, 100, 200, 300, 500]
     cd_types = [CLASSICAL, PERSISTENT]
-    cd_step_range = [1, 3]
-    learning_rate_options = [0.0001, 0.0003, 0.0005, 0.0007, 0.001, 0.003, 0.005]#[0.0001, 0.001, 0.01, 0.1] # Histogram
+    cd_step_range = [1]
+    learning_rate_options = [0.1, 0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001, 0.00001]
     momentum_types = [CLASSICAL, NESTEROV]
-    momentum_range = [0.5]  #[0.1, 0.5, 0.9]
+    momentum_range = [0.5, 0.9]  #[0.1, 0.5, 0.9]
     weight_decay_range = [0.001, 0.0001, 0.01]# [0.0001, 0.0005, 0.001]
     # sparsity_target_range = [0.1 ** 9, 0.1 ** 7, 0.00001, 0.001, 0.01]
     # sparsity_cost_range = [0.01, 0.1, 0.5]    # histogram mean activities of the hidden units
     # sparsity_decay_range = [0.9, 0.95, 0.99]
+    progress_logger = ProgressLogger(img_shape=(25,25))
 
+
+    # Iterate through parameters
     possibilities = reduce(lambda x, y: x*y,
                            map(lambda x: len(x), [n_hidden_range, cd_types, cd_step_range, learning_rate_options,
                                                   momentum_types, momentum_range, weight_decay_range,
@@ -97,31 +94,27 @@ def find_hyper_parameters():
                                                       train_parameters=tr,
                                                       progress_logger=progress_logger)
 
-                                            if os.path.isdir("data/even_odd/"+str(rbm)):
+                                            if os.path.isdir(os.path.join('data', proj_name, str(rbm))):
                                                 print "Skipping " + str(rbm) + " as it was already sampled"
                                                 continue                                    
 
-                                            store.move_to('even_odd_simple/' + str(rbm))
+                                            manager.move_to(str(rbm))
 
                                             # Train RBM - learn joint distribution
                                             rbm.train(train_x, train_x01)
-                                            rbm.save()
+                                            # manager.persist(rbm)
+
+                                            manager.move_to_project_root()
 
                                             print "... reconstruction of associated images"
-                                            reconstructed_y = rbm.reconstruct_association(test_x, None, 2, 0.01, sample_size=100)
+                                            reconstructed_y = rbm.reconstruct_association(test_x, None, 5, 0, plot_n=30, img_name='recon_'+str(rbm)+'.png')
                                             print "... reconstructed"
 
-                                            # Create Dataset to feed into logistic regression
-                                            # Test set: reconstructed y's become the input. Get the corresponding x's and y's
-
-                                            dataset01[2] = (theano.shared(reconstructed_y), test_y)
-
                                             # Classify the reconstructions
-                                            score = logistic_sgd.sgd_optimization_mnist(0.13, 100, dataset01, 10)
-
-                                            store.move_to_root()
+                                            score = clf.get_score(reconstructed_y, test_y.eval())
 
                                             logging.info(str(rbm) + " : " + str(score))
+                                            print str(rbm) + " : " + str(score)
                                             f.write(str(rbm) + ':' + str(score) + '\n')
 
                                             print str(rbm)

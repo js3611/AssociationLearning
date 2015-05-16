@@ -4,10 +4,12 @@ import theano.tensor as T
 from activationFunction import *
 from theano.tensor.shared_randomstreams import RandomStreams
 import utils
-import mnist_loader as loader
+# import mnist_loader as loader
+import kanade_loader as loader
 import datastorage as store
 import rbm as RBM
 import sklearn
+from simple_classifiers import SimpleClassifier
 
 import os
 import time
@@ -37,25 +39,26 @@ def test_rbm():
     print "Testing RBM"
 
     data_manager = store.StorageManager('SimpleRBMTest')
+    rbm_logger = RBM.ProgressLogger(img_shape=(25, 25))
 
     # Load mnist hand digits
-    datasets = loader.load_digits(n=[5000, 0, 100])
+    datasets = loader.load_kanade(pre={'scale2unit':True})
     train_set_x, train_set_y = datasets[0]
     test_set_x, test_set_y = datasets[2]
 
     # Initilise the RBM and training parameters
     tr = RBM.TrainParam(learning_rate=0.001,
                         momentum_type=CLASSICAL,
-                        momentum=0.5,
+                        momentum=0.9,
                         weight_decay=0.001,
-                        sparsity_constraint=True,
+                        sparsity_constraint=False,
                         sparsity_target=0.1 ** 9,
                         sparsity_cost=10 ** 8,
                         sparsity_decay=0.9,
                         epochs=20)
 
-    n_visible = train_set_x.get_value().shape[1]
-    n_hidden = 300
+    n_visible = train_set_x.get_value(borrow=True).shape[1]
+    n_hidden = 100
 
     rbm = RBM.RBM(n_visible,
                   n_visible,
@@ -66,7 +69,7 @@ def test_rbm():
                   v_activation_fn=log_sig,
                   h_activation_fn=log_sig,
                   train_parameters=tr,
-                  progress_logger=RBM.ProgressLogger())
+                  progress_logger=rbm_logger)
 
     print "... initialised RBM"
 
@@ -75,13 +78,22 @@ def test_rbm():
 
     # rbm.pretrain_mean_activity_h(train_set_x)
 
-    rbm.get_initial_mean_activity(train_set_x)
+    # rbm.get_initial_mean_activity(train_set_x)
 
     # Train RBM
     rbm.train(train_set_x)
 
-    # Test RBM
-    rbm.reconstruct(test_set_x, k=1, plot_n=500, plot_every=1)
+    # Test RBM Reconstruction via Linear Classifier
+    clf = SimpleClassifier(classifier='logistic', train_x=train_set_x, train_y=train_set_y)
+    recon_tr = rbm.reconstruct(train_set_x, k=1, plot_n=100, plot_every=1)
+    recon_te = rbm.reconstruct(test_set_x, k=1, plot_n=100, plot_every=1)
+
+    assert len(recon_tr) == len(train_set_x.get_value(borrow=True))
+
+    print 'Original Score: {}'.format(clf.get_score(test_set_x, test_set_y))
+    print 'Recon Score:    {}'.format(clf.get_score(recon_te, test_set_y.eval()))
+    clf.retrain(recon_tr, train_set_y.eval())
+    print 'Recon Score (retrain): {}'.format(clf.get_score(recon_te, test_set_y.eval()))
 
     # Store Parameters
     data_manager.persist(rbm)
