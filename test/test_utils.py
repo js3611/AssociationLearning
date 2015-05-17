@@ -2,7 +2,7 @@ import unittest
 import datastorage as store
 import utils
 import rbm as RBM
-import DBN as DBN
+import dbn as DBN
 
 import os
 

@@ -2,7 +2,7 @@ __author__ = 'joschlemper'
 
 import unittest
 import rbm
-import DBN
+import dbn
 import theano
 import theano.tensor as T
 import numpy as np
@@ -12,7 +12,7 @@ class MyTestCase(unittest.TestCase):
         x = np.array([[1,2,3,4,5],[1,2,3,4,5]])
         x2 = np.array([[1,2,3,4]])
 
-        dbn = DBN.DBN(topology=[5, 4, 3])
+        dbn = dbn.DBN(topology=[5, 4, 3])
 
         # x_t = theano.shared(x)
 

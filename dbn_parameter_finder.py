@@ -4,7 +4,7 @@ import mnist_loader as loader
 import logistic_sgd
 import datastorage as store
 from rbm import *
-from DBN import *
+from dbn import *
 import logging
 
 logging.basicConfig(filename='trace.log', level=logging.INFO)

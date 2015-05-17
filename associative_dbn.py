@@ -13,7 +13,7 @@ from theano.tensor.shared_randomstreams import RandomStreams
 from logistic_sgd import sgd_optimization_mnist as LogisticRegression
 from mlp import HiddenLayer
 from rbm import *
-from DBN import DBN
+from dbn import DBN
 
 try:
     import PIL.Image as Image

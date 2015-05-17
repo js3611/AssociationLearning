@@ -4,7 +4,7 @@ import utils
 import numpy as np
 import rbm as rbm
 import rbm_units
-import DBN as DBN
+import dbn as DBN
 import sklearn
 import theano
 import theano.tensor as T

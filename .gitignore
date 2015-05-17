@@ -1,6 +1,10 @@
+.idea/*
+.ropeproject/*
 *.pyc
 *~
 *.txt
 *.log
 kanade
 data
+past_data
+dbn_plots

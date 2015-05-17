@@ -3,7 +3,7 @@ import theano.tensor as T
 import numpy as np
 import logistic_sgd
 import rbm as RBM
-import DBN as DBN
+import dbn as DBN
 import associative_dbn
 import utils
 import mnist_loader as loader

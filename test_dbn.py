@@ -17,7 +17,7 @@ from rbm import TrainParam
 from rbm import CLASSICAL
 from rbm import NESTEROV
 from rbm import PERSISTENT
-from DBN import DBN
+from dbn import DBN
 
 try:
     import PIL.Image as Image
