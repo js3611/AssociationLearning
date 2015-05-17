@@ -7,7 +7,6 @@ import theano.tensor as T
 from theano.tensor.shared_randomstreams import RandomStreams
 import numpy as np
 
-
 class SingleRBMTest(unittest.TestCase):
     def setUpRBM(self):
         v = 5
