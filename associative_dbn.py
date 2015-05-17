@@ -4,7 +4,8 @@ import time
 
 import numpy as np
 import datastorage as store
-import mnist_loader as loader
+import mnist_loader as m_loader
+import kanade_loader as k_loader
 
 import theano
 import theano.tensor as T
@@ -12,16 +13,17 @@ from theano.tensor.shared_randomstreams import RandomStreams
 
 from logistic_sgd import sgd_optimization_mnist as LogisticRegression
 from mlp import HiddenLayer
+
 from rbm import *
-from dbn import DBN
+from DBN import *
+from simple_classifiers import SimpleClassifier
+
 
 try:
     import PIL.Image as Image
 except ImportError:
     import Image
 
-from utils import tile_raster_images
-from utils import load_data
 from utils import save_digits
 
 theano.config.optimizer = 'None'
@@ -30,68 +32,74 @@ theano.config.exception_verbosity = 'high'
 
 class DefaultADBNConfig(object):
     def __init__(self):
-        n_visible = 784
-        n_visible2 = n_visible
-        n_association = 300
-
-        self.topology_left = [n_visible, 100, 100]
-        self.topology_right = [n_visible2, 100, 100]
-        self.n_association = n_association
-        self.reuse_dbn = True
-        self.top_cd_type = 'classical'
-
-        tr = TrainParam(learning_rate=0.01,
+        # Base RBM Parameters
+        # Layer 1
+        tr = TrainParam(learning_rate=0.001,
                         momentum_type=NESTEROV,
                         momentum=0.5,
-                        weight_decay=0.01,
+                        weight_decay=0.001,
                         sparsity_constraint=False,
                         sparsity_target=0.01,
                         sparsity_cost=0.01,
                         sparsity_decay=0.1,
-                        epochs=50)
+                        epochs=20)
 
-        self.base_rbm_params = tr
-        self.top_rbm_params = tr
+        first_progress_logger = ProgressLogger(img_shape=(25,25))
+        first_rbm_config = RBMConfig(train_params=tr,
+                                     progress_logger=first_progress_logger)
+                    
+        # Layer 2 onwards
+        tr2 = tr
+        rest_progress_logger = ProgressLogger()
+        rbm_config = RBMConfig(train_params=tr,
+                               progress_logger=rest_progress_logger)
+        
+        # Left DBN
+        left_topology = [625, 100, 100, 100]
+        tr_list = [tr, tr2, tr2]
+        rbm_configs = [first_rbm_config, rbm_config, rbm_config]
+        left_dbn_config = DBNConfig(out_dir='left',
+                                    topology=left_topology,
+                                    training_parameters=tr_list,
+                                    rbm_configs=rbm_configs)
 
-        self.n_visible = n_visible
-        self.n_visible2 = n_visible2
-        self.n_association = n_association
-
-
-
+        # Right DBN
+        right_topology = [625, 100, 100, 100]
+        right_dbn_config = DBNConfig(out_dir='right',
+                                     topology=right_topology,
+                                     training_parameters=tr_list,
+                                     rbm_configs=rbm_configs)
+        # Top AssociativeRBM
+        top_rbm_config = RBMConfig(tr, progress_logger=AssociationProgressLogger())
+        top_rbm_config.associative = True
+                
+        # Set configurations
+        self.reuse_dbn = False
+        self.left_dbn = left_dbn_config
+        self.right_dbn = right_dbn_config
+        self.top_rbm = top_rbm_config
+        self.n_association = 100
+        
 class AssociativeDBN(object):
 
-    def __init__(self, config=DefaultADBNConfig(), data_manager=None):
+    def __init__(self, config, data_manager=None):
+
+        # Set parameters / Assertion
+        config.left_dbn.data_manager = data_manager
+        config.right_dbn.data_manager = data_manager        
+        rbm_config = config.top_rbm
+        rbm_config.h_n = config.n_association
+        rbm_config.v_n = config.left_dbn.topology[-1]
+        rbm_config.v2_n = config.right_dbn.topology[-1]        
+        config.top_rbm = rbm_config        
         self.config = config
-        self.data_manager=data_manager
-
-        self.dbn_left = DBN(topology=config.topology_left,
-                            tr=config.base_rbm_params,
-                            out_dir='left',
-                            data_manager=data_manager)
-        if config.reuse_dbn:
-            self.dbn_right = self.dbn_left
-        else:
-            self.dbn_right = DBN(topology=config.topology_right,
-                                 tr=config.base_rbm_params,
-                                 out_dir='right',
-                                 data_manager=data_manager)
-        n_top_left = config.topology_left[-1]
-        n_top_right = config.topology_right[-1]
-
-        ass_rbm = RBM(n_top_left,
-                      n_top_right,
-                      config.n_association,
-                      associative=True,
-                      cd_type=config.top_cd_type,
-                      cd_steps=1,
-                      train_parameters=config.top_rbm_params,
-                      progress_logger=AssociationProgressLogger())
-
-        self.association_layer = ass_rbm
-        print 'top layer = {}'.format(str(ass_rbm))
+        self.data_manager=data_manager        
+        self.dbn_left = DBN(config.left_dbn)        
+        self.dbn_right = DBN(config.right_dbn) if not config.reuse_dbn else self.dbn_left
+        self.association_layer = RBM(config=config.top_rbm)
 
     def train(self, x1, x2, cache=False, optimise=False):
+        # Train left & right DBN's
         self.dbn_left.pretrain(x1, cache=cache, optimise=optimise)
 
         if self.config.reuse_dbn:
@@ -99,19 +107,22 @@ class AssociativeDBN(object):
         else:
             self.dbn_right.pretrain(x2, cache=cache, optimise=optimise)
 
+        # Pass the parameter to top layer
         x1_np = self.dbn_left.bottom_up_pass(x1.get_value(True))
         x2_np = self.dbn_right.bottom_up_pass(x2.get_value(True))
-
         x1_features = theano.shared(x1_np)
         x2_features = theano.shared(x2_np)
 
-        out_dir = 'association_layer/' + str(len(self.dbn_left.rbm_layers)) + '_' + str(len(self.dbn_right.rbm_layers)) + '/'
-        load = self.data_manager.retrieve(str(self.association_layer),out_dir=out_dir)
-        if load and cache:
-            self.association_layer = load
-        else:
-            self.association_layer.train(x1_features, x2_features)
-            self.data_manager.persist(self.association_layer, out_dir=out_dir)
+        self.association_layer.train(x1_features, x2_features)
+        # Check Cache
+        # out_dir = 'association_layer/{}_{}/'.format(len(self.dbn_left.rbm_layers),
+        #                                             len(self.dbn_right.rbm_layers))
+        # load = self.data_manager.retrieve(str(self.association_layer), out_dir=out_dir)
+        # if load and cache:
+        #     self.association_layer = load
+        # else:
+        #     self.association_layer.train(x1_features, x2_features)
+        #     self.data_manager.persist(self.association_layer, out_dir=out_dir)
 
     # TODO clean up input and output of each function (i.e. they should all return theano or optional flag)
     def recall(self, x, associate_steps=10, recall_steps=5, img_name='default'):
@@ -138,7 +149,6 @@ class AssociativeDBN(object):
         # Sample from the association layer
         associate_x = top.reconstruct_association(assoc_in, k=associate_steps)
 
-
         if recall_steps > 0:
             top_in = theano.shared(associate_x, 'associate_x', allow_downcast=True)
             # Allow right dbn to day dream by extracting top layer rbm
@@ -157,8 +167,10 @@ class AssociativeDBN(object):
             res = right.top_down_pass(associate_x)
 
         n = res.shape[0]
-        save_digits(x, img_name+'original.png', shape=(n / 10, 10), img_shape=(25, 25))
-        save_digits(res, img_name+'dbn_reconstruction.png', shape=(n / 10, 10), img_shape=(25, 25))
+
+        img_shape = right.rbm_layers[0].track_progress.img_shape
+        save_digits(x, img_name+'original.png', shape=(n / 10, 10), img_shape=img_shape)
+        save_digits(res, img_name+'dbn_reconstruction.png', shape=(n / 10, 10), img_shape=img_shape)
 
         self.data_manager.move_to_project_root()
 
@@ -169,10 +181,10 @@ def test_associative_dbn(i=0):
     print "Testing Associative DBN which tries to learn even-odd of numbers"
 
     # load dataset
-    train, valid, test = loader.load_digits(n=[500, 100, 100], pre={'binary_label': True})
+    train, valid, test = m_loader.load_digits(n=[10000, 100, 100], pre={'binary_label': True})
     train_x, train_y = train
     test_x, test_y = test
-    train_x01 = loader.sample_image(train_y)
+    train_x01 = m_loader.sample_image(train_y)
 
     # project set up
     project_name = 'AssociationDBNTest/{}'.format(i)
@@ -182,11 +194,14 @@ def test_associative_dbn(i=0):
     # initialise AssociativeDBN
     config = DefaultADBNConfig()
     config.reuse_dbn = False
-    config.topology_left = [784, 100, 100]
-    config.topology_right = [784, 100]
-    config.n_association = 500
+    config.left_dbn.rbm_configs[0].progress_logger = ProgressLogger(img_shape=(28, 28))
+    config.right_dbn.rbm_configs[0].progress_logger = ProgressLogger(img_shape=(28, 28))
+    config.left_dbn.topology = [784, 500]
+    config.right_dbn.topology = [784, 500]
+    config.n_association = 300    
     associative_dbn = AssociativeDBN(config=config, data_manager=data_manager)
 
+    # Plot sample
     save_digits(train_x.get_value(borrow=True)[1:100], 'n_orig.png',(10, 10))
     save_digits(train_x01.get_value(borrow=True)[1:100], 'n_ass.png',(10, 10))
 
@@ -200,17 +215,15 @@ def test_associative_dbn(i=0):
 
     # Create Dataset to feed into logistic regression
     # Test set: reconstructed y's become the input. Get the corresponding x's and y's
-    dataset01 = loader.load_digits(n=[1000, 100, 100], digits=[0, 1])
+    dataset01 = m_loader.load_digits(n=[1000, 100, 100], digits=[0, 1])
     dataset01[2] = (theano.shared(reconstructed_y), test_y)
 
     # Classify the reconstructions
-    # TODO use sklearn to obtain accuracy/precision etc
-    score = LogisticRegression(0.13, 100, dataset01, 100)
+    clf = SimpleClassifier('logistic',dataset01[0][0],dataset01[0][1])
+    score_orig = clf.get_score(reconstructed_y, test_y.eval())
+    out_msg = '{} (orig, retrain):{}'.format(associative_dbn, score_orig)
+    print out_msg
 
-    print 'Score: {}'.format(str(score))
-
-
-
-
+    
 if __name__ == '__main__':
     test_associative_dbn()
