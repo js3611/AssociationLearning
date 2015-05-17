@@ -15,7 +15,7 @@ class TrainParam(object):
     def __init__(self,
                  epochs=15,
                  batch_size=20,
-                 learning_rate=0.1,
+                 learning_rate=0.001,
                  adj_lr=0.001,
                  momentum_type=NESTEROV,
                  momentum=0.5,

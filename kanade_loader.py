@@ -221,10 +221,10 @@ def sample_image(data, shared=True, mapping=None):
     if not mapping:
         mapping = {}
         for emo in emotion_dict.keys():
-            mapping[emo] = emo
+            mapping[emo] = emo  # get id map
 
     source_emotions = np.unique(seq).tolist()
-    target_emotions = map(lambda x: mapping[emotion_rev_dict[x]], source_emotions)
+    target_emotions = list(set(map(lambda x: mapping[emotion_rev_dict[x]], source_emotions)))
     image_pool = {}
     for d in target_emotions:
         dataset = load_kanade(shared=False, set_name='sharp_equi25_25', emotions=[d], n=len(seq), pre={'scale2unit':True})
@@ -277,14 +277,17 @@ def load_data_threshold(dataset, t=0.5):
             (new_test_x, test_set_y)]
 
 
-def save_digits(x, image_name='digits.png'):
+def save_faces(x, shape=None, image_name='digits.png', img_shape=(25,25)):
     data_size = x.shape[0]
-    image_data = np.zeros((29, 29 * data_size - 1), dtype='uint8')
+    nrow, ncol = img_shape
+    image_data = np.zeros(((nrow+1), (ncol+1) * data_size - 1), dtype='uint8')
+    if not shape:
+        shape = (1, data_size)
 
-    image_data[0:28, :] = tile_raster_images(
+    image_data = tile_raster_images(
         X=x,
-        img_shape=(28, 28),
-        tile_shape=(1, data_size),
+        img_shape=img_shape,
+        tile_shape=shape,
         tile_spacing=(1, 1)
     )
 
@@ -293,13 +296,13 @@ def save_digits(x, image_name='digits.png'):
     image.save(image_name)
 
 
-def save_digit(x, name="digit.png"):
-    image_data = np.zeros((29, 29), dtype='uint8')
+def save_face(x, name="digit.png", img_shape=(25,25)):
+    image_data = np.zeros(img_shape, dtype='uint8')
 
     # Original images
     image_data = tile_raster_images(
         X=np.array([x]),
-        img_shape=(28, 28),
+        img_shape=img_shape,
         tile_shape=(1, 1),
         tile_spacing=(1, 1)
     )

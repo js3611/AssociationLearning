@@ -4,7 +4,8 @@ import time
 
 import numpy as np
 import datastorage as store
-import mnist_loader as loader
+import mnist_loader as m_loader
+import kanade_loader as k_loader
 
 import theano
 import theano.tensor as T
@@ -13,11 +14,10 @@ from theano.tensor.shared_randomstreams import RandomStreams
 from logistic_sgd import LogisticRegression
 from mlp import HiddenLayer
 from rbm import RBM
-from rbm import TrainParam
-from rbm import CLASSICAL
-from rbm import NESTEROV
-from rbm import PERSISTENT
+from rbm_config import *
+from rbm_logger import *
 from dbn import DBN
+from dbn import DBNConfig
 
 try:
     import PIL.Image as Image
@@ -34,7 +34,7 @@ def test_DBN_classifier(finetune_lr=0.1, pretraining_epochs=100,
              dataset='mnist.pkl.gz', batch_size=10, output_folder='zero_learner'):
 
     # Load data
-    datasets = loader.load_digits(dataset)
+    datasets = m_loader.load_digits(dataset)
     train_set_x, train_set_y = datasets[0]
     valid_set_x, valid_set_y = datasets[1]
     test_set_x, test_set_y = datasets[2]
@@ -196,35 +196,49 @@ def test_generative_dbn():
 
     manager = store.StorageManager('generative_dbn_test')
     # Load data
-    train, valid, test = loader.load_digits(n=[500, 100, 100], digits=[0, 1, 2, 3, 4, 5])
+    # train, valid, test = m_loader.load_digits(n=[500, 100, 100], digits=[0, 1, 2, 3, 4, 5])
+    train, valid, test = k_loader.load_kanade(n=1000, emotions={'anger','sadness'}, pre={'scale2unit':True})
     train_x, train_y = train
 
     # Initialise RBM parameters
-    tr = TrainParam(learning_rate=0.1,
-                    momentum_type=NESTEROV,
+    tr = TrainParam(learning_rate=0.001,
+                    momentum_type=CLASSICAL,
                     momentum=0.5,
                     weight_decay=0.001,
                     sparsity_constraint=False,
                     sparsity_target=0.01,
                     sparsity_cost=0.01,
                     sparsity_decay=0.1,
-                    epochs=50)
+                    epochs=20)
 
     # Layer 1
     # Layer 2
     # Layer 3
-    topology = [784, 500, 500, 2000]
-    batch_size = 10
+    topology = [625, 100, 100, 500]
+    # batch_size = 10
+    first_progress_logger = ProgressLogger(img_shape=(25,25))
+    rest_progress_logger = ProgressLogger()
+
+    first_rbm_config = RBMConfig(train_params=tr,
+                                 progress_logger=first_progress_logger)
+    rbm_config = RBMConfig(train_params=tr,
+                                 progress_logger=rest_progress_logger)
+    rbm_configs = [first_rbm_config, rbm_config, rbm_config]
+
+    config = DBNConfig(topology=topology,
+                       training_parameters=tr,
+                       rbm_configs=rbm_configs,
+                       data_manager=manager)
 
     # construct the Deep Belief Network
-    dbn = DBN(topology=topology, n_outs=10, out_dir='zero_one_learner', tr=tr, data_manager=manager)
+    dbn = DBN(config)
 
     print "... initialised dbn"
 
     print '... pre-training the model'
     start_time = time.clock()
 
-    dbn.pretrain(train_x, cache=False, optimise=True)
+    dbn.pretrain(train_x, cache=False, optimise=False)
     # dbn.pretrain(train_x, cache=False)
 
     end_time = time.clock()
@@ -234,10 +248,10 @@ def test_generative_dbn():
 
 
     # Sample from top layer to generate data
-    sample_n = 1000
-    sampled = dbn.sample(sample_n, 2)
+    sample_n = 100
+    sampled = dbn.sample(sample_n, 30)
 
-    save_digits(sampled, shape=(sample_n / 10, 10), image_name="smapled.png")
+    k_loader.save_faces(sampled, shape=(sample_n / 10, 10), image_name="sampled.png")
 
 
     # end-snippet-2
