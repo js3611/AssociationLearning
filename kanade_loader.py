@@ -56,11 +56,11 @@ def load_kanade(shared=True, set_name='sharp_equi25_25', emotions=None, pre=None
             pass
         if 'wpca' in pre:
             pass
-        if 'scale' in pre:
-            x = preprocessing.scale(data[0].astype(np.float64))
-            data = (x, data[1])
         if 'scale2unit' in pre:
             x = data[0] / 255.0
+            data = (x, data[1])
+        if 'scale' in pre:
+            x = preprocessing.scale(data[0].astype(np.float32))
             data = (x, data[1])
         if 'center' in pre:
             pass

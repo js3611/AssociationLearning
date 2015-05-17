@@ -4,12 +4,12 @@ import utils
 import numpy as np
 import rbm as rbm
 import rbm_units
-import dbn as DBN
 import sklearn
 import theano
 import theano.tensor as T
 
 import mnist_loader as m_loader
+import kanade_loader as k_loader
 
 
 class UtilsTest(unittest.TestCase):
@@ -51,6 +51,16 @@ class UtilsTest(unittest.TestCase):
         y = unit.activate(x)
         f = theano.function([x], [y])
         # print f(x_in)
+
+    def test_kanade_scaling(self):
+        datasets = k_loader.load_kanade(shared=False, n=10)
+        x, y = datasets[0]
+        xsc = sklearn.preprocessing.scale(x.astype(float))
+
+        print x
+        print xsc
+        print np.mean(xsc, axis=0)
+        print np.std(xsc, axis=0)
 
     def test_axis(self):
         xs = np.array([[1, 2, 3], [4, 5, 6]])
@@ -104,7 +114,6 @@ class UtilsTest(unittest.TestCase):
 
         # Test RBM
         # gaussian_rbm.plot_samples(test_x)
-
 
 
 if __name__ == '__main__':

@@ -39,15 +39,15 @@ def test_rbm():
 
     data_manager = store.StorageManager('SimpleRBMTest')
     # Load mnist hand digits
-    datasets = loader.load_kanade(n=1000, pre={'scale2unit': True})
+    datasets = loader.load_kanade(n=100, pre={'scale2unit': True, 'scale':True})
     train_set_x, train_set_y = datasets[0]
     test_set_x, test_set_y = datasets[2]
 
     # Initilise the RBM and training parameters
-    tr = TrainParam(learning_rate=0.001,
+    tr = TrainParam(learning_rate=0.005,
                     momentum_type=CLASSICAL,
-                    momentum=0.9,
-                    weight_decay=0.001,
+                    momentum=0.5,
+                    weight_decay=0.000,
                     sparsity_constraint=False,
                     sparsity_target=0.1 ** 9,
                     sparsity_cost=10 ** 8,
@@ -55,11 +55,12 @@ def test_rbm():
                     epochs=20)
 
     n_visible = train_set_x.get_value(borrow=True).shape[1]
-    n_hidden = 100
+    n_hidden = 2
 
     config = RBMConfig()
     config.v_n = n_visible
     config.h_n = n_hidden
+    config.v_unit = rbm_units.GaussianVisibleUnit
     config.progress_logger = ProgressLogger(img_shape=(25, 25))
     config.train_params = tr
     rbm = RBM(config)
@@ -72,26 +73,27 @@ def test_rbm():
 
     # rbm.get_initial_mean_activity(train_set_x)
 
-    # Train RBM
-    rbm.train(train_set_x)
+    for i in xrange(0, 10):
+        # Train RBM
+        rbm.train(train_set_x)
 
-    # Test RBM Reconstruction via Linear Classifier
-    clf = SimpleClassifier(classifier='logistic', train_x=train_set_x, train_y=train_set_y)
-    recon_tr = rbm.reconstruct(train_set_x, k=1, plot_n=100, plot_every=1)
-    recon_te = rbm.reconstruct(test_set_x, k=1, plot_n=100, plot_every=1)
+        # Test RBM Reconstruction via Linear Classifier
+        clf = SimpleClassifier(classifier='logistic', train_x=train_set_x, train_y=train_set_y)
+        recon_tr = rbm.reconstruct(train_set_x, k=1, plot_n=100, plot_every=1)
+        recon_te = rbm.reconstruct(test_set_x, k=1, plot_n=100, plot_every=1)
 
-    assert len(recon_tr) == len(train_set_x.get_value(borrow=True))
+        assert len(recon_tr) == len(train_set_x.get_value(borrow=True))
 
-    print 'Original Score: {}'.format(clf.get_score(test_set_x, test_set_y))
-    print 'Recon Score:    {}'.format(clf.get_score(recon_te, test_set_y.eval()))
-    clf.retrain(recon_tr, train_set_y.eval())
-    print 'Recon Score (retrain): {}'.format(clf.get_score(recon_te, test_set_y.eval()))
+        print 'Original Score: {}'.format(clf.get_score(test_set_x, test_set_y))
+        print 'Recon Score:    {}'.format(clf.get_score(recon_te, test_set_y.eval()))
+        clf.retrain(recon_tr, train_set_y.eval())
+        print 'Recon Score (retrain): {}'.format(clf.get_score(recon_te, test_set_y.eval()))
 
-    # Store Parameters
-    data_manager.persist(rbm)
-    loaded = data_manager.retrieve(str(rbm))
-    if loaded:
-        print "... loaded trained RBM"
+        # # Store Parameters
+        # data_manager.persist(rbm)
+        # loaded = data_manager.retrieve(str(rbm))
+        # if loaded:
+        #     print "... loaded trained RBM"
 
 
 if __name__ == '__main__':
