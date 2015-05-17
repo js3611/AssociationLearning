@@ -5,13 +5,13 @@ import unittest
 import numpy as np
 import scipy as sp
 import theano
-import mnist_loader as loader
+import mnist_loader as m_loader
 import utils
 
 
 class TestMNistLoader(unittest.TestCase):
     def test_load_raw(self):
-        dataset = loader.load_digits(shared=False)
+        dataset = m_loader.load_digits(shared=False)
         self.assertTrue(len(dataset) == 3)
 
         train, valid, test = dataset
@@ -28,7 +28,7 @@ class TestMNistLoader(unittest.TestCase):
 
     def test_load_individual_digits(self):
         chosen_digits = [0, 1]
-        dataset = loader.load_digits(shared=False, digits=chosen_digits)
+        dataset = m_loader.load_digits(shared=False, digits=chosen_digits)
 
         self.assertTrue(len(dataset) == 3)
 
@@ -50,7 +50,7 @@ class TestMNistLoader(unittest.TestCase):
 
     def test_load_fixed_number(self):
         # [train_n, valid_n, test_n]
-        dataset = loader.load_digits(shared=False, n=[500, 400, 300])
+        dataset = m_loader.load_digits(shared=False, n=[500, 400, 300])
 
         self.assertTrue(len(dataset) == 3)
 
@@ -70,7 +70,7 @@ class TestMNistLoader(unittest.TestCase):
         self.assertTrue(len(test_x) == len(test_y) and len(test_y) == 300)
 
     def test_shared(self):
-        dataset = loader.load_digits(n=[10, 10, 10])
+        dataset = m_loader.load_digits(n=[10, 10, 10])
         train, valid, test = dataset
         train_x, train_y = train
         valid_x, valid_y = valid
@@ -83,13 +83,13 @@ class TestMNistLoader(unittest.TestCase):
         self.assertTrue(isinstance(test_x, theano.tensor.sharedvar.TensorSharedVariable))
 
     def test_load_preprocessed(self):
-        dataset = loader.load_digits(shared=False, pre={'threshold':0.5}, n=[10, 10, 10])
+        dataset = m_loader.load_digits(shared=False, pre={'threshold':0.5}, n=[10, 10, 10])
         for (x, y) in dataset:
             # print sp.stats.itemfreq(x)
             self.assertTrue(np.all((np.unique(x) == np.array([0, 1]))))
 
     def test_load_vectorised(self):
-        dataset = loader.load_digits(shared=False, pre={'label_vector':True}, n=[10, 10, 10])
+        dataset = m_loader.load_digits(shared=False, pre={'label_vector':True}, n=[10, 10, 10])
         train, valid, test = dataset
         train_x, train_y = train
         valid_x, valid_y = valid
@@ -100,17 +100,17 @@ class TestMNistLoader(unittest.TestCase):
         self.assertTrue(test_y.shape[1] == 10)
 
     def test_sample_image(self):
-        train, valid, test = loader.load_digits(digits=[2, 3], n=[10, 0, 0], pre={'binary_label':True})
+        train, valid, test = m_loader.load_digits(digits=[2, 3], n=[10, 0, 0], pre={'binary_label':True})
         train_x, train_y = train
         valid_x, valid_y = valid
         test_x, test_y = test
 
-        train_x01 = loader.sample_image(train_y, shared=False)
+        train_x01 = m_loader.sample_image(train_y, shared=False)
         print train_y.eval()
         utils.save_digits(train_x01, 'test_image/sampled_img.png')
 
     def test_binary_label(self):
-        train, valid, test = loader.load_digits(digits=[2, 3], n=[10, 0, 0], pre={'binary_label':True})
+        train, valid, test = m_loader.load_digits(digits=[2, 3], n=[10, 0, 0], pre={'binary_label':True})
 
 if __name__ == '__main__':
     unittest.main()

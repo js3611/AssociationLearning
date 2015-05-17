@@ -6,7 +6,7 @@ from rbm_units import *
 from rbm_logger import *
 from theano.tensor.shared_randomstreams import RandomStreams
 import utils
-import mnist_loader as loader
+import mnist_loader as m_loader
 import datastorage as store
 import rbm_config
 
@@ -141,7 +141,7 @@ class RBM(object):
         name = 'ass_' if self.associative else ''
         return name + "rbm_" + str(self.h_n) + \
                "_" + self.cd_type + str(self.cd_steps) + \
-               "_" + str(self.train_parameters)
+               "_{}".format(self.train_parameters)
 
     def free_energy(self, v, v2=None):
         if self.associative:
@@ -977,7 +977,7 @@ def test_rbm():
     print "Testing RBM"
 
     # Load mnist hand digits
-    datasets = loader.load_digits(n=[100, 0, 100], digits=[1])
+    datasets = m_loader.load_digits(n=[100, 0, 100], digits=[1])
     train_set_x, train_set_y = datasets[0]
     test_set_x, test_set_y = datasets[2]
 

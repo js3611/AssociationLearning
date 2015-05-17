@@ -20,9 +20,10 @@ class DBNConfig(object):
     def __init__(self,
                  numpy_rng=None,
                  theano_rng=None,
-                 topology=[784, 500, 500],
+                 topology=[625, 100, 100],
                  load_layer=None,
                  n_outs=10,
+                 out_dir='dbn',  # useful for associative dbn
                  rbm_configs=RBMConfig(),
                  training_parameters=TrainParam(),
                  data_manager=None):
@@ -34,7 +35,7 @@ class DBNConfig(object):
         self.data_manager = data_manager
         self.training_parameters = training_parameters
         self.rbm_configs = rbm_configs
-
+        self.out_dir = out_dir
 
 class DBN(object):
     def __init__(self, config=DBNConfig()):
@@ -45,6 +46,7 @@ class DBN(object):
         load_layer = config.load_layer
         n_outs = config.n_outs
         data_manager = config.data_manager
+        out_dir = config.out_dir
         tr = config.training_parameters
         rbm_configs = config.rbm_configs
 
@@ -56,6 +58,7 @@ class DBN(object):
         self.params = []
         self.n_layers = len(hidden_layers_sizes)
         self.topology = topology
+        self.out_dir = out_dir
         self.data_manager = data_manager
 
         assert self.n_layers > 0
@@ -100,12 +103,12 @@ class DBN(object):
             self.params.extend(sigmoid_layer.params)
 
 
-            config = rbm_configs[i]
-            config.v_n = topology[i]
-            config.h_n = topology[i + 1]
-            config.training_parameters = tr[i]  # Ensure it has parameters
+            rbm_config = rbm_configs[i]
+            rbm_config.v_n = topology[i]
+            rbm_config.h_n = topology[i + 1]
+            rbm_config.training_parameters = tr[i]  # Ensure it has parameters
 
-            rbm_layer = RBM(config, W=sigmoid_layer.W, h_bias=sigmoid_layer.b)
+            rbm_layer = RBM(rbm_config, W=sigmoid_layer.W, h_bias=sigmoid_layer.b)
             self.rbm_layers.append(rbm_layer)
 
         # Logistic layer on top of the MLP
@@ -157,7 +160,7 @@ class DBN(object):
             rbm = self.rbm_layers[i]
             print 'training layer {}, {}'.format(i, rbm)
 
-            self.data_manager.move_to('dbn/layer/{}/{}'.format(i, rbm))
+            self.data_manager.move_to('{}/layer/{}/{}'.format(self.out_dir, i, rbm))
 
             # Check Cache
             cost = 0

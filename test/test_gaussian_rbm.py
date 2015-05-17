@@ -9,7 +9,7 @@ import sklearn
 import theano
 import theano.tensor as T
 
-import mnist_loader as loader
+import mnist_loader as m_loader
 
 
 class UtilsTest(unittest.TestCase):
@@ -67,7 +67,7 @@ class UtilsTest(unittest.TestCase):
         self.assertTrue(np.all(v3 == np.array([2, 5])))
 
     def test_full(self):
-        train, valid, test = loader.load_digits(n=[10000, 0, 100], pre={'scale':True})
+        train, valid, test = m_loader.load_digits(n=[10000, 0, 100], pre={'scale':True})
         train_x, train_y = train
         valid_x, valid_y = valid
         test_x, test_y = test

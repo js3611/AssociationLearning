@@ -6,7 +6,7 @@ import rbm as RBM
 import dbn as DBN
 import associative_dbn
 import utils
-import mnist_loader as loader
+import mnist_loader as m_loader
 import datastorage as store
 
 import logging
@@ -17,7 +17,7 @@ def associate_data2label(cache=False):
     print "Testing ClassRBM with generative target (i.e. AssociativeRBM with picture-label association)"
 
     # Load mnist hand digits, class label is already set to binary
-    train, valid, test = loader.load_digits(n=[500, 100, 100], pre={'label_vector': True})
+    train, valid, test = m_loader.load_digits(n=[500, 100, 100], pre={'label_vector': True})
     train_x, train_y = train
     test_x, test_y = test
     train_y = T.cast(train_y, dtype=theano.config.floatX)
@@ -76,12 +76,12 @@ def associate_data2data(cache=False):
 
 
     # Load mnist hand digits, class label is already set to binary
-    train, valid, test = loader.load_digits(n=[500, 100, 500], digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], pre={'binary_label': True})
+    train, valid, test = m_loader.load_digits(n=[500, 100, 500], digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], pre={'binary_label': True})
     train_x, train_y = train
     test_x, test_y = test
-    train_x01 = loader.sample_image(train_y)
+    train_x01 = m_loader.sample_image(train_y)
 
-    dataset01 = loader.load_digits(n=[500, 100, 100], digits=[0, 1])
+    dataset01 = m_loader.load_digits(n=[500, 100, 100], digits=[0, 1])
 
 
     # Initialise the RBM and training parameters
@@ -154,12 +154,12 @@ def associate_data2dataDBN(cache=False):
 
 
     # Load mnist hand digits, class label is already set to binary
-    train, valid, test = loader.load_digits(n=[500, 100, 100], digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], pre={'binary_label': True})
+    train, valid, test = m_loader.load_digits(n=[500, 100, 100], digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], pre={'binary_label': True})
     train_x, train_y = train
     test_x, test_y = test
-    train_x01 = loader.sample_image(train_y)
+    train_x01 = m_loader.sample_image(train_y)
 
-    dataset01 = loader.load_digits(n=[500, 100, 100], digits=[0, 1])
+    dataset01 = m_loader.load_digits(n=[500, 100, 100], digits=[0, 1])
 
     # Initialise RBM parameters
     # fixed base train param

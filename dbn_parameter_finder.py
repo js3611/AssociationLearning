@@ -1,6 +1,6 @@
 __author__ = 'joschlemper'
 
-import mnist_loader as loader
+import mnist_loader as m_loader
 import kanade_loader as k_loader
 import logistic_sgd
 import datastorage as store
@@ -186,7 +186,7 @@ def find_hyper_parameters():
                     sparsity_constraint=False)
 
     # Load mnist hand digits, class label is already set to binary
-    dataset = loader.load_digits(n=[100, 100, 100])
+    dataset = m_loader.load_digits(n=[100, 100, 100])
     train_x, train_y = dataset[0]
 
 

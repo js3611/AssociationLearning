@@ -16,8 +16,8 @@ from mlp import HiddenLayer
 from rbm import RBM
 from rbm_config import *
 from rbm_logger import *
-from dbn import DBN
-from dbn import DBNConfig
+from DBN import DBN
+from DBN import DBNConfig
 
 try:
     import PIL.Image as Image
@@ -197,11 +197,11 @@ def test_generative_dbn():
     manager = store.StorageManager('generative_dbn_test')
     # Load data
     # train, valid, test = m_loader.load_digits(n=[500, 100, 100], digits=[0, 1, 2, 3, 4, 5])
-    train, valid, test = k_loader.load_kanade(n=1000, emotions={'anger','sadness'}, pre={'scale2unit':True})
+    train, valid, test = k_loader.load_kanade(n=10000, pre={'scale2unit':True})
     train_x, train_y = train
 
     # Initialise RBM parameters
-    tr = TrainParam(learning_rate=0.001,
+    tr = TrainParam(learning_rate=0.0005,
                     momentum_type=CLASSICAL,
                     momentum=0.5,
                     weight_decay=0.001,
