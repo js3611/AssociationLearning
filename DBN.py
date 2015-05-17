@@ -16,17 +16,37 @@ from rbm_config import *
 from rbm_logger import *
 
 
-class DBN(object):
-    
-    def __init__(self, 
+class DBNConfig(object):
+    def __init__(self,
                  numpy_rng=None,
                  theano_rng=None,
                  topology=[784, 500, 500],
                  load_layer=None,
                  n_outs=10,
-                 out_dir='dbn',
-                 tr=TrainParam(),
+                 rbm_configs=RBMConfig(),
+                 training_parameters=TrainParam(),
                  data_manager=None):
+        self.numpy_rng = numpy_rng
+        self.theano_rng = theano_rng
+        self.topology = topology
+        self.load_layer = load_layer
+        self.n_outs = n_outs
+        self.data_manager = data_manager
+        self.training_parameters = training_parameters
+        self.rbm_configs = rbm_configs
+
+
+class DBN(object):
+    def __init__(self, config=DBNConfig()):
+
+        numpy_rng = config.numpy_rng
+        theano_rng = config.theano_rng
+        topology = config.topology
+        load_layer = config.load_layer
+        n_outs = config.n_outs
+        data_manager = config.data_manager
+        tr = config.training_parameters
+        rbm_configs = config.rbm_configs
 
         n_ins = topology[1]
         hidden_layers_sizes = topology[1:]
@@ -36,8 +56,7 @@ class DBN(object):
         self.params = []
         self.n_layers = len(hidden_layers_sizes)
         self.topology = topology
-        self.out_dir = out_dir
-        self.data_manager=data_manager
+        self.data_manager = data_manager
 
         assert self.n_layers > 0
 
@@ -52,15 +71,19 @@ class DBN(object):
         if not (type(tr) is list):
             tr = [tr for i in xrange(self.n_layers)]
 
+        if not (type(rbm_configs) is list):
+            rbm_configs = [rbm_configs for i in xrange(self.n_layers)]
+
+
         # Create Layers
         self.x = T.matrix('x')
-        self.y = T.ivector('y')  #labels presented as 1D vector
+        self.y = T.ivector('y')  # labels presented as 1D vector
         for i in xrange(self.n_layers):
             # construct sigmoidal layer
             if i == 0:
                 input_size = n_ins
             else:
-                input_size = hidden_layers_sizes[i-1]
+                input_size = hidden_layers_sizes[i - 1]
 
             if i == 0:
                 layer_input = self.x
@@ -68,27 +91,23 @@ class DBN(object):
                 layer_input = self.sigmoid_layers[-1].output
 
             sigmoid_layer = HiddenLayer(rng=numpy_rng,
-                                         input = layer_input,
-                                         n_in = topology[i],
-                                         n_out = topology[i+1],
-                                         activation=T.nnet.sigmoid)
+                                        input=layer_input,
+                                        n_in=topology[i],
+                                        n_out=topology[i + 1],
+                                        activation=T.nnet.sigmoid)
 
             self.sigmoid_layers.append(sigmoid_layer)
             self.params.extend(sigmoid_layer.params)
 
-            # construct RBM that shared weights with this layer
-            logger = ProgressLogger(img_shape=(25,25))
 
-            rbm_layer = RBM(associative=False,
-                            cd_type='classical',
-                            v_n=topology[i],
-                            h_n=topology[i+1],
-                            W=sigmoid_layer.W,
-                            h_bias=sigmoid_layer.b,
-                            train_parameters=tr[i],
-                            progress_logger=logger)
+            config = rbm_configs[i]
+            config.v_n = topology[i]
+            config.h_n = topology[i + 1]
+            config.training_parameters = tr[i]  # Ensure it has parameters
+
+            rbm_layer = RBM(config, W=sigmoid_layer.W, h_bias=sigmoid_layer.b)
             self.rbm_layers.append(rbm_layer)
-            
+
         # Logistic layer on top of the MLP
         self.logLayer = LogisticRegression(
             input=self.sigmoid_layers[-1].output,
@@ -106,18 +125,17 @@ class DBN(object):
                '_' + '_'.join([str(i) for i in self.topology])
 
     def pretraining_functions(self, train_set_x, batch_size, k):
-        #index to a [mini]batch
+        # index to a [mini]batch
         index = T.lscalar('index')
-        learning_rate=T.scalar('lr')
+        learning_rate = T.scalar('lr')
 
         n_batches = train_set_x.get_value(borrow=True).shape[0] / batch_size
         batch_begin = index * batch_size
         batch_end = batch_begin + batch_size
-        
+
         pretrain_fns = []
         for rbm in self.rbm_layers:
-
-#            cost, updates = rbm.get_cost_updates(learning_rate, persistent=None, k=k)
+            #            cost, updates = rbm.get_cost_updates(learning_rate, persistent=None, k=k)
             cost, updates = rbm.get_cost_updates(learning_rate, k=k)
 
             # input gets propagated through layer weights W i.e. W2(W1x+b1)+b2 etc
@@ -137,11 +155,12 @@ class DBN(object):
         layer_input = train_data
         for i in xrange(len(self.rbm_layers)):
             rbm = self.rbm_layers[i]
-            print 'training layer {}, {}'.format(str(i), str(rbm))
+            print 'training layer {}, {}'.format(i, rbm)
 
-            self.data_manager.move_to(self.out_dir + '/layer' + str(i) + '/' + str(rbm))
+            self.data_manager.move_to('dbn/layer/{}/{}'.format(i, rbm))
 
             # Check Cache
+            cost = 0
             loaded = store.retrieve_object(str(rbm))
             if cache and loaded:
                 # TODO override neural network's weights too
@@ -152,8 +171,8 @@ class DBN(object):
             else:
                 if optimise:
                     rbm.pretrain_lr(layer_input)
-                rbm.train(layer_input)
-                self.data_manager.persist(rbm)
+                cost += np.mean(rbm.train(layer_input))
+                # self.data_manager.persist(rbm)
                 # store.store_object(rbm)
 
             self.data_manager.move_to_project_root()
@@ -165,6 +184,7 @@ class DBN(object):
             f = theano.function([], transform_input)
             res = f()
             layer_input = theano.shared(res)
+        return cost
 
 
     def build_finetune_functions(self, datasets, batch_size, learning_rate):
@@ -194,11 +214,11 @@ class DBN(object):
             updates=updates,
             givens={
                 self.x: train_set_x[
-                    index * batch_size: (index + 1) * batch_size
-                ],
+                        index * batch_size: (index + 1) * batch_size
+                        ],
                 self.y: train_set_y[
-                    index * batch_size: (index + 1) * batch_size
-                ]
+                        index * batch_size: (index + 1) * batch_size
+                        ]
             }
         )
 
@@ -207,11 +227,11 @@ class DBN(object):
             self.errors,
             givens={
                 self.x: test_set_x[
-                    index * batch_size: (index + 1) * batch_size
-                ],
+                        index * batch_size: (index + 1) * batch_size
+                        ],
                 self.y: test_set_y[
-                    index * batch_size: (index + 1) * batch_size
-                ]
+                        index * batch_size: (index + 1) * batch_size
+                        ]
             }
         )
 
@@ -220,11 +240,11 @@ class DBN(object):
             self.errors,
             givens={
                 self.x: valid_set_x[
-                    index * batch_size: (index + 1) * batch_size
-                ],
+                        index * batch_size: (index + 1) * batch_size
+                        ],
                 self.y: valid_set_y[
-                    index * batch_size: (index + 1) * batch_size
-                ]
+                        index * batch_size: (index + 1) * batch_size
+                        ]
             }
         )
 
@@ -286,6 +306,44 @@ class DBN(object):
         # For final layer, take the probability vp
         return vp
 
+    def reconstruct(self, x, k=1, plot_n=None, plot_every=1, img_name='reconstruction.png'):
+        '''
+        Reconstruct image given cd-k
+        - data: theano
+        '''
+        if utils.isSharedType(x):
+            x = x.get_value(borrow=True)
+
+        orig = x
+        top_x = self.bottom_up_pass(x, 0, self.n_layers-1)
+
+        # get top layer rbm
+        rbm = self.rbm_layers[-1]
+
+        # Set the initial chain
+        chain_state = theano.shared(np.asarray(top_x, dtype=theano.config.floatX),name='reconstruct_root')
+
+         # Gibbs sampling
+        k_batch = k / plot_every
+        (res, updates) = theano.scan(rbm.gibbs_vhv,
+                                     outputs_info=[None, None, None,
+                                                   None, None, chain_state],
+                                     n_steps=plot_every,
+                                     name="Gibbs_sampling_reconstruction")
+        updates.update({chain_state: res[-1][-1]})
+        gibbs_sampling = theano.function([], res, updates=updates)
+
+        reconstructions = []
+        for i in xrange(k_batch):
+            result = gibbs_sampling()
+            [_, _, _, _, reconstruction_chain, _] = result
+            reconstructions.append(self.top_down_pass(reconstruction_chain[-1], self.n_layers-1))
+
+        if self.rbm_layers[0].track_progress:
+            self.rbm_layers[0].track_progress.visualise_reconstructions(orig, reconstructions, plot_n)
+
+        return reconstructions[-1]
+
     def sample(self, n=1, k=10):
 
         top_layer = self.rbm_layers[-1]
@@ -294,6 +352,6 @@ class DBN(object):
         x = top_layer.sample(n, k)
 
         # prop down the output to visible unit
-        sampled = self.top_down_pass(x, self.n_layers-1)
+        sampled = self.top_down_pass(x, self.n_layers - 1)
 
         return sampled

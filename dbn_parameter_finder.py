@@ -6,7 +6,7 @@ import logistic_sgd
 import datastorage as store
 from simple_classifiers import SimpleClassifier
 from rbm import *
-from dbn import *
+from DBN import *
 import logging
 
 def find_associative_dbn_hyper_parameters():
