@@ -1,23 +1,21 @@
 import numpy as np
 import theano
 import theano.tensor as T
-from activationFunction import *
-from theano.tensor.shared_randomstreams import RandomStreams
-import utils
-# import mnist_loader as loader
+
 import kanade_loader as loader
 import datastorage as store
-import rbm as RBM
-import sklearn
+from rbm import RBM
+from rbm_config import *
+from rbm_logger import *
 from simple_classifiers import SimpleClassifier
 
 import os
 import time
+
 try:
     import PIL.Image as Image
 except ImportError:
     import Image
-
 
 CLASSICAL = 'classical'
 NESTEROV = "nesterov"
@@ -35,42 +33,36 @@ data_dir = "/".join([root_dir, "data"])
 # theano.config.optimizer='None'
 # theano.config.exception_verbosity='high'
 
+
 def test_rbm():
     print "Testing RBM"
 
     data_manager = store.StorageManager('SimpleRBMTest')
-    rbm_logger = RBM.ProgressLogger(img_shape=(25, 25))
-
     # Load mnist hand digits
-    datasets = loader.load_kanade(pre={'scale2unit':True})
+    datasets = loader.load_kanade(n=1000, pre={'scale2unit': True})
     train_set_x, train_set_y = datasets[0]
     test_set_x, test_set_y = datasets[2]
 
     # Initilise the RBM and training parameters
-    tr = RBM.TrainParam(learning_rate=0.001,
-                        momentum_type=CLASSICAL,
-                        momentum=0.9,
-                        weight_decay=0.001,
-                        sparsity_constraint=False,
-                        sparsity_target=0.1 ** 9,
-                        sparsity_cost=10 ** 8,
-                        sparsity_decay=0.9,
-                        epochs=20)
+    tr = TrainParam(learning_rate=0.001,
+                    momentum_type=CLASSICAL,
+                    momentum=0.9,
+                    weight_decay=0.001,
+                    sparsity_constraint=False,
+                    sparsity_target=0.1 ** 9,
+                    sparsity_cost=10 ** 8,
+                    sparsity_decay=0.9,
+                    epochs=20)
 
     n_visible = train_set_x.get_value(borrow=True).shape[1]
     n_hidden = 100
 
-    rbm = RBM.RBM(n_visible,
-                  n_visible,
-                  n_hidden,
-                  associative=False,
-                  cd_type=CLASSICAL,
-                  cd_steps=1,
-                  v_activation_fn=log_sig,
-                  h_activation_fn=log_sig,
-                  train_parameters=tr,
-                  progress_logger=rbm_logger)
-
+    config = RBMConfig()
+    config.v_n = n_visible
+    config.h_n = n_hidden
+    config.progress_logger = ProgressLogger(img_shape=(25, 25))
+    config.train_params = tr
+    rbm = RBM(config)
     print "... initialised RBM"
 
     # adjust learning rate

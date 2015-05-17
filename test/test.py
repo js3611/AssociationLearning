@@ -1,7 +1,12 @@
 import unittest
-from rbm import *
+from rbm import RBM
+from rbm_config import *
+from rbm_logger import *
 from activationFunction import *
+from theano.tensor.shared_randomstreams import RandomStreams
 from utils import *
+import numpy as np
+import theano
 import theano.tensor as T
 import numpy as np
 import scipy.stats as ss
@@ -16,18 +21,18 @@ class RBMMethodTest(unittest.TestCase):
                         momentum_type=CLASSICAL,
                         momentum=0.5,
                         weight_decay=0.01,
-                        output_directory="AssociationTest",
                         sparsity_constraint=False,
-                        epochs=15)
+                        batch_size=1,
+                        epochs=5)
 
-        rbm = RBM(v, v2, h,
-                  cd_type=CLASSICAL,
-                  cd_steps=1,
-                  train_parameters=tr,
-                  associative=True,
-                  progress_logger=ProgressLogger())
-
-        self.rbm = rbm
+        config = RBMConfig()
+        config.associative = True
+        config.v_n = v
+        config.v2_n = v2
+        config.h_n = h
+        config.train_params = tr
+        config.progress_logger = ProgressLogger()
+        self.rbm = RBM(config)
 
     def setUpRBM(self):
         v = 5
@@ -37,18 +42,18 @@ class RBMMethodTest(unittest.TestCase):
                         momentum_type=CLASSICAL,
                         momentum=0.5,
                         weight_decay=0.01,
-                        output_directory="AssociationTest",
                         sparsity_constraint=False,
-                        epochs=15)
+                        batch_size=1,
+                        epochs=5)
 
-        rbm = RBM(v, v2, h,
-                  cd_type=CLASSICAL,
-                  cd_steps=1,
-                  associative=True,
-                  train_parameters=tr,
-                  progress_logger=ProgressLogger())
-
-        self.rbm = rbm
+        config = RBMConfig()
+        config.associative = True
+        config.v_n = v
+        config.v2_n = v2
+        config.h_n = h
+        config.train_params = tr
+        config.progress_logger = ProgressLogger()
+        self.rbm = RBM(config)
         self.rbmx1 = np.array([[2, 5, 5, 2, 1]], dtype=t_float_x)
         self.rbmx2 = np.array([[5, 2, 3, 8, 1]], dtype=t_float_x)
 

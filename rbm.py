@@ -13,6 +13,7 @@ import rbm_config
 import sys
 import os
 import time
+import math
 try:
     import PIL.Image as Image
 except ImportError:
@@ -52,7 +53,6 @@ class RBM(object):
         cd_steps = config.cd_steps
         associative = config.associative
         dropout = config.dropout
-
         v_n = config.v_n
         v_n2 = config.v2_n
         h_n = config.h_n
@@ -100,7 +100,6 @@ class RBM(object):
         # For hyperparameters
         self.active_probability_h = active_probability_h
 
-        self.associative = associative
         if associative:
             self.U = self.get_initial_weight(U, v_n2, h_n, 'U')
             # Visible Layer 2
@@ -109,7 +108,7 @@ class RBM(object):
             self.v_unit2 = config.v2_unit()
             self.params += [self.U, self.v_bias2]
 
-
+        self.associative = associative
         self.track_progress = config.progress_logger
         self.config = config
 
@@ -550,7 +549,7 @@ class RBM(object):
             sparsity_penalty = T.nnet.binary_crossentropy(sparsity_target, q)
 
             # 3. Get the derivative
-            if self.h_activation_fn is log_sig:     # if sigmoid
+            if isinstance(self.h_unit, BinaryUnit):     # if sigmoid
                 d_sparsity = q - sparsity_target
             else:
                 # Summation is a trick to differentiate element-wise
@@ -769,7 +768,11 @@ class RBM(object):
         for epoch in xrange(param.epochs):
             mean_cost = []
             for batch_index in xrange(mini_batches):
-                mean_cost += [train_fn(batch_index)]
+                cost = train_fn(batch_index)
+                if math.isnan(cost):
+                    raise Exception('training cost is infty -- try lowering learning rate')
+
+                mean_cost += [cost]
                 if self.track_progress and self.track_progress.monitor_weights:
                     self.track_progress.monitor_wt(self)
                     self.track_progress.monitor_mean_activity(self, train_data, train_label)
@@ -784,13 +787,13 @@ class RBM(object):
         if self.track_progress:
             print ('Training took %f minutes' % (pre_training_time / 60.))
             if self.track_progress.monitor_weights:
-                print 'weight histogram'
+                print 'Weight histogram'
                 avg_hist, avg_bins = np.histogram(np.abs(self.track_progress.weight_hist['avg']), bins=[0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000])
                 std_hist, std_bins = np.histogram(np.abs(self.track_progress.weight_hist['std']))
                 print avg_hist, avg_bins
-                print std_hist, avg_bins
-                print self.track_progress.weight_hist['min']
-                print self.track_progress.weight_hist['max']
+                # print std_hist, avg_bins
+                # print self.track_progress.weight_hist['min']
+                # print self.track_progress.weight_hist['max']
 
         return [mean_cost]
 

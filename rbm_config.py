@@ -20,7 +20,7 @@ class TrainParam(object):
                  momentum_type=NESTEROV,
                  momentum=0.5,
                  weight_decay=0.001,
-                 sparsity_constraint=True,
+                 sparsity_constraint=False,
                  sparsity_target=0.01,  # in range (0.1^9, 0.01)
                  sparsity_cost=0.01,
                  sparsity_decay=0.1,

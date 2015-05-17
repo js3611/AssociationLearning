@@ -231,16 +231,20 @@ def sample_image(data, shared=True, mapping=None):
         image_pool[d] = dataset[0][0]
 
     sample_data = []
+    sample_label = []
     rand_seq = np.random.randint(0, len(seq), size=len(seq))
 
     for d, r in zip(seq.tolist(), rand_seq.tolist()):
         pool = image_pool[mapping[emotion_rev_dict[d]]]
         sample_data.append(pool[r % len(pool)])
+        sample_label.append(emotion_dict[mapping[emotion_rev_dict[d]]] * 1.)
 
     if shared:
-        return theano.shared(np.array(sample_data, dtype=theano.config.floatX), borrow=True)
+        data = theano.shared(np.array(sample_data, dtype=theano.config.floatX), borrow=True)
+        label = theano.shared(np.array(sample_label, dtype=theano.config.floatX), borrow=True)
+        return data, T.cast(label, 'int32')
     else:
-        return np.asarray(sample_data, dtype=theano.config.floatX)
+        return np.asarray(sample_data, dtype=theano.config.floatX), np.asarray(sample_label, dtype=theano.config.floatX)
 
 def vectorise_label(data):
     new_data = []
