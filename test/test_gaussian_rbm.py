@@ -139,7 +139,8 @@ class UtilsTest(unittest.TestCase):
             print 'rbm'
             print d[0], e[1:5], f[1:5]
 
-    def test_kanades(self):
+    def test_kanades_gbrbm(self):
+        train_n = 1000
         tr = rbm_config.TrainParam(learning_rate=0.05,
                     momentum_type=rbm_config.CLASSICAL,
                     momentum=0.5,
@@ -157,15 +158,15 @@ class UtilsTest(unittest.TestCase):
         config.v_n = nvis
         config.h_n = nhid
         config.v_unit = rbm_units.GaussianVisibleUnit
-        config.h_unit = rbm_units.ReLUnit
+        config.h_unit = rbm_units.RBMUnit
         config.progress_logger = rbm_logger.ProgressLogger()
         config.train_params = tr
         np_rand = np.random.RandomState(123)
 
         # Weights
-        W = np_rand.uniform(low=-1./10, high=1./10, size=(nvis, nhid)).astype(np.float32)
+        W = np_rand.normal(0, 0.01, size=(nvis, nhid)).astype(np.float32)
         vb = np.zeros(nvis, dtype=np.float32)
-        hb = np.array(nhid, dtype=np.float32)
+        hb = np.zeros(nhid, dtype=np.float32)
         Wt = theano.shared(W, name='W')
         vbt = theano.shared(vb, name='vbias')
         hbt = theano.shared(hb, name='hbias')
@@ -177,23 +178,28 @@ class UtilsTest(unittest.TestCase):
         self.assertTrue(np.count_nonzero(g_rbm.v_bias.get_value(borrow=True) - vb) == 0)
         self.assertTrue(np.count_nonzero(g_rbm.h_bias.get_value(borrow=True) - hb) == 0)
 
-        tr, vl, te = k_loader.load_kanade(n=100, pre={'scale': True})
+        tr, vl, te = k_loader.load_kanade(n=train_n, pre={'scale': True})
         v = tr[0]
 
-        print 'inputs:'
-        table = ss.itemfreq(v.get_value(borrow=True))
-        x = [pt[0] for pt in table]
-        y = [pt[1] for pt in table]
-        plt.plot(x, y)
-        plt.show()
+        # print 'inputs:'
+        # table = ss.itemfreq(v.get_value(borrow=True))
+        # x = [pt[0] for pt in table]
+        # y = [pt[1] for pt in table]
+        # plt.plot(x, y)
+        # plt.show()
 
         # v = theano.shared(x)
+        h = g_rbm.h_unit.activate(g_rbm.h_unit.scale(T.dot(v, W) + hb))
+
+
         _, _, h = g_rbm.sample_h_given_v(v)
         _, _, vs = g_rbm.sample_v_given_h(h)
         _, _, hs = g_rbm.sample_h_given_v(vs)
-        dw = T.dot(v.T, h) - T.dot(vs.T, hs)
-        dv = T.sum(v - vs, axis=0)
-        dh = T.sum(h - hs, axis=0)
+
+
+        dw = (T.dot(v.T, h) - T.dot(vs.T, hs)) / train_n
+        dv = T.mean(v - vs, axis=0)
+        dh = T.mean(h - hs, axis=0)
         gr = g_rbm.get_partial_derivatives(v, None)['gradients']
         gdw, gdv, gdh = gr[0], gr[1], gr[2]
         print gdw, gdv, gdh
@@ -202,10 +208,87 @@ class UtilsTest(unittest.TestCase):
             a, b, c, d, e, f = compute_derivative()
             # print a, b, c
             print 'unfold'
-            print a[0], b[1:5], c[1:5]
+            print a[0][0:5], b[1:5], c[1:5]
 
             print 'rbm'
-            print d[0], e[1:5], f[1:5]
+            print d[0][0:5], e[1:5], f[1:5]
+
+    def test_kanades_grrbm(self):
+        nvis = 625
+        nhid = 1000
+        train_n = 10000
+        batch_n = 20
+
+        tr = rbm_config.TrainParam(learning_rate=0.05,
+                    momentum_type=rbm_config.CLASSICAL,
+                    momentum=0.5,
+                    weight_decay=0,
+                    sparsity_constraint=False,
+                    sparsity_target=0.1 ** 9,
+                    sparsity_cost=10 ** 8,
+                    sparsity_decay=0.9,
+                    epochs=5,
+                    batch_size=batch_n)
+
+        config = rbm_config.RBMConfig()
+        config.v_n = nvis
+        config.h_n = nhid
+        config.v_unit = rbm_units.GaussianVisibleUnit
+        config.h_unit = rbm_units.ReLUnit
+        config.progress_logger = rbm_logger.ProgressLogger()
+        config.train_params = tr
+        np_rand = np.random.RandomState(123)
+
+        # Weights
+        W = np_rand.normal(0, 0.01, size=(nvis, nhid)).astype(np.float32)
+        vb = np.zeros(nvis, dtype=np.float32)
+        hb = np.zeros(nhid, dtype=np.float32)
+        Wt = theano.shared(W, name='W')
+        vbt = theano.shared(vb, name='vbias')
+        hbt = theano.shared(hb, name='hbias')
+        g_rbm = rbm.RBM(config, W=Wt, h_bias=hbt, v_bias=vbt)
+        self.assertTrue(g_rbm)
+        self.assertTrue(isinstance(g_rbm.v_unit, rbm_units.GaussianVisibleUnit))
+        self.assertTrue(isinstance(g_rbm.h_unit, rbm_units.RBMUnit))
+        self.assertTrue(np.count_nonzero(g_rbm.W.get_value(borrow=True) - W) == 0)
+        self.assertTrue(np.count_nonzero(g_rbm.v_bias.get_value(borrow=True) - vb) == 0)
+        self.assertTrue(np.count_nonzero(g_rbm.h_bias.get_value(borrow=True) - hb) == 0)
+
+        tr, vl, te = k_loader.load_kanade(n=batch_n, pre={'scale': True})
+        v = tr[0]
+
+        vv = v.get_value(borrow=True).ravel()
+        table = ss.itemfreq(vv)
+        print table
+        x = [pt[0] for pt in table]
+        y = [pt[1] for pt in table]
+        plt.plot(x, y)
+        plt.show()
+
+        # v = theano.shared(x)
+        h = g_rbm.h_unit.activate(g_rbm.h_unit.scale(T.dot(v, W) + hb))
+
+        _, _, h = g_rbm.sample_h_given_v(v)
+        _, _, vs = g_rbm.sample_v_given_h(h)
+        _, _, hs = g_rbm.sample_h_given_v(vs)
+
+
+        dw = (T.dot(v.T, h) - T.dot(vs.T, hs)) / batch_n
+        dv = T.mean(v - vs, axis=0)
+        dh = T.mean(h - hs, axis=0)
+        gr = g_rbm.get_partial_derivatives(v, None)['gradients']
+        gdw, gdv, gdh = gr[0], gr[1], gr[2]
+        print gdw, gdv, gdh
+        compute_derivative = theano.function([], [dw, dv, dh, gdw, gdv, gdh])
+        for i in xrange(1):
+            a, b, c, d, e, f = compute_derivative()
+            # print a, b, c
+            print 'unfold'
+            print a[0][0:5], b[1:5], c[1:5]
+
+            print 'rbm'
+            print d[0][0:5], e[1:5], f[1:5]
+
 
 
     def test_subclass(self):

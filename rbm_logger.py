@@ -51,6 +51,7 @@ class ProgressLogger(object):
             visualise_reconstructions(orig, reconstructions, self.img_shape, plot_n, img_name)
 
         def monitor_wt(self, rbm):
+            # print rbm.W.get_value(borrow=True)[0][0:5]
             self.weight_hist['avg'].append(np.mean(rbm.W.get_value(borrow=True)))
             self.weight_hist['std'].append(np.std(rbm.W.get_value(borrow=True)))
             self.weight_hist['min'] = min(np.min(rbm.W.get_value(borrow=True)), self.weight_hist['min'])

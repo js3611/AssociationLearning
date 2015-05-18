@@ -41,8 +41,9 @@ class GaussianVisibleUnit(RBMUnit):
     '''
 
     def activate(self, x):
-        return x # id
-        # return x + self.rand.normal(size=x.shape, avg=0., std=1., dtype=theano.config.floatX)
+        # return x # id
+        return x + self.rand.normal(size=x.shape, avg=0., std=1., dtype=theano.config.floatX)
+
     def energy(self, v, v_bias):
         return 0.5 * T.sum((v - v_bias) ** 2)
 

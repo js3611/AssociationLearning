@@ -116,12 +116,13 @@ class RBM(object):
     def get_initial_weight(self, w, nrow, ncol, name):
         if w is None:
             w = np.asarray(
-                # self.np_rand.uniform(low=-1./10, high=-1./10, size=(nrow, ncol)),
-                self.np_rand.uniform(
-                    low=-4 * np.sqrt(6. / (nrow + ncol)),
-                    high=4 * np.sqrt(6. / (nrow + ncol)),
-                    size=(nrow, ncol)
-                ),
+                # self.np_rand.normal(0, scale=0.01, size=(nrow, ncol)),
+                self.np_rand.uniform(low=-1./10, high=1./10, size=(nrow, ncol)),
+                # self.np_rand.uniform(
+                #     low=-4 * np.sqrt(6. / (nrow + ncol)),
+                #     high=4 * np.sqrt(6. / (nrow + ncol)),
+                #     size=(nrow, ncol)
+                # ),
                 dtype=t_float_x
             )
         if 'numpy' in str(type(w)):
@@ -446,19 +447,24 @@ class RBM(object):
             stats = [v_input, v2_input]
         else:
             res = self.negative_statistics(x)
-            print res[0]
             v_sample = res[1]
             h_samples = res[-2]
             v_input = res[2]
             h_recon = h_samples[-1]
             h_data = res[-1]
-            dw = T.dot(x.T, h_data) - T.dot(v_sample.T, h_recon)
-            dv = T.sum(x - v_sample, axis=0)
-            dh = T.sum(h_data - h_recon, axis=0)
-            grads = [dw, dv, dh]
+            cost = T.mean(self.free_energy(x)) - T.mean(self.free_energy(v_sample))
+            grads = T.grad(cost, self.params, consider_constant=[v_sample])
+
+            # _, _, h = self.sample_h_given_v(x)
+            # _, _, vs = self.sample_v_given_h(h)
+            # _, _, hs = self.sample_h_given_v(vs)
+            # dw = (T.dot(x.T, h) - T.dot(vs.T, hs)) / -self.train_parameters.batch_size
+            # dv = T.mean(x - vs, axis=0)
+            # dh = T.mean(h - hs, axis=0)
+            # grads[1] = dv
+            # grads[2] = dh
+            # grads = [dw, dv, dh]
             # Differentiate cost function w.r.t params to get gradients for param updates
-            # cost = T.mean(self.free_energy(x)) - T.mean(self.free_energy(v_sample))
-            # grads = T.grad(cost, self.params, consider_constant=[v_sample])
 
             stats = [v_input]
 
@@ -780,11 +786,11 @@ class RBM(object):
             mean_cost = []
             for batch_index in xrange(mini_batches):
                 cost = train_fn(batch_index)
-                if math.isnan(cost):
-                    continue
-                    raise Exception('training cost is infty -- try lowering learning rate')
+                if not math.isnan(cost):
+                    # continue
+                    # raise Exception('training cost is infty -- try lowering learning rate')
 
-                mean_cost += [cost]
+                   mean_cost += [cost]
                 if self.track_progress and self.track_progress.monitor_weights:
                     self.track_progress.monitor_wt(self)
                     self.track_progress.monitor_mean_activity(self, train_data, train_label)
@@ -800,12 +806,13 @@ class RBM(object):
             print ('Training took %f minutes' % (pre_training_time / 60.))
             if self.track_progress.monitor_weights:
                 print 'Weight histogram'
-                avg_hist, avg_bins = np.histogram(np.abs(self.track_progress.weight_hist['avg']), bins=[0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000])
-                std_hist, std_bins = np.histogram(np.abs(self.track_progress.weight_hist['std']))
+                # avg_hist, avg_bins = np.histogram(np.abs(self.track_progress.weight_hist['avg']), bin=[0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000])
+                avg_hist, avg_bins = np.histogram(self.track_progress.weight_hist['avg'])
+                std_hist, std_bins = np.histogram(self.track_progress.weight_hist['std'])
                 print avg_hist, avg_bins
-                # print std_hist, avg_bins
-                # print self.track_progress.weight_hist['min']
-                # print self.track_progress.weight_hist['max']
+                print std_hist, avg_bins
+                print self.track_progress.weight_hist['min']
+                print self.track_progress.weight_hist['max']
 
         return [mean_cost]
 
@@ -850,7 +857,7 @@ class RBM(object):
             reconstructions.append(reconstruction_chain[-1])
 
         if self.track_progress:
-            self.track_progress.visualise_reconstructions(orig, reconstructions, plot_n)
+            self.track_progress.visualise_reconstructions(orig, reconstructions, plot_n, img_name=img_name)
 
         return reconstructions[-1]
 
