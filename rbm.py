@@ -116,8 +116,8 @@ class RBM(object):
     def get_initial_weight(self, w, nrow, ncol, name):
         if w is None:
             w = np.asarray(
-                # self.np_rand.normal(0, scale=0.01, size=(nrow, ncol)),
-                self.np_rand.uniform(low=-1./10, high=1./10, size=(nrow, ncol)),
+                self.np_rand.normal(0, scale=0.01, size=(nrow, ncol)),
+                # self.np_rand.uniform(low=-1./10, high=1./10, size=(nrow, ncol)),
                 # self.np_rand.uniform(
                 #     low=-4 * np.sqrt(6. / (nrow + ncol)),
                 #     high=4 * np.sqrt(6. / (nrow + ncol)),
@@ -138,6 +138,16 @@ class RBM(object):
             return theano.shared(value=bias, name=name, borrow=True)
         else:
             return bias
+
+    def set_initial_bias(self, train_data):
+        '''
+        Sets initial bias for visible unit i to
+        log [pi / (1 - pi)], where pi = probability unit i is on (i.e. mean value of all training data)
+        :param train_data:
+        :return:
+        '''
+        v_activation = theano.function([], T.mean(train_data, axis=0))()
+        self.v_bias.set_value(v_activation)
 
     def __str__(self):
         name = 'ass_' if self.associative else ''
