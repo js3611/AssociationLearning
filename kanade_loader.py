@@ -5,7 +5,7 @@ import gzip
 import os
 import sys
 import time
-import cv2
+# import cv2
 from sklearn import preprocessing
 from sklearn import cross_validation
 import numpy as np
@@ -103,35 +103,35 @@ def __load(set_name='25_25'):
             break
 
     # If the saved file doesn't exist, create one
-    if not os.path.isfile(data_location):
-        dir_name = 'kanade/' + set_name
-        for location in possible_locations:
-            data_location = os.path.join(BASE_DIR, location, dir_name)
-            if os.path.isdir(data_location):
-                dataset = data_location
-                break
-
-        assert os.path.isdir(dataset)
-        print '... creating data'
-
-        data = []
-        label = []
-        for emotion in emotion_dict.keys():
-            for img in os.listdir(dataset + '/' + emotion):
-                img_name = os.path.join(dataset, emotion, img)
-                img_array = cv2.imread(img_name, 0)
-                data.append(np.asarray(img_array).reshape(-1))
-                label.append(emotion_dict[emotion])
-
-        dataset = os.path.join(DATA_DIR, 'kanade' + set_name + '.save')
-
-        # print data
-        # print label
-        # print os.getcwd()
-
-        f = open(dataset, 'wb')
-        cPickle.dump((np.array(data), np.array(label)), f, protocol=cPickle.HIGHEST_PROTOCOL)
-        f.close()
+    # if not os.path.isfile(data_location):
+    #     dir_name = 'kanade/' + set_name
+    #     for location in possible_locations:
+    #         data_location = os.path.join(BASE_DIR, location, dir_name)
+    #         if os.path.isdir(data_location):
+    #             dataset = data_location
+    #             break
+    #
+    #     assert os.path.isdir(dataset)
+    #     print '... creating data'
+    #
+    #     data = []
+    #     label = []
+    #     for emotion in emotion_dict.keys():
+    #         for img in os.listdir(dataset + '/' + emotion):
+    #             img_name = os.path.join(dataset, emotion, img)
+    #             img_array = cv2.imread(img_name, 0)
+    #             data.append(np.asarray(img_array).reshape(-1))
+    #             label.append(emotion_dict[emotion])
+    #
+    #     dataset = os.path.join(DATA_DIR, 'kanade' + set_name + '.save')
+    #
+    #     # print data
+    #     # print label
+    #     # print os.getcwd()
+    #
+    #     f = open(dataset, 'wb')
+    #     cPickle.dump((np.array(data), np.array(label)), f, protocol=cPickle.HIGHEST_PROTOCOL)
+    #     f.close()
 
     # open
     f = open(dataset, 'rb')

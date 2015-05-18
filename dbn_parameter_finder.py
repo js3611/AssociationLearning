@@ -1,6 +1,6 @@
 __author__ = 'joschlemper'
 
-import mnist_loader as m_loader
+import m_loader
 import kanade_loader as k_loader
 import logistic_sgd
 import datastorage as store

@@ -41,8 +41,8 @@ class GaussianVisibleUnit(RBMUnit):
     '''
 
     def activate(self, x):
-        # return x # id
-        return x + self.rand.normal(size=x.shape, avg=0., std=1., dtype=theano.config.floatX)
+        return x # id
+        # return x + self.rand.normal(size=x.shape, avg=0., std=1., dtype=theano.config.floatX)
     def energy(self, v, v_bias):
         return 0.5 * T.sum((v - v_bias) ** 2)
 
@@ -61,6 +61,9 @@ class ReLUnit(RBMUnit):
     def __init__(self, size):
         RBMUnit.__init__(self)
         self.size = size
+
+    def scale(self, x):
+        return x
 
     def activate(self, x):
         return T.maximum(0, x)

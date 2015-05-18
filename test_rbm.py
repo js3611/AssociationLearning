@@ -39,28 +39,29 @@ def test_rbm():
 
     data_manager = store.StorageManager('SimpleRBMTest')
     # Load mnist hand digits
-    datasets = loader.load_kanade(n=100, pre={'scale2unit': True, 'scale':True})
+    datasets = loader.load_kanade(n=1000, pre={'scale':True})
     train_set_x, train_set_y = datasets[0]
     test_set_x, test_set_y = datasets[2]
 
     # Initilise the RBM and training parameters
-    tr = TrainParam(learning_rate=0.005,
+    tr = TrainParam(learning_rate=0.0000000001,
                     momentum_type=CLASSICAL,
-                    momentum=0.5,
+                    momentum=0,
                     weight_decay=0.000,
                     sparsity_constraint=False,
                     sparsity_target=0.1 ** 9,
                     sparsity_cost=10 ** 8,
                     sparsity_decay=0.9,
-                    epochs=20)
+                    epochs=100)
 
     n_visible = train_set_x.get_value(borrow=True).shape[1]
-    n_hidden = 2
+    n_hidden = 100
 
     config = RBMConfig()
     config.v_n = n_visible
     config.h_n = n_hidden
     config.v_unit = rbm_units.GaussianVisibleUnit
+    config.h_unit = rbm_units.ReLUnit
     config.progress_logger = ProgressLogger(img_shape=(25, 25))
     config.train_params = tr
     rbm = RBM(config)
@@ -73,7 +74,7 @@ def test_rbm():
 
     # rbm.get_initial_mean_activity(train_set_x)
 
-    for i in xrange(0, 10):
+    for i in xrange(0, 1):
         # Train RBM
         rbm.train(train_set_x)
 

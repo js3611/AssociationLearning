@@ -178,8 +178,6 @@ class SingleRBMTest(unittest.TestCase):
         # print f()
         # print f()
 
-class 
-        
 if __name__ == '__main__':
     print "Test Simple RBM"
     unittest.main()

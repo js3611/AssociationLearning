@@ -6,7 +6,7 @@ from rbm_units import *
 from rbm_logger import *
 from theano.tensor.shared_randomstreams import RandomStreams
 import utils
-import mnist_loader as m_loader
+import m_loader
 import datastorage as store
 import rbm_config
 
@@ -116,6 +116,7 @@ class RBM(object):
     def get_initial_weight(self, w, nrow, ncol, name):
         if w is None:
             w = np.asarray(
+                # self.np_rand.uniform(low=-1./10, high=-1./10, size=(nrow, ncol)),
                 self.np_rand.uniform(
                     low=-4 * np.sqrt(6. / (nrow + ncol)),
                     high=4 * np.sqrt(6. / (nrow + ncol)),
@@ -154,13 +155,14 @@ class RBM(object):
         v_bias = self.v_bias
         h_bias = self.h_bias
 
-        t0 = - T.dot(v, v_bias)
+        t0 = self.v_unit.energy(v, v_bias)
         t1 = T.dot(v, w) + h_bias
 
         if v2:
             u = self.U
             v_bias2 = self.v_bias2
-            t0 += -T.dot(v2, v_bias2)
+            # t0 += -T.dot(v2, v_bias2) # For classRBM
+            t0 += self.v_unit2.energy(v2, v_bias2)  # For GaussianUnits
             t1 += T.dot(v2, u)
 
         t2 = - T.sum(T.log(1 + T.exp(t1)))
@@ -339,7 +341,8 @@ class RBM(object):
                 v_samples,
                 h_total_inputs,
                 h_p_activations,
-                h_samples]
+                h_samples,
+                h_sample]
 
     def contrastive_divergence_assoc(self, x, y, k=1):
         h_total_input, h_p_activation, h_sample = self.sample_h_given_v(x, y)
@@ -387,7 +390,7 @@ class RBM(object):
             else:
                 return self.pcd(self.cd_steps)
         elif y:
-            return self.contrastive_divergence_assoc(x, y, 1)
+            return self.contrastive_divergence_assoc(x, y, self.cd_steps)
         else:
             return self.contrastive_divergence(x, self.cd_steps)
 
@@ -443,11 +446,20 @@ class RBM(object):
             stats = [v_input, v2_input]
         else:
             res = self.negative_statistics(x)
+            print res[0]
             v_sample = res[1]
+            h_samples = res[-2]
             v_input = res[2]
+            h_recon = h_samples[-1]
+            h_data = res[-1]
+            dw = T.dot(x.T, h_data) - T.dot(v_sample.T, h_recon)
+            dv = T.sum(x - v_sample, axis=0)
+            dh = T.sum(h_data - h_recon, axis=0)
+            grads = [dw, dv, dh]
             # Differentiate cost function w.r.t params to get gradients for param updates
-            cost = T.mean(self.free_energy(x)) - T.mean(self.free_energy(v_sample))
-            grads = T.grad(cost, self.params, consider_constant=[v_sample])
+            # cost = T.mean(self.free_energy(x)) - T.mean(self.free_energy(v_sample))
+            # grads = T.grad(cost, self.params, consider_constant=[v_sample])
+
             stats = [v_input]
 
         updates = res[0]
@@ -717,7 +729,6 @@ class RBM(object):
             self.train_parameters.sparsity_cost *= 10
             print 'sparsity cost updated to {}'.format(self.train_parameters.sparsity_cost)
 
-
     def set_default_weights(self):
         self.W = self.get_initial_weight(None, self.v_n, self.h_n, 'W')
         self.v_bias = self.get_initial_bias(None, self.v_n, 'v_bias')
@@ -770,6 +781,7 @@ class RBM(object):
             for batch_index in xrange(mini_batches):
                 cost = train_fn(batch_index)
                 if math.isnan(cost):
+                    continue
                     raise Exception('training cost is infty -- try lowering learning rate')
 
                 mean_cost += [cost]
@@ -796,7 +808,6 @@ class RBM(object):
                 # print self.track_progress.weight_hist['max']
 
         return [mean_cost]
-
 
     def save(self):
         store.store_object(self)
