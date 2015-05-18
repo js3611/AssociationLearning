@@ -112,6 +112,10 @@ class RBM(object):
         self.track_progress = config.progress_logger
         self.config = config
 
+        # Check for legit configuration
+        if train_params.sparsity_constraint and type(self.h_unit) is not RBMUnit:
+            raise Exception('Sparsity Constraint can be used only for Stochastic Binary Hidden Unit')
+
 
     def get_initial_weight(self, w, nrow, ncol, name):
         if w is None:
@@ -139,15 +143,26 @@ class RBM(object):
         else:
             return bias
 
-    def set_initial_bias(self, train_data):
+    def set_initial_visible_bias(self, train_data):
         '''
         Sets initial bias for visible unit i to
         log [pi / (1 - pi)], where pi = probability unit i is on (i.e. mean value of all training data)
+        FOR BINARY STOCHASTIC UNITS ONLY
         :param train_data:
         :return:
         '''
-        v_activation = theano.function([], T.mean(train_data, axis=0))()
-        self.v_bias.set_value(v_activation)
+        if type(self.v_unit) is RBMUnit:
+            print 'Readjusting the initial visible bias (for stochastic binary unit)'
+            p = theano.function([], T.mean(train_data, axis=0))()
+            self.v_bias.set_value(np.log2(p / (1 - p)))
+
+    def set_initial_hidden_bias(self):
+        if self.train_parameters.sparsity_constraint:
+            print 'Setting initial bias for Stochastic Binary Hidden Unit'
+            t = self.train_parameters.sparsity_target
+            bias = np.log(t / (1 - t))
+            self.h_bias.set_value(np.tile(bias, self.h_n).astype(t_float_x))
+
 
     def __str__(self):
         name = 'ass_' if self.associative else ''
@@ -458,10 +473,7 @@ class RBM(object):
         else:
             res = self.negative_statistics(x)
             v_sample = res[1]
-            h_samples = res[-2]
             v_input = res[2]
-            h_recon = h_samples[-1]
-            h_data = res[-1]
             cost = T.mean(self.free_energy(x)) - T.mean(self.free_energy(v_sample))
             grads = T.grad(cost, self.params, consider_constant=[v_sample])
 
@@ -603,7 +615,7 @@ class RBM(object):
                 chain_W, chain_h = T.grad(T.sum(q), [self.W, self.h_bias])
                 new_params[0] -= lr * sparsity_cost * d_sparsity * chain_W
                 new_params[2] -= lr * sparsity_cost * d_sparsity * chain_h
-
+                #
                 # chain_W, chain_h = T.grad(T.sum(q), [self.W, self.h_bias])
                 # new_hbias -= lr * sparsity_cost * d_sparsity * chain_h
                 # new_W -= lr * sparsity_cost * d_sparsity * chain_W
@@ -705,19 +717,13 @@ class RBM(object):
         self.pretrain_mean_activity_h(x, y)
 
     def get_initial_mean_activity(self, x, y=None):
-        print '... setting initial mean activity'
+        print '... Sparsity: setting initial mean activity for hidden units'
         sub_x, sub_y = self.get_sub_data(x, y)
-        self.train_parameters.sparsity_constraint = False
-        self.train_parameters.sparsity_cost = 0.01
-        self.train(x, y)
         _, ph = self.prop_up(sub_x, sub_y)
-        mean_ph = T.mean(ph, axis=0)
-        f = theano.function([], mean_ph)
-        active_probability_h = f()
-        print active_probability_h
+        active_probability_h = theano.function([], T.mean(ph, axis=0))().astype(t_float_x)
+        print active_probability_h.shape
         self.active_probability_h = theano.shared(active_probability_h, 'active_probability_h')
-        self.train_parameters.sparsity_constraint = True
-        self.set_default_weights()
+        print active_probability_h
 
     def pretrain_mean_activity_h(self, x, y=None):
         print '... adjusting mean activity'

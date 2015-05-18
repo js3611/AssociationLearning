@@ -39,7 +39,8 @@ def test_rbm():
 
     data_manager = store.StorageManager('SimpleRBMTest')
     # Load mnist hand digits
-    datasets = loader.load_kanade(pre={'scale': True})#, 'scale2unit':True})
+    datasets = loader.load_kanade(pre={'scale': True})
+    # datasets = loader.load_kanade(pre={'scale2unit': True})
     train_set_x, train_set_y = datasets[0]
     test_set_x, test_set_y = datasets[2]
 
@@ -48,9 +49,9 @@ def test_rbm():
                     momentum_type=CLASSICAL,
                     momentum=0.5,
                     weight_decay=0.0001,
-                    sparsity_constraint=False,
-                    sparsity_target=0.1 ** 9,
-                    sparsity_cost=10 ** 8,
+                    sparsity_constraint=True,
+                    sparsity_target=0.00001,
+                    sparsity_cost=0.1,
                     sparsity_decay=0.9,
                     batch_size=10,
                     epochs=20)
@@ -62,7 +63,7 @@ def test_rbm():
     config.v_n = n_visible
     config.h_n = n_hidden
     config.v_unit = rbm_units.GaussianVisibleUnit
-    config.h_unit = rbm_units.ReLUnit
+    # config.h_unit = rbm_units.ReLUnit
     config.progress_logger = ProgressLogger(img_shape=(25, 25))
     config.train_params = tr
     rbm = RBM(config)
@@ -76,8 +77,11 @@ def test_rbm():
     # rbm.get_initial_mean_activity(train_set_x)
 
     # Pre-training
-    rbm.set_initial_bias(train_set_x)
+    rbm.set_initial_visible_bias(train_set_x)
 
+    if tr.sparsity_constraint:
+        rbm.set_initial_hidden_bias()
+        rbm.get_initial_mean_activity(train_set_x)
 
     for i in xrange(0, 2):
         # Train RBM
