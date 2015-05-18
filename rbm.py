@@ -608,13 +608,13 @@ class RBM(object):
 
             if self.associative:
                 chain_W, chain_h, chain_U = T.grad(T.sum(q), [self.W, self.h_bias, self.U])
-                new_params[0] -= lr * sparsity_cost * d_sparsity * chain_W
+                new_params[0] -= T.cast(lr * sparsity_cost * d_sparsity * chain_W, t_float_x)
                 new_params[2] -= lr * sparsity_cost * d_sparsity * chain_h
                 new_params[3] -= lr * sparsity_cost * d_sparsity * chain_U
             else:
                 chain_W, chain_h = T.grad(T.sum(q), [self.W, self.h_bias])
-                new_params[0] -= lr * sparsity_cost * d_sparsity * chain_W
-                new_params[2] -= lr * sparsity_cost * d_sparsity * chain_h
+                new_params[0] -= T.cast(lr * sparsity_cost * d_sparsity * chain_W, t_float_x)
+                new_params[2] -= T.cast(lr * sparsity_cost * d_sparsity * chain_h, t_float_x)
                 #
                 # chain_W, chain_h = T.grad(T.sum(q), [self.W, self.h_bias])
                 # new_hbias -= lr * sparsity_cost * d_sparsity * chain_h
