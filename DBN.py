@@ -318,13 +318,17 @@ class DBN(object):
             x = x.get_value(borrow=True)
 
         orig = x
-        top_x = self.bottom_up_pass(x, 0, self.n_layers-1)
-
+        if self.n_layers > 1:
+            top_x = self.bottom_up_pass(x, 0, self.n_layers-1)
+        else:
+            top_x = x
         # get top layer rbm
         rbm = self.rbm_layers[-1]
 
         # Set the initial chain
-        chain_state = theano.shared(np.asarray(top_x, dtype=theano.config.floatX),name='reconstruct_root')
+        chain_state = theano.shared(np.asarray(top_x,
+                                               dtype=theano.config.floatX),
+                                    name='reconstruct_root')
 
          # Gibbs sampling
         k_batch = k / plot_every
@@ -340,10 +344,17 @@ class DBN(object):
         for i in xrange(k_batch):
             result = gibbs_sampling()
             [_, _, _, _, reconstruction_chain, _] = result
-            reconstructions.append(self.top_down_pass(reconstruction_chain[-1], self.n_layers-1))
+            if self.n_layers > 1:
+                recon = self.top_down_pass(reconstruction_chain[-1], self.n_layers-1)
+            else:
+                recon = reconstruction_chain[-1]
+            reconstructions.append(recon)
 
         if self.rbm_layers[0].track_progress:
-            self.rbm_layers[0].track_progress.visualise_reconstructions(orig, reconstructions, plot_n)
+            self.rbm_layers[0].track_progress.visualise_reconstructions(orig,
+                                                                        reconstructions,
+                                                                        plot_n,
+                                                                        img_name)
 
         return reconstructions[-1]
 

@@ -55,7 +55,7 @@ class DefaultADBNConfig(object):
                                progress_logger=rest_progress_logger)
         
         # Left DBN
-        left_topology = [625, 100, 100, 100]
+        left_topology = [625, 100]
         tr_list = [tr, tr2, tr2]
         rbm_configs = [first_rbm_config, rbm_config, rbm_config]
         left_dbn_config = DBNConfig(out_dir='left',
@@ -64,7 +64,7 @@ class DefaultADBNConfig(object):
                                     rbm_configs=rbm_configs)
 
         # Right DBN
-        right_topology = [625, 100, 100, 100]
+        right_topology = [625, 100]
         right_dbn_config = DBNConfig(out_dir='right',
                                      topology=right_topology,
                                      training_parameters=tr_list,
@@ -79,6 +79,8 @@ class DefaultADBNConfig(object):
         self.right_dbn = right_dbn_config
         self.top_rbm = top_rbm_config
         self.n_association = 100
+        self.opt = True
+
         
 class AssociativeDBN(object):
 

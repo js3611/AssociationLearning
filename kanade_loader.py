@@ -277,23 +277,23 @@ def load_data_threshold(dataset, t=0.5):
             (new_test_x, test_set_y)]
 
 
-def save_faces(x, shape=None, image_name='digits.png', img_shape=(25,25)):
+def save_faces(x, tile=None, img_name='digits.png', img_shape=(25,25)):
     data_size = x.shape[0]
     nrow, ncol = img_shape
     image_data = np.zeros(((nrow+1), (ncol+1) * data_size - 1), dtype='uint8')
-    if not shape:
-        shape = (1, data_size)
+    if not tile:
+        tile = (1, data_size)
 
     image_data = tile_raster_images(
         X=x,
         img_shape=img_shape,
-        tile_shape=shape,
+        tile_shape=tile,
         tile_spacing=(1, 1)
     )
 
     # construct image
     image = Image.fromarray(image_data)
-    image.save(image_name)
+    image.save(img_name)
 
 
 def save_face(x, name="digit.png", img_shape=(25,25)):

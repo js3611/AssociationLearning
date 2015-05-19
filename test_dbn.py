@@ -254,7 +254,7 @@ def test_generative_dbn():
     sample_n = 100
     sampled = dbn.sample(sample_n, 30)
 
-    k_loader.save_faces(sampled, shape=(sample_n / 10, 10), image_name="sampled.png", img_shape=(shape, shape))
+    k_loader.save_faces(sampled, tile=(sample_n / 10, 10), img_name="sampled.png", img_shape=(shape, shape))
 
 
     # end-snippet-2
