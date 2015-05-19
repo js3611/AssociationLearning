@@ -211,7 +211,7 @@ def get_target_vector(x):
     return xs
 
 
-def sample_image(data, shared=True, mapping=None):
+def sample_image(data, shared=True, mapping=None,  pre=None, set_name='sharp_equi25_25'):
     # convert to numpy first
     if 'Tensor' in str(type(data)):
         seq = data.eval()
@@ -227,7 +227,7 @@ def sample_image(data, shared=True, mapping=None):
     target_emotions = list(set(map(lambda x: mapping[emotion_rev_dict[x]], source_emotions)))
     image_pool = {}
     for d in target_emotions:
-        dataset = load_kanade(shared=False, set_name='sharp_equi25_25', emotions=[d], n=len(seq), pre={'scale':True})
+        dataset = load_kanade(shared=False, set_name=set_name, emotions=[d], n=len(seq), pre=pre)
         image_pool[d] = dataset[0][0]
 
     sample_data = []

@@ -31,7 +31,7 @@ class ProgressLogger(object):
         def visualise_weight(self, rbm, image_name):
             plotting_start = time.clock()  # Measure plotting time
 
-            if rbm.v_n in [784, 625, 1250, 2500]:
+            if rbm.v_n in [784, 625, 1250, 2500, 5000]:
                 tile_shape = (rbm.h_n / 10 + 1, 10)
 
                 image = Image.fromarray(
@@ -70,7 +70,7 @@ class ProgressLogger(object):
 class AssociationProgressLogger(ProgressLogger):
     def visualise_weight(self, rbm, image_name):
             assert rbm.associative
-            if rbm.v_n in [784, 625, 2500]:
+            if rbm.v_n in [784, 625, 2500, 5000]:
                 plotting_start = time.clock()  # Measure plotting time
 
                 w = rbm.W.get_value(borrow=True).T
@@ -107,7 +107,7 @@ def visualise_reconstructions(orig, reconstructions, img_shape, plot_n=None, img
             else:
                 data_size = orig.shape[0]
 
-            if orig.shape[1] in [784, 625, 1250, 2500]:
+            if orig.shape[1] in [784, 625, 1250, 2500, 5000]:
                 nrow, ncol = img_shape
 
                 image_data = np.zeros(

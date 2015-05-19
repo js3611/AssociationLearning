@@ -195,32 +195,35 @@ def test_DBN_classifier(finetune_lr=0.1, pretraining_epochs=100,
 def test_generative_dbn():
 
     manager = store.StorageManager('generative_dbn_test')
+    shape = 25
+    dataset_name = 'sharp_equi{}_{}'.format(shape,shape)
     # Load data
     # train, valid, test = m_loader.load_digits(n=[500, 100, 100], digits=[0, 1, 2, 3, 4, 5])
-    train, valid, test = k_loader.load_kanade(n=10000, pre={'scale2unit':True})
+    train, valid, test = k_loader.load_kanade(n=30000, set_name=dataset_name, pre={'scale':True})
     train_x, train_y = train
 
     # Initialise RBM parameters
-    tr = TrainParam(learning_rate=0.0005,
-                    momentum_type=CLASSICAL,
-                    momentum=0.5,
-                    weight_decay=0.001,
+    tr = TrainParam(learning_rate=0.0001,
+                    momentum_type=NESTEROV,
+                    momentum=0.9,
+                    weight_decay=0.0001,
                     sparsity_constraint=False,
                     sparsity_target=0.01,
                     sparsity_cost=0.01,
                     sparsity_decay=0.1,
-                    epochs=20)
+                    epochs=15)
 
     # Layer 1
     # Layer 2
     # Layer 3
-    topology = [625, 100, 100, 500]
+    topology = [shape ** 2, 500]
     # batch_size = 10
-    first_progress_logger = ProgressLogger(img_shape=(25,25))
+    first_progress_logger = ProgressLogger(img_shape=(shape, shape))
     rest_progress_logger = ProgressLogger()
 
     first_rbm_config = RBMConfig(train_params=tr,
                                  progress_logger=first_progress_logger)
+    first_rbm_config.v_unit = rbm_units.GaussianVisibleUnit
     rbm_config = RBMConfig(train_params=tr,
                                  progress_logger=rest_progress_logger)
     rbm_configs = [first_rbm_config, rbm_config, rbm_config]
@@ -251,7 +254,7 @@ def test_generative_dbn():
     sample_n = 100
     sampled = dbn.sample(sample_n, 30)
 
-    k_loader.save_faces(sampled, shape=(sample_n / 10, 10), image_name="sampled.png")
+    k_loader.save_faces(sampled, shape=(sample_n / 10, 10), image_name="sampled.png", img_shape=(shape, shape))
 
 
     # end-snippet-2

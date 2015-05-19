@@ -149,48 +149,50 @@ def associate_data2data(cache=False):
     # print str(rbm)
 
 
-def associate_data2data_opt(cache=False):
-    print "Testing Associative RBM which tries to learn even-oddness of numbers"
+def KanadeAssociativeOptRBM(cache=False):
+    print "Testing Associative RBM which tries to learn the following mapping: {anger, saddness, disgust} -> {sadness}, {contempt, happy, surprise} -> {happy}"
     # project set-up
     data_manager = store.StorageManager('Kanade/OptAssociativeRBMTest', log=True)
+    shape = 50
+    dataset_name = 'sharp_equi{}_{}'.format(shape,shape)
 
     # Load kanade database
     mapping = {'anger': 'sadness', 'contempt': 'happy', 'disgust': 'sadness', 'fear': 'sadness', 'happy': 'happy',
                'sadness': 'sadness', 'surprise': 'happy'}
-    train, valid, test = loader.load_kanade(n=5000, pre={'scale': True})
+    train, valid, test = loader.load_kanade(pre={'scale': True}, set_name=dataset_name)
     train_x, train_y = train
     test_x, test_y = test
 
     # Sample associated image
-    train01 = loader.sample_image(train_y, mapping=mapping)
-    train01_x, train01_y = train01
+    train_x_mapped, train_y_mapped = loader.sample_image(train_y, mapping=mapping, pre={'scale': True}, set_name=dataset_name)
+    test_x_mapped, test_y_mapped = loader.sample_image(test_y, mapping=mapping, pre={'scale': True}, set_name=dataset_name)
 
     # Concatenate images
-    train_tX = theano.function([], T.concatenate([train_x, train01_x], axis=1))()
+    train_tX = theano.function([], T.concatenate([train_x, train_x_mapped], axis=1))()
     train_X = theano.shared(train_tX)
 
-    # Train classifier to used for associated image layer
-    dataset01 = loader.load_kanade(n=5000, emotions=['sadness', 'happy'], pre={'scale': True})  # Target Image
-    clf = SimpleClassifier(classifier='logistic', train_x=dataset01[0][0], train_y=dataset01[0][1])
+    # Train classifier to be used for classifying reconstruction associated image layer
+    mapped_data = loader.load_kanade(emotions=['sadness', 'happy'], pre={'scale': True}, set_name=dataset_name)  # Target Image
+    clf_orig = SimpleClassifier('logistic', mapped_data[0][0], mapped_data[0][1])
 
     # Initialise RBM
-    tr = rbm_config.TrainParam(learning_rate=0.0001,
+    tr = rbm_config.TrainParam(learning_rate=0.00005,
                                momentum_type=rbm_config.NESTEROV,
                                momentum=0.9,
                                weight_decay=0.0001,
                                sparsity_constraint=False,
                                batch_size=10,
-                               epochs=20)
+                               epochs=5)
 
-    n_visible = 25 * 25 * 2
-    n_hidden = 500
+    n_visible = shape * shape * 2
+    n_hidden = 100
 
     config = rbm_config.RBMConfig()
     config.v_n = n_visible
     config.h_n = n_hidden
     config.v_unit = rbm_units.GaussianVisibleUnit
     # config.h_unit = rbm_units.ReLUnit
-    config.progress_logger = rbm_logger.ProgressLogger(img_shape=(25*2, 25))
+    config.progress_logger = rbm_logger.ProgressLogger(img_shape=(shape*2, shape))
     config.train_params = tr
     rbm = RBM(config)
     print "... initialised RBM"
@@ -199,41 +201,132 @@ def associate_data2data_opt(cache=False):
     loaded = data_manager.retrieve(str(rbm))
     if loaded and cache:
         rbm = loaded
-        print "... loaded precomputed rbm"
-    else:
-        # Train RBM - learn joint distribution
-        # rbm.pretrain_lr(train_x, train_x01)
+
+    # Train RBM - learn joint distribution
+    # rbm.pretrain_lr(train_x, train_x01)
+    for i in xrange(0, 1):
         rbm.train(train_X)
         rbm.save()
 
-    print "... reconstruction of associated images"
-    reconstructed_y = rbm.reconstruct_association_opt(train_x, None,
-                                                      5,
-                                                      0.,
-                                                      plot_n=100,
-                                                      plot_every=1,
-                                                      img_name='kanade_recon.png')
-    print "... reconstructed"
+        print "... reconstruction of associated images"
+        # Get reconstruction with train data to get 'mapped' images to train classifiers on
+        reconstruction = rbm.reconstruct(train_X, 1,
+                                          plot_n=100,
+                                          plot_every=1,
+                                          img_name='kanade_train_double_recon')
+        reconstruct_assoc_part = reconstruction[:, (shape **2):]
 
-    # Classify the reconstructions
-    score_orig = clf.get_score(reconstructed_y, test_y.eval())
-    # clf.retrain(reconstructed_tr, train_y.eval())
-    # score_retrain = clf.get_score(reconstructed_te, test_y.eval())
-    score_retrain = 0
-    out_msg = '{} (orig, retrain):{},{}'.format(rbm, score_orig, score_retrain)
-    print out_msg
+        # Get associated images of test data
+        test_x_associated = rbm.reconstruct_association_opt(test_x, None,
+                                                          5,
+                                                          0.,
+                                                          plot_n=100,
+                                                          plot_every=1,
+                                                          img_name='test_recon')
+        print "... reconstructed"
 
-    # TODO use sklearn to obtain accuracy/precision etc
+        # Classify the reconstructions
 
-    # Create Dataset to feed into logistic regression
-    # Test set: reconstructed y's become the input. Get the corresponding x's and y's
-    # dataset01[2] = (theano.shared(reconstructed_y), test_y)
-    #
-    # # Classify the reconstructions
-    # score = logistic_sgd.sgd_optimization_mnist(0.13, 100, dataset01, 100)
-    #
-    # print 'Score: {}'.format(str(score))
-    # print str(rbm)
+        # 1. Train classifier on original images
+        score_orig = clf_orig.get_score(test_x_associated, test_y_mapped.eval())
+
+        # 2. Train classifier on reconstructed images
+        clf_recon = SimpleClassifier('logistic', reconstruct_assoc_part, train_y_mapped.eval())
+        score_retrain = clf_recon.get_score(test_x_associated, test_y_mapped.eval())
+
+        out_msg = '{} (orig, retrain):{},{}'.format(rbm, score_orig, score_retrain)
+        print out_msg
+
+
+def KanadeAssociativeDBN(cache=False):
+    print "Testing Associative RBM which tries to learn the following mapping: {anger, saddness, disgust} -> {sadness}, {contempt, happy, surprise} -> {happy}"
+    # project set-up
+    data_manager = store.StorageManager('Kanade/AssociativeDBNTest', log=True)
+    shape = 25
+    dataset_name = 'sharp_equi{}_{}'.format(shape,shape)
+
+    # Load kanade database
+    mapping = {'anger': 'sadness', 'contempt': 'happy', 'disgust': 'sadness', 'fear': 'sadness', 'happy': 'happy',
+               'sadness': 'sadness', 'surprise': 'happy'}
+    dataset= loader.load_kanade(n=100, pre={'scale': True}, set_name=dataset_name)
+    mapped_dataset = loader.load_kanade(n=100, emotions=['sadness', 'happy'], pre={'scale': True}, set_name=dataset_name)  # Target Image
+    train, valid, test = dataset
+    train_x, train_y = train
+    test_x, test_y = test
+
+    # Sample associated image
+    train_x_mapped, train_y_mapped = loader.sample_image(train_y, mapping=mapping, pre={'scale': True}, set_name=dataset_name)
+    test_x_mapped, test_y_mapped = loader.sample_image(test_y, mapping=mapping, pre={'scale': True}, set_name=dataset_name)
+
+    # Concatenate images
+    train_tX = theano.function([], T.concatenate([train_x, train_x_mapped], axis=1))()
+    train_X = theano.shared(train_tX)
+
+    # Train classifier to be used for classifying reconstruction associated image layer
+    clf_orig = SimpleClassifier('logistic', mapped_dataset[0][0], mapped_dataset[0][1])
+
+
+    # Initialise RBM
+    tr = rbm_config.TrainParam(learning_rate=0.00005,
+                               momentum_type=rbm_config.NESTEROV,
+                               momentum=0.9,
+                               weight_decay=0.0001,
+                               sparsity_constraint=False,
+                               batch_size=10,
+                               epochs=10)
+
+    n_visible = shape * shape * 2
+    n_hidden = 500
+
+    config = rbm_config.RBMConfig()
+    config.v_n = n_visible
+    config.h_n = n_hidden
+    config.v_unit = rbm_units.GaussianVisibleUnit
+    config.h_unit = rbm_units.ReLUnit
+    config.progress_logger = rbm_logger.ProgressLogger(img_shape=(shape*2, shape))
+    config.train_params = tr
+    rbm = RBM(config)
+    print "... initialised RBM"
+
+    # Load RBM (test)
+    loaded = data_manager.retrieve(str(rbm))
+    if loaded and cache:
+        rbm = loaded
+
+    # Train RBM - learn joint distribution
+    # rbm.pretrain_lr(train_x, train_x01)
+    for i in xrange(0, 1):
+        rbm.train(train_X)
+        rbm.save()
+
+        print "... reconstruction of associated images"
+        # Get reconstruction with train data to get 'mapped' images to train classifiers on
+        reconstruction = rbm.reconstruct(train_X, 1,
+                                          plot_n=100,
+                                          plot_every=1,
+                                          img_name='kanade_train_double_recon')
+        reconstruct_assoc_part = reconstruction[:, (shape **2):]
+
+        # Get associated images of test data
+        test_x_associated = rbm.reconstruct_association_opt(test_x, None,
+                                                          5,
+                                                          0.,
+                                                          plot_n=100,
+                                                          plot_every=1,
+                                                          img_name='test_recon')
+        print "... reconstructed"
+
+        # Classify the reconstructions
+
+        # 1. Train classifier on original images
+        score_orig = clf_orig.get_score(test_x_associated, test_y_mapped.eval())
+
+        # 2. Train classifier on reconstructed images
+        clf_recon = SimpleClassifier('logistic', reconstruct_assoc_part, train_y_mapped.eval())
+        score_retrain = clf_recon.get_score(test_x_associated, test_y_mapped.eval())
+
+        out_msg = '{} (orig, retrain):{},{}'.format(rbm, score_orig, score_retrain)
+        print out_msg
 
 
 def associate_data2dataDBN(cache=False):
@@ -318,4 +411,4 @@ def associate_data2dataDBN(cache=False):
 if __name__ == '__main__':
     # train_kanade()
     # associate_data2data()
-    associate_data2data_opt(False)
+    KanadeAssociativeOptRBM(False)

@@ -354,7 +354,10 @@ class DBN(object):
         # Sample between top two layers
         x = top_layer.sample(n, k)
 
-        # prop down the output to visible unit
-        sampled = self.top_down_pass(x, self.n_layers - 1)
+        # prop down the output to visible unit if it is not RBM
+        if self.n_layers > 1:
+            sampled = self.top_down_pass(x, self.n_layers - 1)
+        else:
+            sampled = x
 
         return sampled
