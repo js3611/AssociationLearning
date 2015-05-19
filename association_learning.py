@@ -3,10 +3,10 @@ import theano.tensor as T
 import numpy as np
 import logistic_sgd
 import rbm as RBM
-import dbn as DBN
+import DBN
 import associative_dbn
 import utils
-import mnist_loader as m_loader
+import m_loader as m_loader
 import datastorage as store
 
 import logging

@@ -1,11 +1,16 @@
 __author__ = 'joschlemper'
 
-import rbm as RBM
+from rbm import RBM
+import rbm_config
+import rbm_logger
+import rbm_units
 import associative_dbn
 import kanade_loader as loader
 import datastorage as store
 import utils
 import theano
+import theano.tensor as T
+from simple_classifiers import SimpleClassifier
 
 
 def train_kanade():
@@ -14,7 +19,7 @@ def train_kanade():
     data_manager = store.StorageManager('Kanade/SimpleRBMTest')
 
     # Load mnist hand digits
-    datasets = loader.load_kanade(n=500, set_name='50_50', emotions=['happy','sadness'], pre={'scale2unit': True})
+    datasets = loader.load_kanade(n=500, set_name='50_50', emotions=['happy', 'sadness'], pre={'scale2unit': True})
     train_x, train_y = datasets
 
     sparsity_constraint = False
@@ -67,11 +72,12 @@ def associate_data2data(cache=False):
     # project set-up
     data_manager = store.StorageManager('Kanade/AssociationRBMTest', log=True)
 
-    resolution='25_25'
+    resolution = '25_25'
     img_shape = (25, 25)
 
     # Load mnist hand digits, class label is already set to binary
-    dataset = loader.load_kanade(n=500, set_name=resolution, emotions=['anger','happy','sadness'], pre={'scale2unit': True})
+    dataset = loader.load_kanade(n=500, set_name=resolution, emotions=['anger', 'happy', 'sadness'],
+                                 pre={'scale2unit': True})
     train_x, train_y = dataset
     # for now id map
     train_x01 = loader.sample_image(train_y)
@@ -90,14 +96,14 @@ def associate_data2data(cache=False):
                         sparsity_decay=0.99,
                         epochs=100)
     # tr = RBM.TrainParam(learning_rate=0.005,
-                        # momentum_type=RBM.CLASSICAL,
-                        # momentum=0.5,
-                        # weight_decay=0.001,
-                        # sparsity_constraint=False,
-                        # sparsity_target=0.01,
-                        # sparsity_cost=0.5,
-                        # sparsity_decay=0.9,
-                        # epochs=20)
+    # momentum_type=RBM.CLASSICAL,
+    # momentum=0.5,
+    # weight_decay=0.001,
+    # sparsity_constraint=False,
+    # sparsity_target=0.01,
+    # sparsity_cost=0.5,
+    # sparsity_decay=0.9,
+    # epochs=20)
 
     # Even odd test
     k = 1
@@ -126,7 +132,8 @@ def associate_data2data(cache=False):
         rbm.save()
 
     print "... reconstruction of associated images"
-    reconstructed_y = rbm.reconstruct_association(train_x, None, 30, 0.0, plot_n=100, plot_every=1, img_name='kanade_recon.png')
+    reconstructed_y = rbm.reconstruct_association(train_x, None, 30, 0.0, plot_n=100, plot_every=1,
+                                                  img_name='kanade_recon.png')
     print "... reconstructed"
 
     # TODO use sklearn to obtain accuracy/precision etc
@@ -140,6 +147,94 @@ def associate_data2data(cache=False):
     #
     # print 'Score: {}'.format(str(score))
     # print str(rbm)
+
+
+def associate_data2data_opt(cache=False):
+    print "Testing Associative RBM which tries to learn even-oddness of numbers"
+    # project set-up
+    data_manager = store.StorageManager('Kanade/OptAssociativeRBMTest', log=True)
+
+    # Load kanade database
+    mapping = {'anger': 'sadness', 'contempt': 'happy', 'disgust': 'sadness', 'fear': 'sadness', 'happy': 'happy',
+               'sadness': 'sadness', 'surprise': 'happy'}
+    train, valid, test = loader.load_kanade(n=5000, pre={'scale': True})
+    train_x, train_y = train
+    test_x, test_y = test
+
+    # Sample associated image
+    train01 = loader.sample_image(train_y, mapping=mapping)
+    train01_x, train01_y = train01
+
+    # Concatenate images
+    train_tX = theano.function([], T.concatenate([train_x, train01_x], axis=1))()
+    train_X = theano.shared(train_tX)
+
+    # Train classifier to used for associated image layer
+    dataset01 = loader.load_kanade(n=5000, emotions=['sadness', 'happy'], pre={'scale': True})  # Target Image
+    clf = SimpleClassifier(classifier='logistic', train_x=dataset01[0][0], train_y=dataset01[0][1])
+
+    # Initialise RBM
+    tr = rbm_config.TrainParam(learning_rate=0.0001,
+                               momentum_type=rbm_config.NESTEROV,
+                               momentum=0.9,
+                               weight_decay=0.0001,
+                               sparsity_constraint=False,
+                               batch_size=10,
+                               epochs=20)
+
+    n_visible = 25 * 25 * 2
+    n_hidden = 500
+
+    config = rbm_config.RBMConfig()
+    config.v_n = n_visible
+    config.h_n = n_hidden
+    config.v_unit = rbm_units.GaussianVisibleUnit
+    # config.h_unit = rbm_units.ReLUnit
+    config.progress_logger = rbm_logger.ProgressLogger(img_shape=(25*2, 25))
+    config.train_params = tr
+    rbm = RBM(config)
+    print "... initialised RBM"
+
+    # Load RBM (test)
+    loaded = data_manager.retrieve(str(rbm))
+    if loaded and cache:
+        rbm = loaded
+        print "... loaded precomputed rbm"
+    else:
+        # Train RBM - learn joint distribution
+        # rbm.pretrain_lr(train_x, train_x01)
+        rbm.train(train_X)
+        rbm.save()
+
+    print "... reconstruction of associated images"
+    reconstructed_y = rbm.reconstruct_association_opt(train_x, None,
+                                                      5,
+                                                      0.,
+                                                      plot_n=100,
+                                                      plot_every=1,
+                                                      img_name='kanade_recon.png')
+    print "... reconstructed"
+
+    # Classify the reconstructions
+    score_orig = clf.get_score(reconstructed_y, test_y.eval())
+    # clf.retrain(reconstructed_tr, train_y.eval())
+    # score_retrain = clf.get_score(reconstructed_te, test_y.eval())
+    score_retrain = 0
+    out_msg = '{} (orig, retrain):{},{}'.format(rbm, score_orig, score_retrain)
+    print out_msg
+
+    # TODO use sklearn to obtain accuracy/precision etc
+
+    # Create Dataset to feed into logistic regression
+    # Test set: reconstructed y's become the input. Get the corresponding x's and y's
+    # dataset01[2] = (theano.shared(reconstructed_y), test_y)
+    #
+    # # Classify the reconstructions
+    # score = logistic_sgd.sgd_optimization_mnist(0.13, 100, dataset01, 100)
+    #
+    # print 'Score: {}'.format(str(score))
+    # print str(rbm)
+
 
 def associate_data2dataDBN(cache=False):
     print "Testing Associative DBN which tries to learn even-oddness of numbers"
@@ -157,11 +252,11 @@ def associate_data2dataDBN(cache=False):
     # Initialise RBM parameters
     # fixed base train param
     base_tr = RBM.TrainParam(learning_rate=0.001,
-                    momentum_type=RBM.CLASSICAL,
-                    momentum=0.5,
-                    weight_decay=0.0005,
-                    sparsity_constraint=False,
-                    epochs=20)
+                             momentum_type=RBM.CLASSICAL,
+                             momentum=0.5,
+                             weight_decay=0.0005,
+                             sparsity_constraint=False,
+                             epochs=20)
 
     # top layer parameters
     tr = RBM.TrainParam(learning_rate=0.001,
@@ -204,20 +299,23 @@ def associate_data2dataDBN(cache=False):
 
             # Train
             for trainN in xrange(0, 5):
-                ass_dbn.train(train_x, train_x01, cache=cache)#, optimise=True)
+                ass_dbn.train(train_x, train_x01, cache=cache)  # , optimise=True)
 
                 for n_recall in [1, 3, 10]:
-                    for n_think in [0, 1, 3, 5, 10]: #1, 3, 5, 7, 10]:
+                    for n_think in [0, 1, 3, 5, 10]:  # 1, 3, 5, 7, 10]:
                         # Reconstruct
                         sampled = ass_dbn.recall(train_x, n_recall, n_think)
 
                         # Sample from top layer to generate data
                         sample_n = 100
-                        utils.save_digits(sampled, image_name='{}_reconstruced_{}_{}_{}.png'.format(count, n_ass, n_recall, n_think), shape=(sample_n / 10, 10),img_shape=(25, 25))
+                        utils.save_digits(sampled,
+                                          image_name='{}_reconstruced_{}_{}_{}.png'.format(count, n_ass, n_recall,
+                                                                                           n_think),
+                                          shape=(sample_n / 10, 10), img_shape=(25, 25))
                         count += 1
 
 
 if __name__ == '__main__':
     # train_kanade()
     # associate_data2data()
-    associate_data2dataDBN()
+    associate_data2data_opt(False)

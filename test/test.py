@@ -467,6 +467,18 @@ class NumpyTest(unittest.TestCase):
         # print a[idx]
 
 
+class TheanoTest(unittest.TestCase):
+
+    def test_concat_mat(self):
+
+        x = theano.shared(np.random.randint(0, 5, (5, 10)))
+        y = theano.shared(np.random.randint(5, 10, (5, 10)))
+        z1 = T.concatenate([x, y], axis=0)
+        z2 = T.concatenate([x, y], axis=1)
+        za1, za2 = theano.function([],[z1, z2])()
+        print za1
+        print za2
+
 def np_prop_up(v, w, b, v2=None, u=None):
     h_sum = np.dot(v, w) + b
     if np.any(v2) and np.any(u):

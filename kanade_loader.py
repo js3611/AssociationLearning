@@ -227,7 +227,7 @@ def sample_image(data, shared=True, mapping=None):
     target_emotions = list(set(map(lambda x: mapping[emotion_rev_dict[x]], source_emotions)))
     image_pool = {}
     for d in target_emotions:
-        dataset = load_kanade(shared=False, set_name='sharp_equi25_25', emotions=[d], n=len(seq), pre={'scale2unit':True})
+        dataset = load_kanade(shared=False, set_name='sharp_equi25_25', emotions=[d], n=len(seq), pre={'scale':True})
         image_pool[d] = dataset[0][0]
 
     sample_data = []

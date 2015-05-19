@@ -262,6 +262,15 @@ class RBM(object):
                 v2_total_input, v2_p_activation, v2_sample,
                 h_total_input, h_p_activation, h_sample]
 
+    # For getting y's
+    def gibbs_hvh_fixed2(self, h, x):
+        v_total_input, v_p_activation, v_sample = self.sample_v_given_h(h)
+        v_sample = T.concatenate([x, v_sample[:, (self.v_n/2):]], axis=1)
+        h_total_input, h_p_activation, h_sample = self.sample_h_given_v(v_sample)
+        return [v_total_input, v_p_activation, v_sample,
+                h_total_input, h_p_activation, h_sample]
+
+
     def gibbs_vhv_assoc(self, v):
         h_total_input, h_p_activation, h_sample = self.sample_h_given_v(v)
         v_total_input, v_p_activation, v_sample = self.sample_v_given_h(h_sample)
@@ -540,6 +549,10 @@ class RBM(object):
         # For each parameters, compute: new_dx = m * old_dx - lr * grad_x
         new_ds = map(lambda (d, g): m * d - lr * g, zip(old_ds, gradients))
 
+        # TODO
+        # if not param.weight_decay_for_bias:
+        # only apply weight decay to W, U
+
         if param.momentum_type is NESTEROV:
 
             def nesterov_update(p, grad_p, old_dp):
@@ -702,7 +715,8 @@ class RBM(object):
 
         return train_fn
 
-    def get_sub_data(self, train_data, train_label, factor=10):
+    @staticmethod
+    def get_sub_data(train_data, train_label, factor=10):
         l = train_data.get_value(borrow=True).shape[0]
         nl = max(1, int(l / factor))
         sub_data = theano.shared(train_data.get_value(borrow=True)[0: nl])
@@ -910,101 +924,64 @@ class RBM(object):
 
         return reconstruction_chain[-1]
 
+    def reconstruct_association_opt(self, x, y=None, k=1, bit_p=0, plot_n=None, plot_every=1, img_name='association_reconstruction.png'):
+        '''
+        As an optimisation, we can concatenate two images and feed it as a single image to train the network.
+        In this way theano performs matrix optimisation so its much faster.
+
+        If such optimisation was done, this reconstruction method should be used.
+
+        :param x:
+        :param y:
+        :param k:
+        :param bit_p:
+        :param plot_n:
+        :param plot_every:
+        :param img_name:
+        :return:
+        '''
+
+        # Initialise parameters
+        if not utils.isSharedType(x):
+            x = theano.shared(x, allow_downcast=True)
+        data_size = x.get_value().shape[0]
+        if not y:
+            y = self.rand.binomial(size=(data_size, self.v_n / 2), n=1, p=bit_p, dtype=t_float_x)
+
+        # Concatenate x and y
+        z = T.concatenate([x, y], axis=1)
+
+        # Gibbs sampling
+        _, _, h_sample = self.sample_h_given_v(z)
+        chain_start = theano.shared(theano.function([], h_sample)(), name='Z')
+
+        print chain_start.get_value().shape
+
+        k_batch = k / plot_every
+
+        (res, updates) = theano.scan(
+            self.gibbs_hvh_fixed2,
+            outputs_info=[None, None, None, None, None, chain_start],
+            non_sequences=[x], n_steps=plot_every, name="Gibbs_sampling_association"
+        )
+        updates.update({chain_start: res[-1][-1]})
+        gibbs_sampling_assoc = theano.function([], res, updates=updates)
+
+        # Runner
+        reconstructions = []
+        for i in xrange(k_batch):
+            result = gibbs_sampling_assoc()
+            [_, reconstruction_chain, _, _, _, _] = result
+            reconstructions.append(reconstruction_chain[-1][:, (self.v_n/2):])
+
+        if self.track_progress:
+            self.track_progress.visualise_reconstructions(x.get_value(borrow=True), reconstructions, plot_n, img_name=img_name, opt=True)
+
+        return reconstruction_chain[-1][:, (self.v_n/2):]
+
 
 class AssociativeRBM(RBM):
     pass
-
-
-class GaussianRBM(RBM):
-    '''
-    Implements an RBM with Gausian Visible Units with noisy rectifier hidden unit
-    Must set mean = 0 and variance = 1 for dataset you use
-    '''
-
-    def __init__(self,v_n=10,
-                 v_n2=10,
-                 h_n=10,
-                 associative=False,
-                 W=None,
-                 U=None,
-                 h_bias=None,
-                 v_bias=None,
-                 v_bias2=None,
-                 visible_unit = GaussianVisibleUnit,
-                 hidden_unit = NReLUnit,
-                 h_activation_fn=log_sig,
-                 v_activation_fn=log_sig,
-                 v_activation_fn2=log_sig,
-                 cd_type=PERSISTENT,
-                 cd_steps=1,
-                 train_parameters=None,
-                 progress_logger=None):
-
-        RBM.__init__(self, v_n, v_n2, h_n, associative, W, U, h_bias, v_bias, v_bias2,
-                     h_activation_fn, v_activation_fn, v_activation_fn2,
-                     cd_type, cd_steps, train_parameters, progress_logger)
-
-        self.variance = 1
-        self.visible_unit = GaussianVisibleUnit()
-        self.visible_unit = visible_unit()
-        self.hidden_unit = hidden_unit(self.h_n)
-
-    def __str__(self):
-        return "gaussian_" + RBM.__str__(self)
-
-    def calc_free_energy(self, v, v2=None):
-        w = self.W
-        v_bias = self.v_bias
-        h_bias = self.h_bias
-
-        t0 = self.visible_unit.energy(v, v_bias)
-        t1 = T.dot(v, w) + h_bias
-
-        if v2:
-            u = self.U
-            v_bias2 = self.v_bias2
-            # t0 += -T.dot(v2, v_bias2) # For classRBM
-            t0 += self.visible_unit.energy(v2, v_bias2)  # For GaussianUnits
-            t1 += T.dot(v2, u)
-
-        t2 = - T.sum(T.log(1 + T.exp(t1)))
-
-        return t0 + t2
-
-    def prop_up(self, v, v2=None):
-        """Propagates v to the hidden layer. """
-        h_in = T.dot(v, self.W) + self.h_bias
-        if np.any(v2):
-            h_in += T.dot(v2, self.U)  # Associative Layer
-
-        return [h_in, (self.hidden_unit.scale(h_in))]
-
-    def __prop_down(self, h, connectivity, bias, v_unit):
-        """Propagates h to the visible layer. """
-        v_in = T.dot(h, connectivity.T) + bias
-        return [v_in, (v_unit.scale(v_in))]
-
-    def prop_down(self, h):
-        return self.__prop_down(h, self.W, self.v_bias, self.visible_unit)
-
-    def prop_down_assoc(self, h):
-        return self.__prop_down(h, self.U, self.v_bias2, self.visible_unit2)
-
-    def sample_h_given_v(self, v, v2=None):
-        h_total_input, h_p_activation = self.prop_up(v, v2)
-        h_sample = self.hidden_unit.activate(h_p_activation)
-        return [h_total_input, h_p_activation, h_sample]
-
-    def __sample_v_given_h(self, h, prop_down_fn):
-        v_total_input, v_p_activation = prop_down_fn(h)
-        v_sample = self.visible_unit.activate(v_p_activation)
-        return [v_total_input, v_p_activation, v_sample]
-
-    def sample_v_given_h(self, h_sample):
-        return self.__sample_v_given_h(h_sample, self.prop_down)
-
-    def sample_v_given_h_assoc(self, h_sample):
-        return self.__sample_v_given_h(h_sample, self.prop_down) + self.__sample_v_given_h(h_sample, self.prop_down_assoc)
 
 
 def test_rbm():
