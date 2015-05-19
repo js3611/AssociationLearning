@@ -25,14 +25,18 @@ class TrainParam(object):
                  sparsity_cost=0.01,
                  sparsity_decay=0.1,
                  ):
-        self.adj_lr = adj_lr
         self.epochs = epochs
         self.batch_size = batch_size
         # Weight Update Parameters
+        self.adj_lr = adj_lr  # Scaler for adjusting learning rate
         self.learning_rate = learning_rate
+
         self.momentum_type = momentum_type
         self.momentum = momentum
+
         self.weight_decay = weight_decay
+        self.weight_decay_for_bias = True  # if false, weight decay not applied to biases
+
         # Sparsity Constraint Parameters
         self.sparsity_constraint = sparsity_constraint
         self.sparsity_target = sparsity_target
