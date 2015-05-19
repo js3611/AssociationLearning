@@ -291,7 +291,7 @@ def KanadeAssociativeDBN(cache=False):
                                       weight_decay=0.0001,
                                       epochs=20,
                                       batch_size=10)
-    h_n = 250
+    h_n = 100
     bottom_logger = rbm_logger.ProgressLogger(img_shape=(shape, shape))
     bottom_rbm = rbm_config.RBMConfig(v_unit=rbm_units.GaussianVisibleUnit,
                                       v_n=shape**2,
@@ -303,8 +303,9 @@ def KanadeAssociativeDBN(cache=False):
     config.right_dbn.rbm_configs[0] = bottom_rbm
     config.left_dbn.topology = [shape ** 2, h_n]
     config.right_dbn.topology = [shape ** 2, h_n]
-    config.top_rbm.train_params.epochs = 50
-    config.n_association = 100
+    config.top_rbm.train_params.epochs = 10
+    config.top_rbm.train_params.batch_size = 10
+    config.n_association = 50
     adbn = associative_dbn.AssociativeDBN(config=config, data_manager=data_manager)
 
     # Plot sample
@@ -317,11 +318,15 @@ def KanadeAssociativeDBN(cache=False):
     # Test DBN Performance
     for i in xrange(0, 1):
         # Train DBN - learn joint distribution
-        adbn.train(train_x, train_x_ass, cache=False)
+        cache_left = [True]
+        cache_right = [True]
+        cache_top = [False]
+        cache = [cache_left, cache_right, cache_top]
+        adbn.train(train_x, train_x_ass, cache=cache)
         print "... trained associative DBN"
 
         # Reconstruct images
-        test_x_recon = adbn.recall(test_x, associate_steps=1, recall_steps=2)
+        test_x_recon = adbn.recall(test_x, associate_steps=1, recall_steps=0)
         print "... reconstructed images"
 
 

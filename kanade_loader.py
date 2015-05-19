@@ -35,10 +35,6 @@ def load_kanade(shared=True, set_name='sharp_equi25_25', emotions=None, pre=None
 
     data = __load(set_name)
 
-    # Shuffle data
-    idx = np.random.choice(range(0, len(data[1])), size=len(data[1]), replace=False)
-    data = (data[0][idx], data[1][idx])
-
     # pre-processing
     if emotions:  #filter
         x, y = data
@@ -52,22 +48,22 @@ def load_kanade(shared=True, set_name='sharp_equi25_25', emotions=None, pre=None
         data = (data[0][idx], data[1][idx])
 
     # Ensure each class is equi-probable
-    xs, ys = np.array([]), np.array([])
+    xs = []
+    ys = []
     x, y = data
     labels = np.unique(y)
-    print labels
-    per_n = len(labels)
-    print per_n
+    per_n = len(y) / len(labels)
     for lab in labels:
         # get subset
-        filtered = filter(lambda (x1, y1): y1 in filter_keys, enumerate(y))
+        filtered = filter(lambda (x1, y1): y1 == lab, enumerate(y))
         idx = [s[0] for s in filtered]
-        sub_idx = np.random.randint(0, len(idx), per_n)
-        print np.unique(y[sub_idx]), lab
-        np.concatenate([xs, x[sub_idx]])
-        np.concatenate([ys, y[sub_idx]])
-    data = (xs, ys)
-        
+        # Shuffle data
+        sub_idx = np.random.choice(idx, size=per_n)
+        xs += x[sub_idx].tolist()
+        ys += y[sub_idx].tolist()
+
+    data = (np.array(xs, dtype=theano.config.floatX),np.array(ys, dtype=theano.config.floatX))
+
     if pre:
         if 'pca' in pre:
             pass
@@ -88,6 +84,10 @@ def load_kanade(shared=True, set_name='sharp_equi25_25', emotions=None, pre=None
         if 'label_vector' in pre:
             data = vectorise_label(data)
 
+    # Shuffle data
+    idx = np.random.choice(range(0, len(data[1])), size=len(data[1]), replace=False)
+    data = (data[0][idx], data[1][idx])
+
     # split to train and test
     rand = 123
     tr_te = cross_validation.train_test_split(data[0], data[1], test_size=(2.0/7), random_state=rand)
@@ -105,7 +105,7 @@ def load_kanade(shared=True, set_name='sharp_equi25_25', emotions=None, pre=None
 
 def __load(set_name='25_25'):
     ''' Loads the mnist data set '''
-    print BASE_DIR
+    # print BASE_DIR
 
     dataset_name = 'kanade' + set_name + '.save'
 
@@ -115,7 +115,7 @@ def __load(set_name='25_25'):
     for location in possible_locations:
         data_location = os.path.join(BASE_DIR, location, dataset_name)
         if os.path.isfile(data_location):
-            print '... dataset found at {}'.format(data_location)
+            # print '... dataset found at {}'.format(data_location)
             dataset = data_location
             break
 

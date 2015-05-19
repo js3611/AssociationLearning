@@ -101,13 +101,21 @@ class AssociativeDBN(object):
         self.association_layer = RBM(config=config.top_rbm)
 
     def train(self, x1, x2, cache=False, optimise=False):
+        cache_left = False
+        cache_right = False
+        cache_top = False
+        if type(cache) is list:
+            cache_left = cache[0]
+            cache_right = cache[1]
+            cache_top = cache[1]
+
         # Train left & right DBN's
-        self.dbn_left.pretrain(x1, cache=cache, optimise=optimise)
+        self.dbn_left.pretrain(x1, cache=cache_left, optimise=optimise)
 
         if self.config.reuse_dbn:
             self.dbn_right = self.dbn_left
         else:
-            self.dbn_right.pretrain(x2, cache=cache, optimise=optimise)
+            self.dbn_right.pretrain(x2, cache=cache_right, optimise=optimise)
 
         # Pass the parameter to top layer
         x1_np = self.dbn_left.bottom_up_pass(x1.get_value(True))
@@ -119,6 +127,7 @@ class AssociativeDBN(object):
         # Check Cache
         # out_dir = 'association_layer/{}_{}/'.format(len(self.dbn_left.rbm_layers),
         #                                             len(self.dbn_right.rbm_layers))
+        # TODO check whats wrong here
         # load = self.data_manager.retrieve(str(self.association_layer), out_dir=out_dir)
         # if load and cache:
         #     self.association_layer = load
@@ -149,7 +158,9 @@ class AssociativeDBN(object):
         assoc_in = theano.shared(top_out, 'top_in', allow_downcast=True)
 
         # Sample from the association layer
-        associate_x = top.reconstruct_association(assoc_in, k=associate_steps)
+        # associate_x = top.reconstruct_association(assoc_in, k=associate_steps)
+        associate_x = top.mean_field_inference(assoc_in, sample=True)
+        # associate_x = top.reconstruct_association(assoc_in, k=associate_steps)
 
         if recall_steps > 0:
             top_in = theano.shared(associate_x, 'associate_x', allow_downcast=True)

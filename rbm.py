@@ -979,6 +979,45 @@ class RBM(object):
 
         return reconstruction_chain[-1][:, (self.v_n/2):]
 
+    def mean_field_inference(self, x, tolerance=0.01, sample=False, bit_p=0, plot_n=None, plot_every=1, img_name='mean_field'):
+        # Initialise parameters
+        if not utils.isSharedType(x):
+            x = theano.shared(x, allow_downcast=True)
+        data_size = x.get_value().shape[0]
+
+        k = 100
+        plot_every=10
+        mu = theano.shared(np.zeros((data_size, self.v_n2), dtype=t_float_x), name='mu')
+        tau = theano.shared(np.zeros((data_size, self.h_n), dtype=t_float_x), name='tau')
+
+        # Mean field inference -- basically gibbs sampling with no actual sampling
+        def mean_field(m, t, x):
+            _, mu2 = self.prop_down_assoc(t)
+            _, tau2 = self.prop_up(x, mu2)
+            return mu2, tau2 #, {ctr: ctr+1}, theano.scan_module.until(ctr < 50)
+
+        k_batch = k / plot_every
+        (res, updates) = theano.scan(
+            mean_field,
+            outputs_info=[mu, tau],
+            non_sequences=[x], n_steps=plot_every, name="mean_field_inference"
+        )
+        updates.update({tau: res[-1][-1]})
+        mfi = theano.function([], res, updates=updates)
+
+        # Runner
+        reconstructions = []
+        for i in xrange(k_batch):
+            m, t = mfi()
+            reconstructions.append(m[-1])
+
+        if self.track_progress:
+            self.track_progress.visualise_reconstructions(x.get_value(borrow=True), reconstructions, plot_n, img_name=img_name)
+
+        if sample:
+            return self.np_rand.binomial(1, m[-1]).astype(t_float_x)
+        else:
+            return m[-1]
 
 class AssociativeRBM(RBM):
     pass

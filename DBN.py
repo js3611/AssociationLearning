@@ -155,6 +155,9 @@ class DBN(object):
         return pretrain_fns
 
     def pretrain(self, train_data, cache=False, optimise=False):
+        if type(cache) is not list:
+            cache = np.repeat(cache, self.n_layers)
+
         layer_input = train_data
         for i in xrange(len(self.rbm_layers)):
             rbm = self.rbm_layers[i]
@@ -165,7 +168,7 @@ class DBN(object):
             # Check Cache
             cost = 0
             loaded = store.retrieve_object(str(rbm))
-            if cache and loaded:
+            if cache[0] and loaded:
                 # TODO override neural network's weights too
                 rbm = loaded
                 # Override the reference
@@ -175,8 +178,7 @@ class DBN(object):
                 if optimise:
                     rbm.pretrain_lr(layer_input)
                 cost += np.mean(rbm.train(layer_input))
-                # self.data_manager.persist(rbm)
-                # store.store_object(rbm)
+                self.data_manager.persist(rbm)
 
             self.data_manager.move_to_project_root()
             # os.chdir('../..')
