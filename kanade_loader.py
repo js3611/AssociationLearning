@@ -11,7 +11,7 @@ from sklearn import cross_validation
 import numpy as np
 import theano
 import theano.tensor as T
-
+import scipy.stats as sps
 try:
     import PIL.Image as Image
 except ImportError:
@@ -43,7 +43,7 @@ def load_kanade(shared=True, set_name='sharp_equi25_25', emotions=None, pre=None
     if emotions:  #filter
         x, y = data
         filter_keys = map(lambda x: emotion_dict[x], emotions)
-        filtered = filter(lambda (x, y): y in filter_keys, enumerate(y))
+        filtered = filter(lambda (x1, y1): y1 in filter_keys, enumerate(y))
         idx = [s[0] for s in filtered]
         data = (x[idx], y[idx])
 
@@ -51,6 +51,23 @@ def load_kanade(shared=True, set_name='sharp_equi25_25', emotions=None, pre=None
         idx = np.random.randint(0, len(data[1]), size=n)
         data = (data[0][idx], data[1][idx])
 
+    # Ensure each class is equi-probable
+    xs, ys = np.array([]), np.array([])
+    x, y = data
+    labels = np.unique(y)
+    print labels
+    per_n = len(labels)
+    print per_n
+    for lab in labels:
+        # get subset
+        filtered = filter(lambda (x1, y1): y1 in filter_keys, enumerate(y))
+        idx = [s[0] for s in filtered]
+        sub_idx = np.random.randint(0, len(idx), per_n)
+        print np.unique(y[sub_idx]), lab
+        np.concatenate([xs, x[sub_idx]])
+        np.concatenate([ys, y[sub_idx]])
+    data = (xs, ys)
+        
     if pre:
         if 'pca' in pre:
             pass

@@ -24,7 +24,7 @@ try:
 except ImportError:
     import Image
 
-from utils import save_digits
+from utils import save_images
 
 theano.config.optimizer = 'None'
 theano.config.exception_verbosity = 'high'
@@ -34,10 +34,10 @@ class DefaultADBNConfig(object):
     def __init__(self):
         # Base RBM Parameters
         # Layer 1
-        tr = TrainParam(learning_rate=0.001,
+        tr = TrainParam(learning_rate=0.01,
                         momentum_type=NESTEROV,
                         momentum=0.5,
-                        weight_decay=0.001,
+                        weight_decay=0.0001,
                         sparsity_constraint=False,
                         sparsity_target=0.01,
                         sparsity_cost=0.01,
@@ -127,7 +127,7 @@ class AssociativeDBN(object):
         #     self.data_manager.persist(self.association_layer, out_dir=out_dir)
 
     # TODO clean up input and output of each function (i.e. they should all return theano or optional flag)
-    def recall(self, x, associate_steps=10, recall_steps=5, img_name='default'):
+    def recall(self, x, associate_steps=10, recall_steps=5, img_name='dbn'):
         ''' left dbn bottom-up -> associate -> right dbn top-down
         :param x: data
         :param associate_steps: top level gibbs sampling steps
@@ -157,7 +157,9 @@ class AssociativeDBN(object):
             right_top_rbm = right.rbm_layers[-1]
             ass, ass_p, ass_s = right_top_rbm.sample_v_given_h(top_in)
             associate_x_in = theano.function([], ass_s)()
-            associate_x_reconstruct = right_top_rbm.reconstruct(associate_x_in, k=recall_steps)
+            associate_x_reconstruct = right_top_rbm.reconstruct(associate_x_in,
+                                                                k=recall_steps,
+                                                                img_name='recall')
 
             # pass down to visible units, take the penultimate layer because we sampled at the top layer
             if len(right.rbm_layers) > 1:
@@ -171,8 +173,8 @@ class AssociativeDBN(object):
         n = res.shape[0]
 
         img_shape = right.rbm_layers[0].track_progress.img_shape
-        save_digits(x, img_name+'original.png', shape=(n / 10, 10), img_shape=img_shape)
-        save_digits(res, img_name+'dbn_reconstruction.png', shape=(n / 10, 10), img_shape=img_shape)
+        save_images(x, img_name+'_orig.png', shape=(n / 10, 10), img_shape=img_shape)
+        save_images(res, img_name+'_recon.png', shape=(n / 10, 10), img_shape=img_shape)
 
         self.data_manager.move_to_project_root()
 
@@ -204,8 +206,8 @@ def test_associative_dbn(i=0):
     associative_dbn = AssociativeDBN(config=config, data_manager=data_manager)
 
     # Plot sample
-    save_digits(train_x.get_value(borrow=True)[1:100], 'n_orig.png',(10, 10))
-    save_digits(train_x01.get_value(borrow=True)[1:100], 'n_ass.png',(10, 10))
+    save_images(train_x.get_value(borrow=True)[1:100], 'n_orig.png',(10, 10))
+    save_images(train_x01.get_value(borrow=True)[1:100], 'n_ass.png',(10, 10))
 
     # Train RBM - learn joint distribution
     associative_dbn.train(train_x, train_x01, cache=True)

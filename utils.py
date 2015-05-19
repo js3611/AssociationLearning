@@ -20,7 +20,7 @@ def scale_to_unit_interval(ndar, eps=1e-8):
     ndar *= 1.0 / (ndar.max() + eps)
     return ndar
 
-def save_digits(x, image_name='digits.png', shape=None, img_shape=(28, 28)):
+def save_images(x, image_name='digits.png', shape=None, img_shape=(28, 28)):
     data_size = x.shape[0]
     image_data = numpy.zeros((img_shape[0]+1, (img_shape[1]+1) * data_size - 1), dtype='uint8')
     if not shape:

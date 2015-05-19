@@ -264,7 +264,7 @@ def find_hyper_parameters():
                                                     sample_n = 100
                                                     sampled = dbn.sample(sample_n, 2)
 
-                                                    utils.save_digits(sampled, shape=(sample_n / 10, 10), image_name=str(counter) + '_' + str(dbn) + ".png")
+                                                    utils.save_images(sampled, shape=(sample_n / 10, 10), image_name=str(counter) + '_' + str(dbn) + ".png")
 
 
                                                     dataset[2] = (theano.shared(sampled), dataset[2][1])

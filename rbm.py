@@ -857,7 +857,7 @@ class RBM(object):
                                   p=activation_probability, dtype=t_float_x).eval()
         return self.reconstruct(data, k)
 
-    def reconstruct(self, data, k=1, plot_n=None, plot_every=1, img_name='reconstruction.png'):
+    def reconstruct(self, data, k=1, plot_n=None, plot_every=1, img_name='reconstruction'):
         '''
         Reconstruct image given cd-k
         - data: theano

@@ -25,7 +25,7 @@ except ImportError:
     import Image
 
 from utils import tile_raster_images
-from utils import save_digits
+from utils import save_images
 
 theano.config.optimizer = 'None'
 

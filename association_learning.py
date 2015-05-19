@@ -218,7 +218,7 @@ def associate_data2dataDBN(cache=False):
 
                     # Sample from top layer to generate data
                     sample_n = 100
-                    utils.save_digits(sampled, image_name='reconstruced_{}_{}_{}.png'.format(n_ass, n_recall, n_think), shape=(sample_n / 10, 10))
+                    utils.save_images(sampled, image_name='reconstruced_{}_{}_{}.png'.format(n_ass, n_recall, n_think), shape=(sample_n / 10, 10))
 
                     dataset01[2] = (theano.shared(sampled), test_y)
 

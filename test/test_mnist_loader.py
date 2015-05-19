@@ -44,9 +44,9 @@ class TestMNistLoader(unittest.TestCase):
         self.assertTrue((np.unique(valid_y) == np.array(chosen_digits)).all())
         self.assertTrue((np.unique(test_y) == np.array(chosen_digits)).all())
 
-        utils.save_digits(train_x[0:100], 'test_image/zero_and_one_train.png')
-        utils.save_digits(valid_x[0:100], 'test_image/zero_and_one_valid.png')
-        utils.save_digits(test_x[0:100], 'test_image/zero_and_one_test.png')
+        utils.save_images(train_x[0:100], 'test_image/zero_and_one_train.png')
+        utils.save_images(valid_x[0:100], 'test_image/zero_and_one_valid.png')
+        utils.save_images(test_x[0:100], 'test_image/zero_and_one_test.png')
 
     def test_load_fixed_number(self):
         # [train_n, valid_n, test_n]
@@ -107,7 +107,7 @@ class TestMNistLoader(unittest.TestCase):
 
         train_x01 = m_loader.sample_image(train_y, shared=False)
         print train_y.eval()
-        utils.save_digits(train_x01, 'test_image/sampled_img.png')
+        utils.save_images(train_x01, 'test_image/sampled_img.png')
 
     def test_binary_label(self):
         train, valid, test = m_loader.load_digits(digits=[2, 3], n=[10, 0, 0], pre={'binary_label':True})

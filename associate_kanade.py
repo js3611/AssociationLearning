@@ -248,7 +248,7 @@ def KanadeAssociativeDBN(cache=False):
     data_manager = store.StorageManager('Kanade/AssociativeDBNTest', log=True)
     shape = 25
     dataset_name = 'sharp_equi{}_{}'.format(shape, shape)
-    preprocessing = {'scale2unit': True}
+    preprocessing = {'scale': True}
 
     # Load kanade database
     mapping = {'anger': 'sadness',
@@ -259,11 +259,11 @@ def KanadeAssociativeDBN(cache=False):
                'sadness': 'sadness',
                'surprise': 'happy'}
 
-    dataset = loader.load_kanade(n=100,
+    dataset = loader.load_kanade(#n=1000,
                                  pre=preprocessing,
                                  set_name=dataset_name)
 
-    mapped_dataset = loader.load_kanade(n=100,
+    mapped_dataset = loader.load_kanade(#n=1000,
                                         emotions=['sadness', 'happy'],
                                         pre=preprocessing,
                                         set_name=dataset_name)  # Target Image
@@ -283,11 +283,28 @@ def KanadeAssociativeDBN(cache=False):
 
     # initialise AssociativeDBN
     config = associative_dbn.DefaultADBNConfig()
-    config.left_dbn.rbm_configs[0].progress_logger = rbm_logger.ProgressLogger(img_shape=(shape, shape))
-    config.right_dbn.rbm_configs[0].progress_logger = rbm_logger.ProgressLogger(img_shape=(shape, shape))
-    config.left_dbn.topology = [shape ** 2, 100]
-    config.right_dbn.topology = [shape ** 2, 100]
-    config.n_association = 300
+
+    # Gaussian Input Layer
+    bottom_tr = rbm_config.TrainParam(learning_rate=0.0001,
+                                      momentum_type=rbm_config.NESTEROV,
+                                      momentum=0.9,
+                                      weight_decay=0.0001,
+                                      epochs=20,
+                                      batch_size=10)
+    h_n = 250
+    bottom_logger = rbm_logger.ProgressLogger(img_shape=(shape, shape))
+    bottom_rbm = rbm_config.RBMConfig(v_unit=rbm_units.GaussianVisibleUnit,
+                                      v_n=shape**2,
+                                      h_n=h_n,
+                                      progress_logger=bottom_logger,
+                                      train_params=bottom_tr)
+
+    config.left_dbn.rbm_configs[0] = bottom_rbm
+    config.right_dbn.rbm_configs[0] = bottom_rbm
+    config.left_dbn.topology = [shape ** 2, h_n]
+    config.right_dbn.topology = [shape ** 2, h_n]
+    config.top_rbm.train_params.epochs = 50
+    config.n_association = 100
     adbn = associative_dbn.AssociativeDBN(config=config, data_manager=data_manager)
 
     # Plot sample
@@ -304,7 +321,7 @@ def KanadeAssociativeDBN(cache=False):
         print "... trained associative DBN"
 
         # Reconstruct images
-        test_x_recon = adbn.recall(test_x, associate_steps=1, recall_steps=5)
+        test_x_recon = adbn.recall(test_x, associate_steps=1, recall_steps=2)
         print "... reconstructed images"
 
 
@@ -400,7 +417,7 @@ def associate_data2dataDBN(cache=False):
 
                         # Sample from top layer to generate data
                         sample_n = 100
-                        utils.save_digits(sampled,
+                        utils.save_images(sampled,
                                           image_name='{}_reconstruced_{}_{}_{}.png'.format(count, n_ass, n_recall,
                                                                                            n_think),
                                           shape=(sample_n / 10, 10), img_shape=(25, 25))

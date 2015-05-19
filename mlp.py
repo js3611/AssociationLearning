@@ -80,11 +80,12 @@ class HiddenLayer(object):
         #        tanh.
         if W is None:
             W_values = numpy.asarray(
-                rng.uniform(
-                    low=-numpy.sqrt(6. / (n_in + n_out)),
-                    high=numpy.sqrt(6. / (n_in + n_out)),
-                    size=(n_in, n_out)
-                ),
+                rng.normal(0, scale=0.01, size=(n_in, n_out)),
+                # rng.uniform(
+                #     low=-numpy.sqrt(6. / (n_in + n_out)),
+                #     high=numpy.sqrt(6. / (n_in + n_out)),
+                #     size=(n_in, n_out)
+                # ),
                 dtype=theano.config.floatX
             )
             if activation == theano.tensor.nnet.sigmoid:
