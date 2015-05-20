@@ -259,11 +259,11 @@ def KanadeAssociativeDBN(cache=False):
                'sadness': 'sadness',
                'surprise': 'happy'}
 
-    dataset = loader.load_kanade(n=3000,
+    dataset = loader.load_kanade(#n=3000,
                                  pre=preprocessing,
                                  set_name=dataset_name)
 
-    mapped_dataset = loader.load_kanade(n=3000,
+    mapped_dataset = loader.load_kanade(#n=3000,
                                         emotions=['sadness', 'happy'],
                                         pre=preprocessing,
                                         set_name=dataset_name)  # Target Image
@@ -294,7 +294,7 @@ def KanadeAssociativeDBN(cache=False):
     h_n = 150
     bottom_logger = rbm_logger.ProgressLogger(img_shape=(shape, shape))
     bottom_rbm = rbm_config.RBMConfig(v_unit=rbm_units.GaussianVisibleUnit,
-                                      v_n=shape**2,
+                                      v_n=shape ** 2,
                                       h_n=h_n,
                                       progress_logger=bottom_logger,
                                       train_params=bottom_tr)
@@ -320,7 +320,7 @@ def KanadeAssociativeDBN(cache=False):
         # Train DBN - learn joint distribution
         cache_left = [True]
         cache_right = [True]
-        cache_top = [False]
+        cache_top = [True]
         cache = [cache_left, cache_right, cache_top]
         adbn.train(train_x, train_x_ass, cache=cache)
         print "... trained associative DBN"
@@ -347,7 +347,6 @@ def KanadeAssociativeDBN(cache=False):
 
         out_msg = '{} (orig, retrain):{},{}'.format(adbn, score_orig, score_retrain)
         print out_msg
-
 
 
 def associate_data2dataDBN(cache=False):

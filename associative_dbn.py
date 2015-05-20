@@ -34,7 +34,7 @@ class DefaultADBNConfig(object):
     def __init__(self):
         # Base RBM Parameters
         # Layer 1
-        tr = TrainParam(learning_rate=0.01,
+        tr = TrainParam(learning_rate=0.001,
                         momentum_type=NESTEROV,
                         momentum=0.5,
                         weight_decay=0.0001,
@@ -65,9 +65,16 @@ class DefaultADBNConfig(object):
                                      topology=right_topology,
                                      training_parameters=tr_list,
                                      rbm_configs=rbm_configs)
-        # Top AssociativeRBM
-        top_rbm_config = RBMConfig(tr, progress_logger=AssociationProgressLogger())
-        top_rbm_config.associative = True
+
+        self.opt_top = True
+
+        if self.opt_top:
+            top_rbm_config = RBMConfig(tr, progress_logger=ProgressLogger())
+            top_rbm_config.associative = False
+        else:
+            # Top AssociativeRBM
+            top_rbm_config = RBMConfig(tr, progress_logger=AssociationProgressLogger())
+            top_rbm_config.associative = True
                 
         # Set configurations
         self.reuse_dbn = False
@@ -75,7 +82,6 @@ class DefaultADBNConfig(object):
         self.right_dbn = right_dbn_config
         self.top_rbm = top_rbm_config
         self.n_association = 100
-        self.opt = True
 
         
 class AssociativeDBN(object):
@@ -85,18 +91,25 @@ class AssociativeDBN(object):
         # Set parameters / Assertion
         config.left_dbn.data_manager = data_manager
         config.right_dbn.data_manager = data_manager        
-        rbm_config = config.top_rbm
-        rbm_config.h_n = config.n_association
-        rbm_config.v_n = config.left_dbn.topology[-1]
-        rbm_config.v2_n = config.right_dbn.topology[-1]        
-        config.top_rbm = rbm_config        
+        top_rbm_config = config.top_rbm
+        top_rbm_config.h_n = config.n_association
+        v_n = config.left_dbn.topology[-1]
+        v2_n = config.right_dbn.topology[-1]
+        if config.opt_top:
+            top_rbm_config.v_n = v_n + v2_n
+        else:
+            top_rbm_config.v_n = config.left_dbn.topology[-1]
+            top_rbm_config.v2_n = config.right_dbn.topology[-1]
+
+        config.top_rbm = top_rbm_config
         self.config = config
+        self.opt_top = config.opt_top
         self.data_manager=data_manager        
         self.dbn_left = DBN(config.left_dbn)        
         self.dbn_right = DBN(config.right_dbn) if not config.reuse_dbn else self.dbn_left
         self.association_layer = RBM(config=config.top_rbm)
 
-    def train(self, x1, x2, cache=False, optimise=False):
+    def train(self, x1, x2, cache=False, optimise=False, opt_top=False):
         cache_left = False
         cache_right = False
         cache_top = False
@@ -119,19 +132,24 @@ class AssociativeDBN(object):
         x1_features = theano.shared(x1_np)
         x2_features = theano.shared(x2_np)
 
-        # self.association_layer.train(x1_features, x2_features)
-        # Check Cache
-        out_dir = 'association_layer/{}_{}/'.format(len(self.dbn_left.rbm_layers),
-                                                    len(self.dbn_right.rbm_layers))
-        # TODO check whats wrong here
-        print self.association_layer.train_parameters
-        print '{}'.format(self.association_layer)
-        load = self.data_manager.retrieve(str(self.association_layer), out_dir=out_dir)
-        if load and cache_top:
-            self.association_layer = load
+        if self.opt_top:
+            # Concatenate images
+            x = theano.shared(np.concatenate((x1_np, x2_np), axis=1))
+            self.association_layer.train(x)
         else:
-            self.association_layer.train(x1_features, x2_features)
-            self.data_manager.persist(self.association_layer, out_dir=out_dir)
+            # self.association_layer.train(x1_features, x2_features)
+            # Check Cache
+            out_dir = 'association_layer/{}_{}/'.format(len(self.dbn_left.rbm_layers),
+                                                        len(self.dbn_right.rbm_layers))
+            # TODO check whats wrong here
+            print self.association_layer.train_parameters
+            print '{}'.format(self.association_layer)
+            load = self.data_manager.retrieve(str(self.association_layer), out_dir=out_dir)
+            if load and cache_top:
+                self.association_layer = load
+            else:
+                self.association_layer.train(x1_features, x2_features)
+                self.data_manager.persist(self.association_layer, out_dir=out_dir)
 
     # TODO clean up input and output of each function (i.e. they should all return theano or optional flag)
     def recall(self, x, associate_steps=10, recall_steps=5, img_name='dbn'):
@@ -157,7 +175,10 @@ class AssociativeDBN(object):
 
         # Sample from the association layer
         # associate_x = top.reconstruct_association(assoc_in, k=associate_steps)
-        associate_x = top.mean_field_inference(assoc_in, sample=True, k=associate_steps)
+        if self.opt_top:
+            associate_x = top.mean_field_inference_opt(assoc_in, sample=True, k=associate_steps)
+        else:
+            associate_x = top.mean_field_inference(assoc_in, sample=True, k=associate_steps)
         # associate_x = top.reconstruct_association(assoc_in, k=associate_steps)
 
         if recall_steps > 0:

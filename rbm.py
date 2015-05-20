@@ -928,15 +928,6 @@ class RBM(object):
         In this way theano performs matrix optimisation so its much faster.
 
         If such optimisation was done, this reconstruction method should be used.
-
-        :param x:
-        :param y:
-        :param k:
-        :param bit_p:
-        :param plot_n:
-        :param plot_every:
-        :param img_name:
-        :return:
         '''
 
         # Initialise parameters
@@ -1021,6 +1012,58 @@ class RBM(object):
             return self.np_rand.binomial(1, m[-1]).astype(t_float_x)
         else:
             return m[-1]
+
+    def mean_field_inference_opt(self, x, sample=False, k=100):
+        '''
+        As an optimisation, we can concatenate two images and feed it as a single image to train the network.
+        In this way theano performs matrix optimisation so its much faster.
+
+        If such optimisation was done, this reconstruction method should be used.
+        '''
+        img_name = 'mfi_opt'
+        plot_n = 100
+        plot_every = 10
+
+        # Initialise parameters
+        if not utils.isSharedType(x):
+            x = theano.shared(x, allow_downcast=True)
+        data_size = x.get_value().shape[0]
+        y = self.rand.binomial(size=(data_size, self.v_n / 2), n=1, p=0, dtype=t_float_x)
+
+        # get initial values of tau (Concatenate x and y)
+        z = T.concatenate([x, y], axis=1)
+        _, tau = self.prop_up(z)
+        chain_start = theano.shared(theano.function([], tau)(), name='tau')
+
+        # mean field func
+        def mean_field(tau1, fixed):
+            _, mu2 = self.prop_down(tau1)
+            mu2 = T.concatenate([fixed, mu2[:, (self.v_n/2):]], axis=1)
+            _, tau2 = self.prop_up(mu2)
+            return mu2, tau2 #, {ctr: ctr+1}, theano.scan_module.until(ctr < 50)
+
+        # loop
+        k_batch = k / plot_every
+        (res, updates) = theano.scan(
+            mean_field,
+            outputs_info=[None, chain_start],
+            non_sequences=[x], n_steps=plot_every, name="mean_field_opt"
+        )
+        updates.update({chain_start: res[-1][-1]})
+        mean_field_opt = theano.function([], res, updates=updates)
+
+        # Runner
+        reconstructions = []
+        for i in xrange(k_batch):
+            result = mean_field_opt()
+            [reconstruction_chain, _] = result
+            reconstructions.append(reconstruction_chain[-1][:, (self.v_n/2):])
+
+        if self.track_progress:
+            self.track_progress.visualise_reconstructions(x.get_value(borrow=True), reconstructions, plot_n, img_name=img_name, opt=True)
+
+        return reconstruction_chain[-1][:, (self.v_n/2):]
+
 
 class AssociativeRBM(RBM):
     pass

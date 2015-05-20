@@ -3,6 +3,7 @@ __author__ = 'joschlemper'
 import utils
 import kanade_loader as loader
 import numpy as np
+import scipy as sp
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn import svm
@@ -29,6 +30,8 @@ class SimpleClassifier(object):
     def get_score(self, test_x, test_y):
         test_x, test_y = self.__get_values(test_x, test_y)
         guess_y = self.clf.predict(test_x)
+        print 'Guess: {}'.format(sp.stats.itemfreq(guess_y))
+        print 'Actual: {}'.format(sp.stats.itemfreq(test_y))
         return np.sum(guess_y == test_y) * 1. / len(guess_y)
 
     def __get_values(self, x, y):
