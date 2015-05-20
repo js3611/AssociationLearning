@@ -116,7 +116,7 @@ class AssociativeDBN(object):
         if type(cache) is list:
             cache_left = cache[0]
             cache_right = cache[1]
-            cache_top = cache[1]
+            cache_top = cache[2]
 
         # Train left & right DBN's
         self.dbn_left.pretrain(x1, cache=cache_left, optimise=optimise)
@@ -132,24 +132,24 @@ class AssociativeDBN(object):
         x1_features = theano.shared(x1_np)
         x2_features = theano.shared(x2_np)
 
-        if self.opt_top:
-            # Concatenate images
-            x = theano.shared(np.concatenate((x1_np, x2_np), axis=1))
-            self.association_layer.train(x)
+        # Check Cache
+        out_dir = 'association_layer/{}_{}/'.format(len(self.dbn_left.rbm_layers),
+                                                    len(self.dbn_right.rbm_layers))
+
+        load = self.data_manager.retrieve('{}_{}'.format(self.opt_top, self.association_layer),
+                                          out_dir=out_dir)
+        if load and cache_top:
+            self.association_layer = load
         else:
-            # self.association_layer.train(x1_features, x2_features)
-            # Check Cache
-            out_dir = 'association_layer/{}_{}/'.format(len(self.dbn_left.rbm_layers),
-                                                        len(self.dbn_right.rbm_layers))
-            # TODO check whats wrong here
-            print self.association_layer.train_parameters
-            print '{}'.format(self.association_layer)
-            load = self.data_manager.retrieve(str(self.association_layer), out_dir=out_dir)
-            if load and cache_top:
-                self.association_layer = load
+            if self.opt_top:
+                # Concatenate images
+                x = theano.shared(np.concatenate((x1_np, x2_np), axis=1))
+                self.association_layer.train(x)
             else:
                 self.association_layer.train(x1_features, x2_features)
-                self.data_manager.persist(self.association_layer, out_dir=out_dir)
+            self.data_manager.persist(self.association_layer,
+                                      '{}_{}'.format(self.opt_top, self.association_layer),
+                                      out_dir=out_dir)
 
     # TODO clean up input and output of each function (i.e. they should all return theano or optional flag)
     def recall(self, x, associate_steps=10, recall_steps=5, img_name='dbn'):

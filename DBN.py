@@ -106,7 +106,7 @@ class DBN(object):
             rbm_config = rbm_configs[i]
             rbm_config.v_n = topology[i]
             rbm_config.h_n = topology[i + 1]
-            rbm_config.training_parameters = tr[i]  # Ensure it has parameters
+            # rbm_config.training_parameters = tr[i]  # Ensure it has parameters
 
             rbm_layer = RBM(rbm_config, W=sigmoid_layer.W, h_bias=sigmoid_layer.b)
             self.rbm_layers.append(rbm_layer)
@@ -168,7 +168,7 @@ class DBN(object):
             # Check Cache
             cost = 0
             loaded = store.retrieve_object(str(rbm))
-            if cache[0] and loaded:
+            if cache[i] and loaded:
                 # TODO override neural network's weights too
                 rbm = loaded
                 # Override the reference

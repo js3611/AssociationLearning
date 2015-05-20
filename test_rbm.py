@@ -37,9 +37,9 @@ data_dir = "/".join([root_dir, "data"])
 def test_rbm():
     print "Testing RBM"
 
-    data_manager = store.StorageManager('SimpleRBMTest')
+    data_manager = store.StorageManager('GBRBM_Sparse0.0001')
     # Load mnist hand digits
-    datasets = loader.load_kanade(n=2000, pre={'scale': True})
+    datasets = loader.load_kanade(pre={'scale': True})
     # datasets = loader.load_kanade(pre={'scale2unit': True})
     train_set_x, train_set_y = datasets[0]
     test_set_x, test_set_y = datasets[2]
@@ -50,7 +50,7 @@ def test_rbm():
                     momentum=0.9,
                     weight_decay=0.0001,
                     sparsity_constraint=True,
-                    sparsity_target=0.1,
+                    sparsity_target=0.0001,
                     sparsity_cost=1,
                     sparsity_decay=0.9,
                     batch_size=10,
@@ -83,9 +83,14 @@ def test_rbm():
         rbm.set_initial_hidden_bias()
         rbm.get_initial_mean_activity(train_set_x)
 
-    for i in xrange(0, 2):
+    load = store.retrieve_object(str(rbm))
+    if load:
+        rbm = load
+
+    for i in xrange(0, 100):
         # Train RBM
         rbm.train(train_set_x)
+        data_manager.persist(rbm)
 
         # Test RBM Reconstruction via Linear Classifier
         clf = SimpleClassifier(classifier='logistic', train_x=train_set_x, train_y=train_set_y)
