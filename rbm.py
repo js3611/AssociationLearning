@@ -1013,16 +1013,16 @@ class RBM(object):
         else:
             return m[-1]
 
-    def mean_field_inference_opt(self, x, sample=False, k=100):
+    def mean_field_inference_opt(self, x, sample=False, k=100, img_name = 'mfi_opt'):
         '''
         As an optimisation, we can concatenate two images and feed it as a single image to train the network.
         In this way theano performs matrix optimisation so its much faster.
 
         If such optimisation was done, this reconstruction method should be used.
         '''
-        img_name = 'mfi_opt'
+
         plot_n = 100
-        plot_every = 10
+        plot_every = min(k, 10)
 
         # Initialise parameters
         if not utils.isSharedType(x):
@@ -1062,7 +1062,10 @@ class RBM(object):
         if self.track_progress:
             self.track_progress.visualise_reconstructions(x.get_value(borrow=True), reconstructions, plot_n, img_name=img_name, opt=True)
 
-        return reconstruction_chain[-1][:, (self.v_n/2):]
+        if sample and type(self.v_unit) is RBMUnit:
+            return self.v_n.activate(reconstruction_chain[-1][:, (self.v_n/2):])
+        else:
+            return reconstruction_chain[-1][:, (self.v_n/2):]
 
 
 class AssociativeRBM(RBM):

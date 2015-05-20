@@ -153,13 +153,15 @@ def associate_data2data(cache=False):
 def KanadeAssociativeOptRBM(cache=False):
     print "Testing Associative RBM which tries to learn the following mapping: {anger, saddness, disgust} -> {sadness}, {contempt, happy, surprise} -> {happy}"
     # project set-up
-    data_manager = store.StorageManager('Kanade/OptAssociativeRBMTest', log=True)
-    shape = 50
+    data_manager = store.StorageManager('Kanade/OptMFRBMTest', log=True)
+    # data_manager = store.StorageManager('Kanade/OptAssociativeRBMTest', log=True)
+    shape = 25
     dataset_name = 'sharp_equi{}_{}'.format(shape, shape)
 
     # Load kanade database
-    mapping = {'anger': 'sadness', 'contempt': 'happy', 'disgust': 'sadness', 'fear': 'sadness', 'happy': 'happy',
-               'sadness': 'sadness', 'surprise': 'happy'}
+    mapping = None  # id map
+    # mapping = {'anger': 'sadness', 'contempt': 'happy', 'disgust': 'sadness', 'fear': 'sadness', 'happy': 'happy',
+    #            'sadness': 'sadness', 'surprise': 'happy'}
     train, valid, test = loader.load_kanade(pre={'scale': True}, set_name=dataset_name)
     train_x, train_y = train
     test_x, test_y = test
@@ -175,9 +177,11 @@ def KanadeAssociativeOptRBM(cache=False):
     train_X = theano.shared(train_tX)
 
     # Train classifier to be used for classifying reconstruction associated image layer
-    mapped_data = loader.load_kanade(emotions=['sadness', 'happy'], pre={'scale': True},
-                                     set_name=dataset_name)  # Target Image
-    clf_orig = SimpleClassifier('logistic', mapped_data[0][0], mapped_data[0][1])
+    # mapped_data = loader.load_kanade(#emotions=['sadness', 'happy'],
+    #                                  pre={'scale': True},
+    #                                  set_name=dataset_name)  # Target Image
+    # clf_orig = SimpleClassifier('logistic', mapped_data[0][0], mapped_data[0][1])
+    clf_orig = SimpleClassifier('logistic', train_x, train_y)
 
     # Initialise RBM
     tr = rbm_config.TrainParam(learning_rate=0.00005,
@@ -186,10 +190,10 @@ def KanadeAssociativeOptRBM(cache=False):
                                weight_decay=0.0001,
                                sparsity_constraint=False,
                                batch_size=10,
-                               epochs=5)
+                               epochs=20)
 
     n_visible = shape * shape * 2
-    n_hidden = 100
+    n_hidden = 101
 
     config = rbm_config.RBMConfig()
     config.v_n = n_visible
@@ -227,19 +231,35 @@ def KanadeAssociativeOptRBM(cache=False):
                                                             plot_n=100,
                                                             plot_every=1,
                                                             img_name='test_recon')
+
+        mf_recon = rbm.mean_field_inference_opt(test_x, sample=True, k=1)
+
+        # Concatenate images
+        test_MFX = theano.function([], T.concatenate([test_x, mf_recon], axis=1))()
+        test_MF = theano.shared(test_MFX)
+        reconstruction = rbm.reconstruct(test_MF, 1,
+                                         plot_n=100,
+                                         plot_every=1,
+                                         img_name='mf_reconstruction')
+        mf_recon = reconstruction[:, (shape ** 2):]
+
         print "... reconstructed"
 
         # Classify the reconstructions
 
         # 1. Train classifier on original images
         score_orig = clf_orig.get_score(test_x_associated, test_y_mapped.eval())
+        score_orig_mf = clf_orig.get_score(test_x_associated, test_y_mapped.eval())
 
         # 2. Train classifier on reconstructed images
         clf_recon = SimpleClassifier('logistic', reconstruct_assoc_part, train_y_mapped.eval())
         score_retrain = clf_recon.get_score(test_x_associated, test_y_mapped.eval())
+        score_retrain_mf = clf_recon.get_score(mf_recon, test_y_mapped.eval())
 
         out_msg = '{} (orig, retrain):{},{}'.format(rbm, score_orig, score_retrain)
+        out_msg2 = '{} (orig, retrain):{},{}'.format(rbm, score_orig_mf, score_retrain_mf)
         print out_msg
+        print out_msg2
 
 
 def KanadeAssociativeDBN(cache=False):
@@ -293,7 +313,7 @@ def KanadeAssociativeDBN(cache=False):
                                       weight_decay=0.0001,
                                       epochs=20,
                                       batch_size=10)
-    h_n = 500
+    h_n = 150
     bottom_logger = rbm_logger.ProgressLogger(img_shape=(shape, shape))
     bottom_rbm = rbm_config.RBMConfig(v_unit=rbm_units.GaussianVisibleUnit,
                                       v_n=shape ** 2,
@@ -356,8 +376,8 @@ def KanadeStackedOptRBM(cache=False):
     print "Testing Stacked-RBM which tries to learn id map association"
 
     # project set-up
-    data_manager = store.StorageManager('Kanade/AssociativeStackedDBN50', log=True)
-    shape = 50
+    data_manager = store.StorageManager('Kanade/MeanField3', log=True)
+    shape = 25
     dataset_name = 'sharp_equi{}_{}'.format(shape, shape)
     preprocessing = {'scale': True}
 
@@ -396,22 +416,26 @@ def KanadeStackedOptRBM(cache=False):
     # Initialise RBM parameters
     base_tr = rbm_config.TrainParam(learning_rate=0.0001,
                                     momentum_type=rbm_config.NESTEROV,
-                                    momentum=0.5,
-                                    weight_decay=0.1,
-                                    epochs=10,
+                                    momentum=0.9,
+                                    weight_decay=0.0001,
+                                    sparsity_constraint=False,
+                                    sparsity_target=0.00001,
+                                    sparsity_decay=0.9,
+                                    sparsity_cost=10000,
+                                    epochs=100,
                                     batch_size=10)
 
     rest_tr = rbm_config.TrainParam(learning_rate=0.0001,
                                     momentum_type=rbm_config.CLASSICAL,
                                     momentum=0.5,
                                     weight_decay=0.01,
-                                    epochs=10,
+                                    epochs=100,
                                     batch_size=10)
 
     # Layer 1
     # Layer 2
     # Layer 3
-    topology = [2* (shape ** 2), 1000, 1000]
+    topology = [2* (shape ** 2), 3000]
     # batch_size = 10
     first_progress_logger = rbm_logger.ProgressLogger(img_shape=(shape*2, shape))
     rest_progress_logger = rbm_logger.ProgressLogger()
@@ -444,14 +468,14 @@ def KanadeStackedOptRBM(cache=False):
     recons2 = []
 
     # Train DBN
-    dbn.pretrain(train_X, cache=[True, False, False], optimise=False)
+    dbn.pretrain(train_X, cache=[True, True, False], train_further=[True, True, True], optimise=False)
 
     recon = dbn.reconstruct(train_X, k=1, plot_n=20,
-                            img_name='stackedRBM_train_recon_{}_{}'.format(topology,0))
+                            img_name='stackedRBM_train_recon_{}_{}'.format(topology, 0))
     train_x_ass_recon = recon[:, shape**2:]
 
     recon = dbn.reconstruct(test_X, k=1, plot_n=20,
-                            img_name='stackedRBM_test_recon_{}_{}'.format(topology,0))
+                            img_name='stackedRBM_test_recon_{}_{}'.format(topology, 0))
     test_x_ass_recon = recon[:, shape**2:]
 
     recon = dbn.reconstruct(test_X2, k=2, plot_n=20,
@@ -553,6 +577,6 @@ def associate_data2dataDBN(cache=False):
 if __name__ == '__main__':
     # train_kanade()
     # associate_data2data()
-    # KanadeAssociativeOptRBM(False)
+    KanadeAssociativeOptRBM(False)
     # KanadeAssociativeDBN()
-    KanadeStackedOptRBM()
+    # KanadeStackedOptRBM()

@@ -44,8 +44,7 @@ class TrainParam(object):
         self.sparsity_decay = sparsity_decay
 
     def __str__(self):
-        return "epoch" + str(self.epochs) + \
-               "_batch" + str(self.batch_size) + \
+        return "batch" + str(self.batch_size) + \
                "_lr" + str(self.learning_rate) + \
                "_" + self.momentum_type + str(self.momentum) + \
                "_wd" + str(self.weight_decay) + \
