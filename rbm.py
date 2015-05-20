@@ -166,9 +166,7 @@ class RBM(object):
 
     def __str__(self):
         name = 'ass_' if self.associative else ''
-        return name + "rbm_" + str(self.h_n) + \
-               "_" + self.cd_type + str(self.cd_steps) + \
-               "_{}".format(self.train_parameters)
+        return name + "rbm_{}_{}{}_{}".format(self.h_n, self.cd_type, self.cd_steps, self.train_parameters)
 
     def free_energy(self, v, v2=None):
         if self.associative:
@@ -979,14 +977,13 @@ class RBM(object):
 
         return reconstruction_chain[-1][:, (self.v_n/2):]
 
-    def mean_field_inference(self, x, tolerance=0.01, sample=False, bit_p=0, plot_n=None, plot_every=1, img_name='mean_field'):
+    def mean_field_inference(self, x, tolerance=0.01, sample=False, k=100, bit_p=0, plot_n=None, plot_every=1, img_name='mean_field'):
         # Initialise parameters
         if not utils.isSharedType(x):
             x = theano.shared(x, allow_downcast=True)
         data_size = x.get_value().shape[0]
 
-        k = 100
-        plot_every=10
+        plot_every=100
         mu = theano.shared(np.zeros((data_size, self.v_n2), dtype=t_float_x), name='mu')
         tau = theano.shared(np.zeros((data_size, self.h_n), dtype=t_float_x), name='tau')
 
@@ -996,13 +993,19 @@ class RBM(object):
             _, tau2 = self.prop_up(x, mu2)
             return mu2, tau2 #, {ctr: ctr+1}, theano.scan_module.until(ctr < 50)
 
+        def mean_field_rev(m, t, x):
+            _, tau2 = self.prop_up(x, m)
+            _, mu2 = self.prop_down_assoc(tau2)
+            return mu2, tau2 #, {ctr: ctr+1}, theano.scan_module.until(ctr < 50)
+
         k_batch = k / plot_every
         (res, updates) = theano.scan(
-            mean_field,
+            mean_field_rev,
             outputs_info=[mu, tau],
             non_sequences=[x], n_steps=plot_every, name="mean_field_inference"
         )
-        updates.update({tau: res[-1][-1]})
+        updates.update({tau: res[1][-1]})
+        updates.update({mu: res[0][-1]})
         mfi = theano.function([], res, updates=updates)
 
         # Runner

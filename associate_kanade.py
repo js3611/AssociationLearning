@@ -259,11 +259,11 @@ def KanadeAssociativeDBN(cache=False):
                'sadness': 'sadness',
                'surprise': 'happy'}
 
-    dataset = loader.load_kanade(#n=1000,
+    dataset = loader.load_kanade(n=3000,
                                  pre=preprocessing,
                                  set_name=dataset_name)
 
-    mapped_dataset = loader.load_kanade(#n=1000,
+    mapped_dataset = loader.load_kanade(n=3000,
                                         emotions=['sadness', 'happy'],
                                         pre=preprocessing,
                                         set_name=dataset_name)  # Target Image
@@ -291,7 +291,7 @@ def KanadeAssociativeDBN(cache=False):
                                       weight_decay=0.0001,
                                       epochs=20,
                                       batch_size=10)
-    h_n = 100
+    h_n = 150
     bottom_logger = rbm_logger.ProgressLogger(img_shape=(shape, shape))
     bottom_rbm = rbm_config.RBMConfig(v_unit=rbm_units.GaussianVisibleUnit,
                                       v_n=shape**2,
@@ -313,7 +313,7 @@ def KanadeAssociativeDBN(cache=False):
     loader.save_faces(train_x_ass.get_value(borrow=True)[1:50], tile=(10, 10), img_name='n_ass.png')
 
     # Train classifier to be used for classifying reconstruction associated image layer
-    clf_orig = SimpleClassifier('logistic', mapped_dataset[0][0], mapped_dataset[0][1])
+    clf_orig = SimpleClassifier('knn', mapped_dataset[0][0], mapped_dataset[0][1])
 
     # Test DBN Performance
     for i in xrange(0, 1):
@@ -326,7 +326,7 @@ def KanadeAssociativeDBN(cache=False):
         print "... trained associative DBN"
 
         # Reconstruct images
-        test_x_recon = adbn.recall(test_x, associate_steps=1, recall_steps=0)
+        test_x_recon = adbn.recall(test_x, associate_steps=100, recall_steps=0)
         print "... reconstructed images"
 
 
@@ -342,7 +342,7 @@ def KanadeAssociativeDBN(cache=False):
                                                    plot_n=100,
                                                    plot_every=1,
                                                    img_name='right_dbn_reconstruction')
-        clf_recon = SimpleClassifier('logistic', mapped_train_recon, mapped_dataset[0][1].eval())
+        clf_recon = SimpleClassifier('knn', mapped_train_recon, mapped_dataset[0][1].eval())
         score_retrain = clf_recon.get_score(test_x_recon, test_y_ass.eval())
 
         out_msg = '{} (orig, retrain):{},{}'.format(adbn, score_orig, score_retrain)

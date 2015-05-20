@@ -10,7 +10,7 @@ from sklearn import svm
 class SimpleClassifier(object):
     def __init__(self, classifier='logistic', train_x=None, train_y=None):
         if classifier == 'knn':
-            clf = KNeighborsClassifier(3, weights='uniform')
+            clf = KNeighborsClassifier(7, weights='uniform')
         elif classifier == 'logistic':
             clf = LogisticRegression()
         else:

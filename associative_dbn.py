@@ -38,10 +38,6 @@ class DefaultADBNConfig(object):
                         momentum_type=NESTEROV,
                         momentum=0.5,
                         weight_decay=0.0001,
-                        sparsity_constraint=False,
-                        sparsity_target=0.01,
-                        sparsity_cost=0.01,
-                        sparsity_decay=0.1,
                         epochs=20)
 
         first_progress_logger = ProgressLogger(img_shape=(25,25))
@@ -123,17 +119,19 @@ class AssociativeDBN(object):
         x1_features = theano.shared(x1_np)
         x2_features = theano.shared(x2_np)
 
-        self.association_layer.train(x1_features, x2_features)
+        # self.association_layer.train(x1_features, x2_features)
         # Check Cache
-        # out_dir = 'association_layer/{}_{}/'.format(len(self.dbn_left.rbm_layers),
-        #                                             len(self.dbn_right.rbm_layers))
+        out_dir = 'association_layer/{}_{}/'.format(len(self.dbn_left.rbm_layers),
+                                                    len(self.dbn_right.rbm_layers))
         # TODO check whats wrong here
-        # load = self.data_manager.retrieve(str(self.association_layer), out_dir=out_dir)
-        # if load and cache:
-        #     self.association_layer = load
-        # else:
-        #     self.association_layer.train(x1_features, x2_features)
-        #     self.data_manager.persist(self.association_layer, out_dir=out_dir)
+        print self.association_layer.train_parameters
+        print '{}'.format(self.association_layer)
+        load = self.data_manager.retrieve(str(self.association_layer), out_dir=out_dir)
+        if load and cache_top:
+            self.association_layer = load
+        else:
+            self.association_layer.train(x1_features, x2_features)
+            self.data_manager.persist(self.association_layer, out_dir=out_dir)
 
     # TODO clean up input and output of each function (i.e. they should all return theano or optional flag)
     def recall(self, x, associate_steps=10, recall_steps=5, img_name='dbn'):
@@ -159,7 +157,7 @@ class AssociativeDBN(object):
 
         # Sample from the association layer
         # associate_x = top.reconstruct_association(assoc_in, k=associate_steps)
-        associate_x = top.mean_field_inference(assoc_in, sample=True)
+        associate_x = top.mean_field_inference(assoc_in, sample=True, k=associate_steps)
         # associate_x = top.reconstruct_association(assoc_in, k=associate_steps)
 
         if recall_steps > 0:
@@ -241,4 +239,5 @@ def test_associative_dbn(i=0):
 
     
 if __name__ == '__main__':
-    test_associative_dbn()
+    pass
+    # test_associative_dbn()
