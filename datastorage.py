@@ -21,6 +21,7 @@ class StorageManager(object):
     def __init__(self, project_root='.', log=True):
         self.project_root = project_root
         self.log = True
+        self.started = os.getcwd()
         if log:
             print '... data manager created. project_root: {}'.format(project_root)
         self.move_to_project_root()
@@ -53,6 +54,9 @@ class StorageManager(object):
             print '... OBJECT NOT FOUND ({} at {})'.format(name, os.getcwd())
         os.chdir(cur)
         return obj
+
+    def finish(self):
+        os.chdir(self.started)
 
 def __move_to_data_path():
     if os.getcwd() != data_dir:

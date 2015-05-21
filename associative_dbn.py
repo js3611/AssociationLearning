@@ -109,22 +109,33 @@ class AssociativeDBN(object):
         self.dbn_right = DBN(config.right_dbn) if not config.reuse_dbn else self.dbn_left
         self.association_layer = RBM(config=config.top_rbm)
 
-    def train(self, x1, x2, cache=False, optimise=False, opt_top=False):
+    def train(self, x1, x2, cache=False, train_further=False, optimise=False, opt_top=False):
         cache_left = False
         cache_right = False
         cache_top = False
+        train_further_left = False
+        train_further_right = False
+        train_further_top = False
         if type(cache) is list:
             cache_left = cache[0]
             cache_right = cache[1]
             cache_top = cache[2]
+        if type(train_further) is list:
+            train_further_left = train_further[0]
+            train_further_right = train_further[1]
+            train_further_top = train_further[2]
 
         # Train left & right DBN's
-        self.dbn_left.pretrain(x1, cache=cache_left, optimise=optimise)
+        self.dbn_left.pretrain(x1, cache=cache_left,
+                               train_further=train_further_left,
+                               optimise=optimise)
 
         if self.config.reuse_dbn:
             self.dbn_right = self.dbn_left
         else:
-            self.dbn_right.pretrain(x2, cache=cache_right, optimise=optimise)
+            self.dbn_right.pretrain(x2, cache=cache_right,
+                                    train_further=train_further_right,
+                                    optimise=optimise)
 
         # Pass the parameter to top layer
         x1_np = self.dbn_left.bottom_up_pass(x1.get_value(True))
@@ -138,15 +149,18 @@ class AssociativeDBN(object):
 
         load = self.data_manager.retrieve('{}_{}'.format(self.opt_top, self.association_layer),
                                           out_dir=out_dir)
+
         if load and cache_top:
             self.association_layer = load
-        else:
+
+        if not load or train_further_top:
             if self.opt_top:
                 # Concatenate images
                 x = theano.shared(np.concatenate((x1_np, x2_np), axis=1))
                 self.association_layer.train(x)
             else:
                 self.association_layer.train(x1_features, x2_features)
+
             self.data_manager.persist(self.association_layer,
                                       '{}_{}'.format(self.opt_top, self.association_layer),
                                       out_dir=out_dir)
