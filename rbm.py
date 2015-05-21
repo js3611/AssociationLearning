@@ -166,7 +166,7 @@ class RBM(object):
 
     def __str__(self):
         name = 'ass_' if self.associative else ''
-        return name + "rbm_{}_{}{}_{}".format(self.h_n, self.cd_type, self.cd_steps, self.train_parameters)
+        return name + "rbm_{}-{}_{}{}_{}".format(self.v_n, self.h_n, self.cd_type, self.cd_steps, self.train_parameters)
 
     def free_energy(self, v, v2=None):
         if self.associative:
@@ -1064,7 +1064,7 @@ class RBM(object):
             self.track_progress.visualise_reconstructions(x.get_value(borrow=True), reconstructions, plot_n, img_name=img_name, opt=True)
 
         if sample and type(self.v_unit) is RBMUnit:
-            return self.v_n.activate(reconstruction_chain[-1][:, (self.v_n/2):])
+            return self.np_rand.binomial(1, reconstruction_chain[-1][:, (self.v_n/2):])
         else:
             return reconstruction_chain[-1][:, (self.v_n/2):]
 

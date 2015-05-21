@@ -12,6 +12,7 @@ import numpy as np
 import theano
 import theano.tensor as T
 import scipy.stats as sps
+
 try:
     import PIL.Image as Image
 except ImportError:
@@ -36,7 +37,7 @@ def load_kanade(shared=True, set_name='sharp_equi25_25', emotions=None, pre=None
     data = __load(set_name)
 
     # pre-processing
-    if emotions:  #filter
+    if emotions:  # filter
         x, y = data
         filter_keys = map(lambda x: emotion_dict[x], emotions)
         filtered = filter(lambda (x1, y1): y1 in filter_keys, enumerate(y))
@@ -62,7 +63,7 @@ def load_kanade(shared=True, set_name='sharp_equi25_25', emotions=None, pre=None
         xs += x[sub_idx].tolist()
         ys += y[sub_idx].tolist()
 
-    data = (np.array(xs, dtype=theano.config.floatX),np.array(ys, dtype=theano.config.floatX))
+    data = (np.array(xs, dtype=theano.config.floatX), np.array(ys, dtype=theano.config.floatX))
 
     if pre:
         if 'pca' in pre:
@@ -90,7 +91,7 @@ def load_kanade(shared=True, set_name='sharp_equi25_25', emotions=None, pre=None
 
     # split to train and test
     rand = 123
-    tr_te = cross_validation.train_test_split(data[0], data[1], test_size=(2.0/7), random_state=rand)
+    tr_te = cross_validation.train_test_split(data[0], data[1], test_size=(2.0 / 7), random_state=rand)
     tr_x, te_x, tr_y, te_y = tr_te
     vl_x, te_x, vl_y, te_y = cross_validation.train_test_split(te_x, te_y, test_size=0.5, random_state=rand)
 
@@ -158,7 +159,6 @@ def __load(set_name='25_25'):
     return data, label
 
 
-
 def shared_dataset(data_xy, borrow=True):
     """ Function that loads the dataset into shared variables
 
@@ -215,6 +215,7 @@ def scale_to_unit_interval(ndar, eps=1e-8):
     ndar *= 1.0 / (ndar.max() + eps)
     return ndar
 
+
 def get_binary_label(data):
     new_data = []
     for (x, y) in data:
@@ -228,7 +229,60 @@ def get_target_vector(x):
     return xs
 
 
-def sample_image(data, shared=True, mapping=None,  pre=None, set_name='sharp_equi25_25'):
+def sample_image2(lab, shared=True, mapping=None, pre=None, set_name='sharp_equi25_25'):
+    '''
+
+    :param lab: a sequence of labels
+    :param shared:
+    :param mapping: e.g. { 'happy': {'happy':0.5, 'sad':0.5}, 'sad': {'happy':0.2, 'sad':0.8} }
+    :param pre:
+    :param set_name:
+    :return:
+    '''
+    # convert to numpy first
+    if 'Tensor' in str(type(lab)):
+        label_seq = lab.eval()
+    else:
+        label_seq = lab
+
+    if not mapping:  # get id map
+        mapping = {}
+        for emo in emotion_dict.keys():
+            mapping[emo] = {emo: 1.}
+
+    source_emotions = np.unique(label_seq).tolist()
+
+    # Get image pool of target emotions
+    target_emotions = set()
+    for src in source_emotions:
+        target_emotions.update(mapping[emotion_rev_dict[src]].keys())
+    image_pool = {}
+    for emo in target_emotions:
+        dataset = load_kanade(shared=False, set_name=set_name, emotions=[emo], n=len(label_seq), pre=pre)
+        image_pool[emo] = dataset[0][0]
+
+    # Sample image according to probability distribution defined in mapping
+    sample_data = []
+    sample_label = []
+    rand_seq = np.random.randint(0, len(label_seq), size=len(label_seq))
+
+    for emo, i in zip(label_seq.tolist(), rand_seq.tolist()):
+        # Get pool with some probability
+        dist = mapping[emotion_rev_dict[emo]]
+        pl = np.random.choice(dist.keys(), 1, False, dist.values())[0]
+        pool = image_pool[pl]
+        sample_data.append(pool[i % len(pool)])
+        sample_label.append(emotion_dict[pl] * 1.)
+
+    if shared:
+        lab = theano.shared(np.array(sample_data, dtype=theano.config.floatX), borrow=True)
+        label = theano.shared(np.array(sample_label, dtype=theano.config.floatX), borrow=True)
+        return lab, T.cast(label, 'int32')
+    else:
+        return np.asarray(sample_data, dtype=theano.config.floatX), np.asarray(sample_label, dtype=theano.config.floatX)
+
+
+def sample_image(data, shared=True, mapping=None, pre=None, set_name='sharp_equi25_25'):
     # convert to numpy first
     if 'Tensor' in str(type(data)):
         seq = data.eval()
@@ -263,6 +317,7 @@ def sample_image(data, shared=True, mapping=None,  pre=None, set_name='sharp_equ
     else:
         return np.asarray(sample_data, dtype=theano.config.floatX), np.asarray(sample_label, dtype=theano.config.floatX)
 
+
 def vectorise_label(data):
     new_data = []
     for (x, y) in data:
@@ -285,7 +340,7 @@ def load_shared():
 
 def load_data_threshold(dataset, t=0.5):
     [(train_set_x, train_set_y), (valid_set_x, valid_set_y),
-            (test_set_x, test_set_y)] = __load()
+     (test_set_x, test_set_y)] = __load()
     new_train_x = to_binary(train_set_x, t)
     new_valid_x = to_binary(valid_set_x, t)
     new_test_x = to_binary(test_set_x, t)
@@ -294,10 +349,10 @@ def load_data_threshold(dataset, t=0.5):
             (new_test_x, test_set_y)]
 
 
-def save_faces(x, tile=None, img_name='digits.png', img_shape=(25,25)):
+def save_faces(x, tile=None, img_name='digits.png', img_shape=(25, 25)):
     data_size = x.shape[0]
     nrow, ncol = img_shape
-    image_data = np.zeros(((nrow+1), (ncol+1) * data_size - 1), dtype='uint8')
+    image_data = np.zeros(((nrow + 1), (ncol + 1) * data_size - 1), dtype='uint8')
     if not tile:
         tile = (1, data_size)
 
@@ -313,7 +368,7 @@ def save_faces(x, tile=None, img_name='digits.png', img_shape=(25,25)):
     image.save(img_name)
 
 
-def save_face(x, name="digit.png", img_shape=(25,25)):
+def save_face(x, name="digit.png", img_shape=(25, 25)):
     image_data = np.zeros(img_shape, dtype='uint8')
 
     # Original images
@@ -377,19 +432,19 @@ def tile_raster_images(X, img_shape, tile_shape, tile_spacing=(0, 0),
     out_shape = [
         (ishp + tsp) * tshp - tsp
         for ishp, tshp, tsp in zip(img_shape, tile_shape, tile_spacing)
-    ]
+        ]
 
     if isinstance(X, tuple):
         assert len(X) == 4
         # Create an output np ndarray to store the image
         if output_pixel_vals:
             out_array = np.zeros((out_shape[0], out_shape[1], 4),
-                                    dtype='uint8')
+                                 dtype='uint8')
         else:
             out_array = np.zeros((out_shape[0], out_shape[1], 4),
-                                    dtype=X.dtype)
+                                 dtype=X.dtype)
 
-        #colors default to 0, alpha defaults to 1 (opaque)
+        # colors default to 0, alpha defaults to 1 (opaque)
         if output_pixel_vals:
             channel_defaults = [0, 0, 0, 255]
         else:
@@ -432,7 +487,7 @@ def tile_raster_images(X, img_shape, tile_shape, tile_spacing=(0, 0),
                     if scale_rows_to_unit_interval:
                         # if we should scale values to be between 0 and 1
                         # do this by calling the `scale_to_unit_interval`
-                        # function
+                        # functionmapping
                         this_img = scale_to_unit_interval(
                             this_x.reshape(img_shape))
                     else:
@@ -443,7 +498,13 @@ def tile_raster_images(X, img_shape, tile_shape, tile_spacing=(0, 0),
                     if output_pixel_vals:
                         c = 255
                     out_array[
-                        tile_row * (H + Hs): tile_row * (H + Hs) + H,
-                        tile_col * (W + Ws): tile_col * (W + Ws) + W
+                    tile_row * (H + Hs): tile_row * (H + Hs) + H,
+                    tile_col * (W + Ws): tile_col * (W + Ws) + W
                     ] = this_img * c
         return out_array
+
+
+if __name__ == '__main__':
+    d = sample_image2(np.array([5, 6, 5, 5, 5, 6]),
+                      mapping={ 'happy': {'happy':0.5, 'sadness':0.5}, 'sadness': {'happy':0.2, 'sadness':0.8} },
+                      pre={'scale':True})

@@ -30,7 +30,7 @@ class SimpleClassifier(object):
 
     def get_score(self, test_x, test_y):
         test_x, test_y = self.__get_values(test_x, test_y)
-        guess_y = self.clf.predict(test_x)
+        guess_y = self.classify(test_x)
         print metrics.classification_report(test_y, guess_y)
         print metrics.confusion_matrix(test_y, guess_y)
         return np.sum(guess_y == test_y) * 1. / len(guess_y)
@@ -40,6 +40,9 @@ class SimpleClassifier(object):
             x = x.get_value(borrow=False)
             y = y.eval()
         return x, y
+
+    def classify(self, x):
+        return self.clf.predict(x)
 
 
 def get_score(train_x, train_y, test_x, test_y, classifier='logistic'):
