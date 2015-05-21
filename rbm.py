@@ -1013,7 +1013,7 @@ class RBM(object):
         else:
             return m[-1]
 
-    def mean_field_inference_opt(self, x, sample=False, k=100, img_name = 'mfi_opt'):
+    def mean_field_inference_opt(self, x, y=None, sample=False, k=100, img_name = 'mfi_opt'):
         '''
         As an optimisation, we can concatenate two images and feed it as a single image to train the network.
         In this way theano performs matrix optimisation so its much faster.
@@ -1028,7 +1028,8 @@ class RBM(object):
         if not utils.isSharedType(x):
             x = theano.shared(x, allow_downcast=True)
         data_size = x.get_value().shape[0]
-        y = self.rand.binomial(size=(data_size, self.v_n / 2), n=1, p=0, dtype=t_float_x)
+        if not y:
+            y = self.rand.binomial(size=(data_size, self.v_n / 2), n=1, p=0, dtype=t_float_x)
 
         # get initial values of tau (Concatenate x and y)
         z = T.concatenate([x, y], axis=1)

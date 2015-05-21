@@ -47,7 +47,10 @@ class StorageManager(object):
         if out_dir:
             self.move_to(out_dir)
         obj = retrieve_object(name)
-        print '... retrieved {} from {}'.format(name, os.getcwd())
+        if obj:
+            print '... retrieved {} from {}'.format(name, os.getcwd())
+        else:
+            print '... OBJECT NOT FOUND ({} at {})'.format(name, os.getcwd())
         os.chdir(cur)
         return obj
 

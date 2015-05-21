@@ -9,6 +9,7 @@ import associative_dbn
 import kanade_loader as loader
 import datastorage as store
 import utils
+import numpy as np
 import theano
 import theano.tensor as T
 from simple_classifiers import SimpleClassifier
@@ -153,7 +154,7 @@ def associate_data2data(cache=False):
 def KanadeAssociativeOptRBM(cache=False):
     print "Testing Associative RBM which tries to learn the following mapping: {anger, saddness, disgust} -> {sadness}, {contempt, happy, surprise} -> {happy}"
     # project set-up
-    data_manager = store.StorageManager('Kanade/OptMFRBMTest', log=True)
+    data_manager = store.StorageManager('Kanade/OptMFRBMTest_rand_init', log=True)
     # data_manager = store.StorageManager('Kanade/OptAssociativeRBMTest', log=True)
     shape = 25
     dataset_name = 'sharp_equi{}_{}'.format(shape, shape)
@@ -173,7 +174,10 @@ def KanadeAssociativeOptRBM(cache=False):
                                                        set_name=dataset_name)
 
     # Concatenate images
-    train_tX = theano.function([], T.concatenate([train_x, train_x_mapped], axis=1))()
+    concat1 = T.concatenate([train_x, train_x_mapped], axis=1)
+    concat2 = T.concatenate([train_x_mapped, train_x], axis=1)
+    concat = T.concatenate([concat1, concat2], axis=0)
+    train_tX = theano.function([], concat)()
     train_X = theano.shared(train_tX)
 
     # Train classifier to be used for classifying reconstruction associated image layer
@@ -207,14 +211,17 @@ def KanadeAssociativeOptRBM(cache=False):
 
     # Load RBM (test)
     loaded = data_manager.retrieve(str(rbm))
-    if loaded and cache:
+    if loaded:
         rbm = loaded
 
     # Train RBM - learn joint distribution
     # rbm.pretrain_lr(train_x, train_x01)
     for i in xrange(0, 1):
-        rbm.train(train_X)
-        rbm.save()
+
+        # if not cache:
+        #     rbm.train(train_X)
+
+        data_manager.persist(rbm)
 
         print "... reconstruction of associated images"
         # Get reconstruction with train data to get 'mapped' images to train classifiers on
@@ -225,14 +232,21 @@ def KanadeAssociativeOptRBM(cache=False):
         reconstruct_assoc_part = reconstruction[:, (shape ** 2):]
 
         # Get associated images of test data
-        test_x_associated = rbm.reconstruct_association_opt(test_x, None,
+        nsamples = np.zeros(test_x.get_value(True).shape)
+        # nsamples = np.random.normal(0, 0.0001, test_x.get_value(True).shape)
+        # nsamples = np.random.normal(0, 1, test_x.get_value(True).shape)
+        initial_y = theano.shared(nsamples, name='initial_y')
+        utils.save_images(nsamples[0:100], 'initial3.png', (10, 10), (25, 25))
+
+
+        test_x_associated = rbm.reconstruct_association_opt(test_x, initial_y,
                                                             5,
                                                             0.,
                                                             plot_n=100,
                                                             plot_every=1,
                                                             img_name='test_recon')
 
-        mf_recon = rbm.mean_field_inference_opt(test_x, sample=True, k=1)
+        mf_recon = rbm.mean_field_inference_opt(test_x, y=initial_y, sample=True, k=1)
 
         # Concatenate images
         test_MFX = theano.function([], T.concatenate([test_x, mf_recon], axis=1))()
