@@ -728,14 +728,14 @@ class RBM(object):
         self.pretrain_lr(x, y)
         self.pretrain_mean_activity_h(x, y)
 
-    def get_initial_mean_activity(self, x, y=None):
+    def set_hidden_mean_activity(self, x, y=None):
         print '... Sparsity: setting initial mean activity for hidden units'
         sub_x, sub_y = self.get_sub_data(x, y)
         _, ph = self.prop_up(sub_x, sub_y)
         active_probability_h = theano.function([], T.mean(ph, axis=0))().astype(t_float_x)
         print active_probability_h.shape
         self.active_probability_h = theano.shared(active_probability_h, 'active_probability_h')
-        print active_probability_h
+        # print active_probability_h
 
     def pretrain_mean_activity_h(self, x, y=None):
         print '... adjusting mean activity'
@@ -848,11 +848,15 @@ class RBM(object):
         store.store_object(self)
         print "... saved RBM object to " + os.getcwd() + "/" + str(self)
 
-    def sample(self, n=1, k=1):
+    def sample(self, n=1, k=1, p=0.01, rand_type='uniform'):
+        assert rand_type in ['binomial', 'uniform', 'normal']
+
         # Generate random "v"
-        activation_probability = 0.1
-        data = self.rand.binomial(size=(n, self.v_n), n=1,
-                                  p=activation_probability, dtype=t_float_x).eval()
+        if rand_type == 'binomial':
+            data = self.np_rand.binomial(size=(n, self.v_n), n=1, p=p).astype(t_float_x)
+        else:
+            data = self.np_rand.uniform(size=(n, self.v_n), low=0, high=1).astype(t_float_x)
+
         return self.reconstruct(data, k)
 
     def reconstruct(self, data, k=1, plot_n=None, plot_every=1, img_name='reconstruction'):
@@ -1013,7 +1017,7 @@ class RBM(object):
         else:
             return m[-1]
 
-    def mean_field_inference_opt(self, x, y=None, sample=False, k=100, img_name = 'mfi_opt'):
+    def mean_field_inference_opt(self, x, y=None, sample=False, k=100, img_name = 'mean_field_inference'):
         '''
         As an optimisation, we can concatenate two images and feed it as a single image to train the network.
         In this way theano performs matrix optimisation so its much faster.
@@ -1022,7 +1026,7 @@ class RBM(object):
         '''
 
         plot_n = 100
-        plot_every = min(k, 10)
+        plot_every = k if k <= 10 else 10
 
         # Initialise parameters
         if not utils.isSharedType(x):

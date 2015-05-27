@@ -143,26 +143,41 @@ class AssociativeDBN(object):
         x1_features = theano.shared(x1_np)
         x2_features = theano.shared(x2_np)
 
+        # Train top association layer
+
+        top = self.association_layer
+        tr = top.train_parameters
+
         # Check Cache
         out_dir = 'association_layer/{}_{}/'.format(len(self.dbn_left.rbm_layers),
                                                     len(self.dbn_right.rbm_layers))
 
-        load = self.data_manager.retrieve('{}_{}'.format(self.opt_top, self.association_layer),
+        load = self.data_manager.retrieve('{}_{}'.format(self.opt_top, top),
                                           out_dir=out_dir)
 
         if load and cache_top:
             self.association_layer = load
+            print '... top layer RBM loaded'
+
+        if not load and tr.sparsity_constraint:
+            top.set_initial_hidden_bias()
+            if self.opt_top:
+                # Concatenate images
+                x = theano.shared(np.concatenate((x1_np, x2_np), axis=1))
+                top.set_hidden_mean_activity(x)
+            else:
+                top.set_hidden_mean_activity(x1_features, x2_features)
 
         if not load or train_further_top:
             if self.opt_top:
                 # Concatenate images
                 x = theano.shared(np.concatenate((x1_np, x2_np), axis=1))
-                self.association_layer.train(x)
+                top.train(x)
             else:
-                self.association_layer.train(x1_features, x2_features)
+                top.train(x1_features, x2_features)
 
-            self.data_manager.persist(self.association_layer,
-                                      '{}_{}'.format(self.opt_top, self.association_layer),
+            self.data_manager.persist(top,
+                                      '{}_{}'.format(self.opt_top, top),
                                       out_dir=out_dir)
 
     # TODO clean up input and output of each function (i.e. they should all return theano or optional flag)
@@ -190,7 +205,18 @@ class AssociativeDBN(object):
         # Sample from the association layer
         # associate_x = top.reconstruct_association(assoc_in, k=associate_steps)
         if self.opt_top:
-            associate_x = top.mean_field_inference_opt(assoc_in, sample=True, k=associate_steps)
+            # Initialise y according to the neuron distribution
+            if type(top.v_unit) is GaussianVisibleUnit:
+                # TODO
+                print 'GAUSSIAN INPUT IS NOT SUPPORTED'
+
+            right_top_rbm = right.rbm_layers[-1]
+            p = right_top_rbm.active_probability_h.get_value(borrow=True)
+            y = theano.shared(right_top_rbm.np_rand.binomial(size=top_out.shape,
+                                                             n=1,
+                                                             p=p).astype(t_float_x),
+                              name='assoc_y')
+            associate_x = top.mean_field_inference_opt(assoc_in, y, sample=True, k=associate_steps)
         else:
             associate_x = top.mean_field_inference(assoc_in, sample=True, k=associate_steps)
         # associate_x = top.reconstruct_association(assoc_in, k=associate_steps)
@@ -212,7 +238,7 @@ class AssociativeDBN(object):
                 res = associate_x_reconstruct
             # res = result.get_value(borrow=True)
         else:
-            res = right.top_down_pass(associate_x)
+            res = right.top_down_pass(associate_x.astype(t_float_x))
 
         n = res.shape[0]
 

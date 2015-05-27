@@ -37,7 +37,7 @@ data_dir = "/".join([root_dir, "data"])
 def test_rbm():
     print "Testing RBM"
 
-    data_manager = store.StorageManager('GBRBM_Sparse0.0001')
+    data_manager = store.StorageManager('GBRBM_SparseC')
     # Load mnist hand digits
     datasets = loader.load_kanade(pre={'scale': True})
     # datasets = loader.load_kanade(pre={'scale2unit': True})
@@ -50,11 +50,11 @@ def test_rbm():
                     momentum=0.9,
                     weight_decay=0.0001,
                     sparsity_constraint=True,
-                    sparsity_target=0.0001,
-                    sparsity_cost=1,
+                    sparsity_target=0.01,
+                    sparsity_cost=100,
                     sparsity_decay=0.9,
                     batch_size=10,
-                    epochs=20)
+                    epochs=10)
 
     n_visible = train_set_x.get_value(borrow=True).shape[1]
     n_hidden = 250
@@ -81,7 +81,7 @@ def test_rbm():
 
     if tr.sparsity_constraint:
         rbm.set_initial_hidden_bias()
-        rbm.get_initial_mean_activity(train_set_x)
+        rbm.set_hidden_mean_activity(train_set_x)
 
     load = store.retrieve_object(str(rbm))
     if load:

@@ -16,6 +16,7 @@ from scipy.stats import itemfreq
 import kanade_loader
 import matplotlib.pyplot as plt
 
+
 def experimentChild(project_name, mapping, shape, model):
     # Project set up
     data_manager = StorageManager(project_name, log=True)
@@ -65,7 +66,9 @@ def experimentChild(project_name, mapping, shape, model):
         load = data_manager.retrieve(str(brain_c))
         if load:
             brain_c = load
-
+        else:
+            brain_c.set_initial_hidden_bias()
+            brain_c.set_hidden_mean_activity(tr_x)
         brain_c.train(tr_x)
         data_manager.persist(brain_c)
         # brain_c.train(tr_x_mixed)
@@ -81,7 +84,7 @@ def experimentChild(project_name, mapping, shape, model):
 
     elif model == 'dbn':
         brain_c = get_brain_model_DBN(shape, data_manager)
-        brain_c.pretrain(tr_x, cache=[True, True, True], train_further=[True, True, True])
+        brain_c.pretrain(tr_x, cache=[True, True, True], train_further=False)  # [True, True, True])
 
         recon_pair = brain_c.reconstruct(tr_x, k=1, plot_n=100, img_name='dbn_pair_recon_{}'.format(shape))
         recon_p_tr_x = recon_pair[:, (shape ** 2):]
@@ -93,29 +96,32 @@ def experimentChild(project_name, mapping, shape, model):
         brain_c = get_brain_model_AssociativeDBN(shape, data_manager)
         brain_c.train(h_tr_x, p_tr_x,
                       cache=[[True, True, True], [True, True, True], True],
-                      train_further=[[True, True, True], [True, True, True], True])
+                      train_further=False)  # [[False, True, True], [False, True, True], True])
 
         # Reconstruction
-        recon_p_tr_x = brain_c.dbn_right.reconstruct(p_tr_x, k=1, plot_n=100, img_name='adbn_right_recon_{}'.format(shape))
-        recon = brain_c.recall(h_te_x, associate_steps=1, recall_steps=1, img_name='adbn_child_recon_{}'.format(shape))
+        recon_p_tr_x = brain_c.dbn_right.reconstruct(p_tr_x, k=10, plot_every=1, plot_n=100,
+                                                     img_name='adbn_right_recon_{}'.format(shape))
+        recon = brain_c.recall(h_te_x, associate_steps=1, recall_steps=0, img_name='adbn_child_recon_{}'.format(shape))
 
     # Train classifier on reconstruction
     clf = SimpleClassifier('logistic', recon_p_tr_x, p_tr_y.eval())
 
     # Output number of classes
     res = clf.classify(recon).T
-    plt.plot(res)
-    plt.ylabel('Classify Count')
-    plt.show()
-    r = itemfreq(res).T
-    labels = map(lambda x: kanade_loader.emotion_rev_dict[int(x)], r[0])
-    proportion = r[1] / sum(r[1])
+    # plt.plot(res)
+    # plt.ylabel('Classify Count')
+    # plt.show()
+
+    r = np.histogram(res, bins=np.arange(1, 9))
+    labels = map(lambda x: kanade_loader.emotion_rev_dict[int(x)], r[1][:-1])
+    # labels = map(lambda x: kanade_loader.emotion_rev_dict[int(x)], r[0])
+    proportion = r[0] * 1. / sum(r[0])
     txt = 'Learnt Child Configuration:'
     print txt
     f.write(txt)
     f.write('\n')
     for i, l in enumerate(labels):
-        fill_space = (max(map(lambda x: len(x), labels))-len(l))
+        fill_space = (max(map(lambda x: len(x), labels)) - len(l))
         txt = '{}{}:\t %.3f'.format(l, ' ' * fill_space) % proportion[i]
         print txt
         f.write(txt)
@@ -124,17 +130,21 @@ def experimentChild(project_name, mapping, shape, model):
     f.close()
     data_manager.finish()
 
+
 def get_brain_model_RBM(shape):
     # Initialise RBM
     tr = TrainParam(learning_rate=0.0001,
                     momentum_type=NESTEROV,
                     momentum=0.9,
                     weight_decay=0.0001,
-                    sparsity_constraint=False,
+                    sparsity_constraint=True,
+                    sparsity_decay=0.9,
+                    sparsity_cost=100,
+                    sparsity_target=0.01,
                     batch_size=10,
                     epochs=10)
     n_visible = shape * shape * 2
-    n_hidden = 250
+    n_hidden = 500
     config = RBMConfig()
     config.v_n = n_visible
     config.h_n = n_hidden
@@ -157,8 +167,12 @@ def get_brain_model_AssociativeDBN(shape, data_manager):
                            momentum_type=NESTEROV,
                            momentum=0.9,
                            weight_decay=0.0001,
-                           epochs=10,
-                           batch_size=10)
+                           sparsity_constraint=True,
+                           sparsity_decay=0.9,
+                           sparsity_cost=100,
+                           sparsity_target=0.01,
+                           batch_size=10,
+                           epochs=10)
     h_n = 250
     bottom_logger = ProgressLogger(img_shape=(shape, shape))
     bottom_rbm = RBMConfig(v_unit=rbm_units.GaussianVisibleUnit,
@@ -171,9 +185,21 @@ def get_brain_model_AssociativeDBN(shape, data_manager):
     config.right_dbn.rbm_configs[0] = bottom_rbm
     config.left_dbn.topology = [shape ** 2, h_n, ]
     config.right_dbn.topology = [shape ** 2, h_n, ]
-    config.top_rbm.train_params.epochs = 10
-    config.top_rbm.train_params.batch_size = 10
-    config.n_association = 1000
+
+    top_tr = TrainParam(learning_rate=0.001,
+                        momentum_type=NESTEROV,
+                        momentum=0.5,
+                        weight_decay=0.0001,
+                        sparsity_constraint=True,
+                        sparsity_target=0.01,
+                        sparsity_decay=0.9,
+                        sparsity_cost=1,
+                        batch_size=10,
+                        epochs=10
+                        )
+
+    config.top_rbm.train_params = top_tr
+    config.n_association = 300
     config.reuse_dbn = False
     adbn = associative_dbn.AssociativeDBN(config=config, data_manager=data_manager)
     print '... initialised associative DBN'
@@ -183,34 +209,39 @@ def get_brain_model_AssociativeDBN(shape, data_manager):
 def get_brain_model_DBN(shape, data_manager):
     # Initialise RBM parameters
     base_tr = TrainParam(learning_rate=0.0001,
-                         momentum_type=NESTEROV,
-                         momentum=0.9,
-                         weight_decay=0.0001,
-                         sparsity_constraint=False,
-                         sparsity_target=0.00001,
-                         sparsity_decay=0.9,
-                         sparsity_cost=10000,
-                         epochs=10,
-                         batch_size=10)
+                            momentum_type=NESTEROV,
+                            momentum=0.9,
+                            weight_decay=0.0001,
+                            sparsity_constraint=True,
+                            sparsity_decay=0.9,
+                            sparsity_cost=100,
+                            sparsity_target=0.01,
+                            batch_size=10,
+                            epochs=10)
 
-    rest_tr = TrainParam(learning_rate=0.0001,
+    rest_tr = TrainParam(learning_rate=0.001,
                          momentum_type=CLASSICAL,
                          momentum=0.5,
                          weight_decay=0.001,
                          epochs=10,
                          batch_size=10)
 
-    top_tr = TrainParam(learning_rate=0.0001,
-                        momentum_type=CLASSICAL,
+    top_tr = TrainParam(learning_rate=0.001,
+                        momentum_type=NESTEROV,
                         momentum=0.5,
-                        weight_decay=0.001,
-                        epochs=10,
-                        batch_size=10)
+                        weight_decay=0.0001,
+                        sparsity_constraint=True,
+                        sparsity_target=0.01,
+                        sparsity_decay=0.9,
+                        sparsity_cost=1,
+                        batch_size=10,
+                        epochs=10
+                        )
 
     # Layer 1
     # Layer 2
     # Layer 3
-    topology = [2 * (shape ** 2), 500, 1000]
+    topology = [2 * (shape ** 2), 500, 300]
     # batch_size = 10
     first_progress_logger = ProgressLogger(img_shape=(shape * 2, shape))
     rest_progress_logger = ProgressLogger()
@@ -221,7 +252,7 @@ def get_brain_model_DBN(shape, data_manager):
     rest_rbm_config = RBMConfig(train_params=rest_tr,
                                 progress_logger=rest_progress_logger)
     top_rbm_config = RBMConfig(train_params=top_tr,
-                                progress_logger=rest_progress_logger)
+                               progress_logger=rest_progress_logger)
 
     rbm_configs = [first_rbm_config, top_rbm_config]
 
@@ -235,78 +266,80 @@ def get_brain_model_DBN(shape, data_manager):
     print '... initialised DBN'
     return dbn
 
-def plot_result(file_name, mapping):
+
+def plot_result(file_name, mapping, architectures=['RBN', 'DBN', 'ADBN']):
     f = open(file_name, 'r')
     emotions = set(kanade_loader.emotion_dict.keys())
-    graphs = {'anger':[], 'happy':[], 'sadness':[]}
+    graphs = {'anger': [], 'happy': [], 'sadness': []}
 
     for line in f.readlines():
         splitted = ''.join(line.split()).split(':')
-        if splitted[0] in emotions:
+        if splitted[0] in graphs.keys():
             lab, val = splitted[0], splitted[1]
             graphs[lab].append(val)
 
-    # print len(graphs['sadness'])
-    # print graphs
+    print map(len, graphs.values())
+    print graphs
     f.close()
 
-    #RBM
+    # RBM
     anger = graphs['anger']
-    happy= graphs['happy']
+    happy = graphs['happy']
     sadness = graphs['sadness']
     child_reaction = mapping['sadness']
     plt.figure(1)
-    plt.subplot(131)
-    plt.title('RBM')
-    plt.plot(np.arange(0, 20), anger[0::3], 'r', np.arange(0,20), np.repeat(child_reaction['anger'], 20), 'r--')
-    plt.plot(np.arange(0, 20), sadness[0::3], 'b', np.arange(0,20), np.repeat(child_reaction['sadness'], 20), 'b--')
-    plt.plot(np.arange(0, 20), happy[0::3], 'g', np.arange(0,20), np.repeat(child_reaction['happy'], 20), 'g--')
+    attempts = np.min(map(len, graphs.values())) / len(architectures)
+    print attempts
 
-    #DBN
-    plt.subplot(132)
-    plt.title('DBN')
-    plt.plot(np.arange(0, 20), anger[1::3], 'r', np.arange(0,20), np.repeat(child_reaction['anger'], 20), 'r--')
-    plt.plot(np.arange(0, 20), sadness[1::3], 'b', np.arange(0,20), np.repeat(child_reaction['sadness'], 20), 'b--')
-    plt.plot(np.arange(0, 20), happy[1::3], 'g', np.arange(0,20), np.repeat(child_reaction['happy'], 20), 'g--')
+    for i in xrange(0, 3):
+        plt.subplot(130 + i+1)
+        plt.title(architectures[i])
 
-    #AssDBN
-    plt.subplot(133)
-    plt.title('Associative DBN')
-    plt.plot(np.arange(0, 20), anger[2::3], 'r', np.arange(0,20), np.repeat(child_reaction['anger'], 20), 'r--')
-    plt.plot(np.arange(0, 20), sadness[2::3], 'b', np.arange(0,20), np.repeat(child_reaction['sadness'], 20), 'b--')
-    plt.plot(np.arange(0, 20), happy[2::3], 'g', np.arange(0,20), np.repeat(child_reaction['happy'], 20), 'g--')
+        plt.plot(np.arange(0, attempts), np.repeat(child_reaction['anger'], attempts), 'r--')
+        plt.plot(np.arange(0, attempts), np.repeat(child_reaction['sadness'], attempts), 'b--')
+        plt.plot(np.arange(0, attempts), np.repeat(child_reaction['happy'], attempts), 'g--')
+
+        plt.plot(np.arange(0, attempts), anger[i::3], 'r',)
+        plt.plot(np.arange(0, attempts), sadness[i::3], 'b')
+        plt.plot(np.arange(0, attempts), happy[i::3], 'g')
+        plt.legend()
+
+    # plt.title(architectures[0])
+    #
+    # plt.plot(np.arange(0, attempts), np.repeat(child_reaction['anger'], attempts), 'r--')
+    # plt.plot(np.arange(0, attempts), np.repeat(child_reaction['sadness'], attempts), 'b--')
+    # plt.plot(np.arange(0, attempts), np.repeat(child_reaction['happy'], attempts), 'g--')
+    #
+    # plt.plot(np.arange(0, attempts), anger, 'r', label='anger')
+    # plt.plot(np.arange(0, attempts), sadness, 'b', label='sadness')
+    # plt.plot(np.arange(0, attempts), happy, 'g', label='happy')
+    # plt.legend()
+
     plt.show()
 
 
-
 if __name__ == '__main__':
-
 
     print 'Experiment 1: Interaction between happy/sad children and Secure Parent'
     mapping = ({'happy': {'happy': 0.8, 'anger': 0.1, 'sadness': 0.1},
                 'sadness': {'happy': 0.8, 'anger': 0.1, 'sadness': 0.1},
                 'anger': {'happy': 0.8, 'anger': 0.1, 'sadness': 0.1},
                 })
+    plot_result('data/Experiment4/Experiment4.txt', mapping)
 
     attempt = 20
-    # for i in xrange(0, attempt):
-    #     f = open('Experiment1.txt', 'a')
-    #     f.write('Attempt %d \n' % i)
-    #     f.close()
-    #     experimentChild('Experiment1', mapping, 25, 'rbm')
-    #     experimentChild('Experiment1', mapping, 25, 'dbn')
-    #     experimentChild('Experiment1', mapping, 25, 'adbn')
+    for i in xrange(0, attempt):
+        print 'attempt %d' % i
+        experimentChild('Experiment4', mapping, 25, 'rbm')
+        experimentChild('Experiment4', mapping, 25, 'dbn')
+        experimentChild('Experiment4', mapping, 25, 'adbn')
 
-    # for i in xrange(0, attempt):
-    #     f = open('Experiment1_50.txt', 'a')
-    #     f.write('Attempt %d \n' % i)
-    #     f.close()
-    #     experimentChild('Experiment1_50', mapping, 50, 'rbm')
-    #     experimentChild('Experiment1_50', mapping, 50, 'dbn')
-    #     experimentChild('Experiment1_50', mapping, 50, 'adbn')
+    for i in xrange(0, attempt):
+        experimentChild('Experiment4_50', mapping, 50, 'rbm')
+        experimentChild('Experiment4_50', mapping, 50, 'dbn')
+        experimentChild('Experiment4_50', mapping, 50, 'adbn')
 
-    plot_result('data/Experiment1/Experiment1.txt', mapping)
-    plot_result('data/Experiment1_50/Experiment1_50.txt', mapping)
+    # plot_result('data/Experiment1_50/Experiment1_50.txt', mapping)
 
     print 'Experiment 2: Interaction between happy/sad children and Ambivalent Parent'
     mapping = ({'happy': {'happy': 0.5, 'anger': 0.2, 'sadness': 0.3},
@@ -314,24 +347,24 @@ if __name__ == '__main__':
                 'sadness': {'happy': 0.5, 'anger': 0.2, 'sadness': 0.3},
                 })
     #
-    # for i in xrange(0, attempt):
-    #     f = open('Experiment2.txt','a')
-    #     f.write('Attempt %d \n' % i)
-    #     f.close()
-    #     experimentChild('Experiment2', mapping, 25, 'rbm')
-    #     experimentChild('Experiment2', mapping, 25, 'dbn')
-    #     experimentChild('Experiment2', mapping, 25, 'adbn')
+    for i in xrange(0, attempt):
+        f = open('Experiment2.txt','a')
+        f.write('Attempt %d \n' % i)
+        f.close()
+        experimentChild('Experiment5', mapping, 25, 'rbm')
+        experimentChild('Experiment5', mapping, 25, 'dbn')
+        experimentChild('Experiment5', mapping, 25, 'adbn')
 
-    # for i in xrange(0, attempt):
-    #     f = open('Experiment2_50.txt', 'a')
-    #     f.write('Attempt %d \n' % i)
-    #     f.close()
-    #     experimentChild('Experiment2_50', mapping, 50, 'rbm')
-    #     experimentChild('Experiment2_50', mapping, 50, 'dbn')
-    #     experimentChild('Experiment2_50', mapping, 50, 'adbn')
+    for i in xrange(0, attempt):
+        f = open('Experiment2_50.txt', 'a')
+        f.write('Attempt %d \n' % i)
+        f.close()
+        experimentChild('Experiment5_50', mapping, 50, 'rbm')
+        experimentChild('Experiment5_50', mapping, 50, 'dbn')
+        experimentChild('Experiment5_50', mapping, 50, 'adbn')
     #
-    plot_result('data/Experiment2/Experiment2.txt', mapping)
-    plot_result('data/Experiment2_50/Experiment2_50.txt',mapping)
+    # plot_result('data/Experiment2/Experiment2.txt', mapping)
+    # plot_result('data/Experiment2_50/Experiment2_50.txt',mapping)
 
 
     print 'Experiment 3: Interaction between happy/sad children and Avoidant Parent'
@@ -340,22 +373,21 @@ if __name__ == '__main__':
                 'sadness': {'happy': 0.3, 'anger': 0.5, 'sadness': 0.2},
                 })
 
-    # for i in xrange(0, attempt):
-    #     f = open('Experiment3.txt','a')
-    #     f.write('Attempt %d \n' % i)
-    #     f.close()
-    #     experimentChild('Experiment3', mapping, 25, 'rbm')
-    #     experimentChild('Experiment3', mapping, 25, 'dbn')
-    #     experimentChild('Experiment3', mapping, 25, 'adbn')
+    for i in xrange(0, attempt):
+        f = open('Experiment3.txt','a')
+        f.write('Attempt %d \n' % i)
+        f.close()
+        experimentChild('Experiment6', mapping, 25, 'rbm')
+        experimentChild('Experiment6', mapping, 25, 'dbn')
+        experimentChild('Experiment6', mapping, 25, 'adbn')
 
-    # for i in xrange(0, attempt):
-    #     f = open('Experiment3_50.txt', 'a')
-    #     f.write('Attempt %d \n' % i)
-    #     f.close()
-    #     experimentChild('Experiment3_50', mapping, 50, 'rbm')
-    #     experimentChild('Experiment3_50', mapping, 50, 'dbn')
-    #     experimentChild('Experiment3_50', mapping, 50, 'adbn')
+    for i in xrange(0, attempt):
+        f = open('Experiment3_50.txt', 'a')
+        f.write('Attempt %d \n' % i)
+        f.close()
+        experimentChild('Experiment6_50', mapping, 50, 'rbm')
+        experimentChild('Experiment6_50', mapping, 50, 'dbn')
+        experimentChild('Experiment6_50', mapping, 50, 'adbn')
 
-    plot_result('data/Experiment3/Experiment3.txt',mapping)
-    plot_result('data/Experiment3_50/Experiment3_50.txt',mapping)
-
+    # plot_result('data/Experiment3/Experiment3.txt',mapping)
+    # plot_result('data/Experiment3_50/Experiment3_50.txt',mapping)

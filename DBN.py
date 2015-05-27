@@ -177,14 +177,15 @@ class DBN(object):
                 rbm.config.train_params.epochs = epochs
                 # Override the reference
                 self.rbm_layers[i] = rbm
-                print "... loaded trained layer"
+                print "... loaded trained layer {}".format(rbm)
 
                 if train_further[i]:
                     cost += np.mean(rbm.train(layer_input))
                     self.data_manager.persist(rbm)
             else:
-                if optimise:
-                    rbm.pretrain_lr(layer_input)
+                if rbm.train_parameters.sparsity_constraint:
+                    rbm.set_initial_hidden_bias()
+                    rbm.set_hidden_mean_activity(layer_input)
                 cost += np.mean(rbm.train(layer_input))
                 self.data_manager.persist(rbm)
 
@@ -368,12 +369,18 @@ class DBN(object):
 
         return reconstructions[-1]
 
-    def sample(self, n=1, k=10):
+    def sample(self, n=1, k=10, rand_type='normal'):
 
         top_layer = self.rbm_layers[-1]
 
-        # Sample between top two layers
-        x = top_layer.sample(n, k)
+        if self.n_layers > 1:
+            print 'sampling according to active_probability of layer below'
+            pen = self.rbm_layers[-2]
+            active_h = pen.active_probability_h.get_value(borrow=True)
+            x = top_layer.sample(n, k, rand_type='binomial', p=active_h)
+        else:
+            # Sample between top two layers
+            x = top_layer.sample(n, k, rand_type='binomial', p=0.05)
 
         # prop down the output to visible unit if it is not RBM
         if self.n_layers > 1:
