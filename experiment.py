@@ -34,8 +34,7 @@ def experimentChild(project_name, mapping, shape, model):
     # Get dataset
     happy_set = kanade_loader.load_kanade(set_name=dataset_name,
                                           emotions=mapping.keys(),
-                                          pre=preprocesssing,
-                                          n=100)
+                                          pre=preprocesssing)
     h_tr, h_vl, h_te = happy_set
     h_tr_x, h_tr_y = h_tr
     h_vl_x, h_vl_y = h_vl
@@ -236,52 +235,104 @@ def get_brain_model_DBN(shape, data_manager):
     print '... initialised DBN'
     return dbn
 
+def plot_result(file_name, mapping):
+    f = open(file_name, 'r')
+    emotions = set(kanade_loader.emotion_dict.keys())
+    graphs = {'anger':[], 'happy':[], 'sadness':[]}
+
+    for line in f.readlines():
+        splitted = ''.join(line.split()).split(':')
+        if splitted[0] in emotions:
+            lab, val = splitted[0], splitted[1]
+            graphs[lab].append(val)
+
+    # print len(graphs['sadness'])
+    # print graphs
+    f.close()
+
+    #RBM
+    anger = graphs['anger']
+    happy= graphs['happy']
+    sadness = graphs['sadness']
+    child_reaction = mapping['sadness']
+    plt.figure(1)
+    plt.subplot(131)
+    plt.title('RBM')
+    plt.plot(np.arange(0, 20), anger[0::3], 'r', np.arange(0,20), np.repeat(child_reaction['anger'], 20), 'r--')
+    plt.plot(np.arange(0, 20), sadness[0::3], 'b', np.arange(0,20), np.repeat(child_reaction['sadness'], 20), 'b--')
+    plt.plot(np.arange(0, 20), happy[0::3], 'g', np.arange(0,20), np.repeat(child_reaction['happy'], 20), 'g--')
+
+    #DBN
+    plt.subplot(132)
+    plt.title('DBN')
+    plt.plot(np.arange(0, 20), anger[1::3], 'r', np.arange(0,20), np.repeat(child_reaction['anger'], 20), 'r--')
+    plt.plot(np.arange(0, 20), sadness[1::3], 'b', np.arange(0,20), np.repeat(child_reaction['sadness'], 20), 'b--')
+    plt.plot(np.arange(0, 20), happy[1::3], 'g', np.arange(0,20), np.repeat(child_reaction['happy'], 20), 'g--')
+
+    #AssDBN
+    plt.subplot(133)
+    plt.title('Associative DBN')
+    plt.plot(np.arange(0, 20), anger[2::3], 'r', np.arange(0,20), np.repeat(child_reaction['anger'], 20), 'r--')
+    plt.plot(np.arange(0, 20), sadness[2::3], 'b', np.arange(0,20), np.repeat(child_reaction['sadness'], 20), 'b--')
+    plt.plot(np.arange(0, 20), happy[2::3], 'g', np.arange(0,20), np.repeat(child_reaction['happy'], 20), 'g--')
+    plt.show()
+
+
 
 if __name__ == '__main__':
+
+
     print 'Experiment 1: Interaction between happy/sad children and Secure Parent'
     mapping = ({'happy': {'happy': 0.8, 'anger': 0.1, 'sadness': 0.1},
                 'sadness': {'happy': 0.8, 'anger': 0.1, 'sadness': 0.1},
                 'anger': {'happy': 0.8, 'anger': 0.1, 'sadness': 0.1},
                 })
 
-    attempt = 2
-    for i in xrange(0, attempt):
-        f = open('Experiment1.txt', 'a')
-        f.write('Attempt %d \n' % i)
-        f.close()
-        experimentChild('Experiment1', mapping, 25, 'rbm')
-        experimentChild('Experiment1', mapping, 25, 'dbn')
-        experimentChild('Experiment1', mapping, 25, 'adbn')
+    attempt = 20
+    # for i in xrange(0, attempt):
+    #     f = open('Experiment1.txt', 'a')
+    #     f.write('Attempt %d \n' % i)
+    #     f.close()
+    #     experimentChild('Experiment1', mapping, 25, 'rbm')
+    #     experimentChild('Experiment1', mapping, 25, 'dbn')
+    #     experimentChild('Experiment1', mapping, 25, 'adbn')
 
-    for i in xrange(0, attempt):
-        f = open('Experiment1_50.txt', 'a')
-        f.write('Attempt %d \n' % i)
-        f.close()
-        experimentChild('Experiment1_50', mapping, 50, 'rbm')
-        experimentChild('Experiment1_50', mapping, 50, 'dbn')
-        experimentChild('Experiment1_50', mapping, 50, 'adbn')
+    # for i in xrange(0, attempt):
+    #     f = open('Experiment1_50.txt', 'a')
+    #     f.write('Attempt %d \n' % i)
+    #     f.close()
+    #     experimentChild('Experiment1_50', mapping, 50, 'rbm')
+    #     experimentChild('Experiment1_50', mapping, 50, 'dbn')
+    #     experimentChild('Experiment1_50', mapping, 50, 'adbn')
+
+    plot_result('data/Experiment1/Experiment1.txt', mapping)
+    plot_result('data/Experiment1_50/Experiment1_50.txt', mapping)
 
     print 'Experiment 2: Interaction between happy/sad children and Ambivalent Parent'
     mapping = ({'happy': {'happy': 0.5, 'anger': 0.2, 'sadness': 0.3},
                 'anger': {'happy': 0.5, 'anger': 0.2, 'sadness': 0.3},
                 'sadness': {'happy': 0.5, 'anger': 0.2, 'sadness': 0.3},
                 })
+    #
+    # for i in xrange(0, attempt):
+    #     f = open('Experiment2.txt','a')
+    #     f.write('Attempt %d \n' % i)
+    #     f.close()
+    #     experimentChild('Experiment2', mapping, 25, 'rbm')
+    #     experimentChild('Experiment2', mapping, 25, 'dbn')
+    #     experimentChild('Experiment2', mapping, 25, 'adbn')
 
-    for i in xrange(0, attempt):
-        f = open('Experiment2.txt','a')
-        f.write('Attempt %d \n' % i)
-        f.close()
-        experimentChild('Experiment2', mapping, 25, 'rbm')
-        experimentChild('Experiment2', mapping, 25, 'dbn')
-        experimentChild('Experiment2', mapping, 25, 'adbn')
+    # for i in xrange(0, attempt):
+    #     f = open('Experiment2_50.txt', 'a')
+    #     f.write('Attempt %d \n' % i)
+    #     f.close()
+    #     experimentChild('Experiment2_50', mapping, 50, 'rbm')
+    #     experimentChild('Experiment2_50', mapping, 50, 'dbn')
+    #     experimentChild('Experiment2_50', mapping, 50, 'adbn')
+    #
+    plot_result('data/Experiment2/Experiment2.txt', mapping)
+    plot_result('data/Experiment2_50/Experiment2_50.txt',mapping)
 
-    for i in xrange(0, attempt):
-        f = open('Experiment2_50.txt', 'a')
-        f.write('Attempt %d \n' % i)
-        f.close()
-        experimentChild('Experiment2_50', mapping, 50, 'rbm')
-        experimentChild('Experiment2_50', mapping, 50, 'dbn')
-        experimentChild('Experiment2_50', mapping, 50, 'adbn')
 
     print 'Experiment 3: Interaction between happy/sad children and Avoidant Parent'
     mapping = ({'happy': {'happy': 0.3, 'anger': 0.5, 'sadness': 0.2},
@@ -289,19 +340,22 @@ if __name__ == '__main__':
                 'sadness': {'happy': 0.3, 'anger': 0.5, 'sadness': 0.2},
                 })
 
-    for i in xrange(0, attempt):
-        f = open('Experiment3.txt','a')
-        f.write('Attempt %d \n' % i)
-        f.close()
-        experimentChild('Experiment3', mapping, 25, 'rbm')
-        experimentChild('Experiment3', mapping, 25, 'dbn')
-        experimentChild('Experiment3', mapping, 25, 'adbn')
+    # for i in xrange(0, attempt):
+    #     f = open('Experiment3.txt','a')
+    #     f.write('Attempt %d \n' % i)
+    #     f.close()
+    #     experimentChild('Experiment3', mapping, 25, 'rbm')
+    #     experimentChild('Experiment3', mapping, 25, 'dbn')
+    #     experimentChild('Experiment3', mapping, 25, 'adbn')
 
-    for i in xrange(0, attempt):
-        f = open('Experiment3_50.txt', 'a')
-        f.write('Attempt %d \n' % i)
-        f.close()
-        experimentChild('Experiment3_50', mapping, 50, 'rbm')
-        experimentChild('Experiment3_50', mapping, 50, 'dbn')
-        experimentChild('Experiment3_50', mapping, 50, 'adbn')
+    # for i in xrange(0, attempt):
+    #     f = open('Experiment3_50.txt', 'a')
+    #     f.write('Attempt %d \n' % i)
+    #     f.close()
+    #     experimentChild('Experiment3_50', mapping, 50, 'rbm')
+    #     experimentChild('Experiment3_50', mapping, 50, 'dbn')
+    #     experimentChild('Experiment3_50', mapping, 50, 'adbn')
+
+    plot_result('data/Experiment3/Experiment3.txt',mapping)
+    plot_result('data/Experiment3_50/Experiment3_50.txt',mapping)
 
