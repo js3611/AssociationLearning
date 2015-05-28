@@ -86,12 +86,12 @@ def experimentChild(project_name, mapping, shape, model):
 
     elif model == 'dbn':
         brain_c = get_brain_model_DBN(shape, data_manager)
-        brain_c.pretrain(tr_x, cache=[True, True, True], train_further=[True, True, True])
+        brain_c.pretrain(tr_x, cache=[True, True, True], train_further=False)#[True, True, True])
 
         recon_pair = brain_c.reconstruct(tr_x, k=1, plot_n=100, img_name='dbn_pair_recon_{}'.format(shape))
         recon_p_tr_x = recon_pair[:, (shape ** 2):]
 
-        recon_pair = brain_c.reconstruct(te_x, k=10, plot_n=100, img_name='dbn_child_recon_{}'.format(shape))
+        recon_pair = brain_c.reconstruct(te_x, k=1, plot_n=100, img_name='dbn_child_recon_{}'.format(shape))
         recon = recon_pair[:, (shape ** 2):]
 
     elif model == 'adbn':
@@ -214,7 +214,7 @@ def get_brain_model_DBN(shape, data_manager):
                             momentum_type=NESTEROV,
                             momentum=0.9,
                             weight_decay=0.0001,
-                            sparsity_constraint=True,
+                            sparsity_constraint=False,
                             sparsity_decay=0.9,
                             sparsity_cost=10,
                             sparsity_target=0.01,
@@ -232,7 +232,7 @@ def get_brain_model_DBN(shape, data_manager):
                         momentum_type=NESTEROV,
                         momentum=0.5,
                         weight_decay=0.0001,
-                        sparsity_constraint=True,
+                        sparsity_constraint=False,
                         sparsity_target=0.01,
                         sparsity_decay=0.9,
                         sparsity_cost=1,
@@ -317,7 +317,7 @@ def plot_result(file_name, mapping, architectures=['RBN', 'DBN', 'ADBN']):
     # plt.plot(np.arange(0, attempts), happy, 'g', label='happy')
     # plt.legend()
 
-    plt.savefig('.'.join(file_name.split('.')[0],'png'))
+    plt.savefig('.'.join([file_name.split('.')[0],'png']))
     plt.close()
 #    plt.show()
 
@@ -330,22 +330,24 @@ if __name__ == '__main__':
                 'anger': {'happy': 0.8, 'anger': 0.1, 'sadness': 0.1},
                 })
 
-#    plot_result('data/Experiment4/Experiment4.txt', mapping)
-    
-    attempt = 20
+    plot_result('data/remote/Kanade/Experiment1/Experiment1.txt', mapping)
+    plot_result('data/remote/Kanade/Experiment1_50/Experiment1_50.txt', mapping)
+
+    attempt = 1
     for i in xrange(0, attempt):
         print 'attempt %d' % i
-        experimentChild('Experiment4', mapping, 25, 'rbm')
-        experimentChild('Experiment4', mapping, 25, 'dbn')
-        experimentChild('Experiment4', mapping, 25, 'adbn')
+        # experimentChild('Experiment4', mapping, 25, 'rbm')
+        experimentChild('Experiment1', mapping, 25, 'dbn')
+        # experimentChild('Experiment4', mapping, 25, 'adbn')
 
     for i in xrange(0, attempt):
-        experimentChild('Experiment4_50', mapping, 50, 'rbm')
-        experimentChild('Experiment4_50', mapping, 50, 'dbn')
-        experimentChild('Experiment4_50', mapping, 50, 'adbn')
+        # experimentChild('Experiment4_50', mapping, 50, 'rbm')
+        experimentChild('Experiment1_50', mapping, 50, 'dbn')
+        # experimentChild('Experiment4_50', mapping, 50, 'adbn')
 
 
     # plot_result('data/Experiment4_50/Experiment4_50.txt', mapping)
+
 
     print 'Experiment 2: Interaction between happy/sad children and Ambivalent Parent'
     mapping = ({'happy': {'happy': 0.5, 'anger': 0.2, 'sadness': 0.3},
@@ -357,20 +359,22 @@ if __name__ == '__main__':
         f = open('Experiment2.txt','a')
         f.write('Attempt %d \n' % i)
         f.close()
-        experimentChild('Experiment5', mapping, 25, 'rbm')
-        experimentChild('Experiment5', mapping, 25, 'dbn')
-        experimentChild('Experiment5', mapping, 25, 'adbn')
+        # experimentChild('Experiment5', mapping, 25, 'rbm')
+        experimentChild('Experiment2', mapping, 25, 'dbn')
+        # experimentChild('Experiment5', mapping, 25, 'adbn')
 
     for i in xrange(0, attempt):
         f = open('Experiment2_50.txt', 'a')
         f.write('Attempt %d \n' % i)
         f.close()
-        experimentChild('Experiment5_50', mapping, 50, 'rbm')
-        experimentChild('Experiment5_50', mapping, 50, 'dbn')
-        experimentChild('Experiment5_50', mapping, 50, 'adbn')
+        # experimentChild('Experiment5_50', mapping, 50, 'rbm')
+        experimentChild('Experiment2_50', mapping, 50, 'dbn')
+        # experimentChild('Experiment5_50', mapping, 50, 'adbn')
     #
     # plot_result('data/Experiment2/Experiment2.txt', mapping)
     # plot_result('data/Experiment2_50/Experiment2_50.txt',mapping)
+    plot_result('data/remote/Kanade/Experiment2/Experiment2.txt', mapping)
+    plot_result('data/remote/Kanade/Experiment2_50/Experiment2_50.txt', mapping)
 
 
     print 'Experiment 3: Interaction between happy/sad children and Avoidant Parent'
@@ -383,17 +387,20 @@ if __name__ == '__main__':
         f = open('Experiment3.txt','a')
         f.write('Attempt %d \n' % i)
         f.close()
-        experimentChild('Experiment6', mapping, 25, 'rbm')
-        experimentChild('Experiment6', mapping, 25, 'dbn')
-        experimentChild('Experiment6', mapping, 25, 'adbn')
+        # experimentChild('Experiment6', mapping, 25, 'rbm')
+        experimentChild('Experiment3', mapping, 25, 'dbn')
+        # experimentChild('Experiment6', mapping, 25, 'adbn')
 
     for i in xrange(0, attempt):
         f = open('Experiment3_50.txt', 'a')
         f.write('Attempt %d \n' % i)
         f.close()
-        experimentChild('Experiment6_50', mapping, 50, 'rbm')
-        experimentChild('Experiment6_50', mapping, 50, 'dbn')
-        experimentChild('Experiment6_50', mapping, 50, 'adbn')
+        # experimentChild('Experiment6_50', mapping, 50, 'rbm')
+        experimentChild('Experiment3_50', mapping, 50, 'dbn')
+        # experimentChild('Experiment6_50', mapping, 50, 'adbn')
 
     # plot_result('data/Experiment3/Experiment3.txt',mapping)
     # plot_result('data/Experiment3_50/Experiment3_50.txt',mapping)
+    plot_result('data/remote/Kanade/Experiment6/Experiment6.txt', mapping)
+    plot_result('data/remote/Kanade/Experiment3/Experiment3.txt', mapping)
+
