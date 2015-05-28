@@ -35,7 +35,9 @@ def experimentChild(project_name, mapping, shape, model):
     # Get dataset
     happy_set = kanade_loader.load_kanade(set_name=dataset_name,
                                           emotions=mapping.keys(),
-                                          pre=preprocesssing)
+                                          pre=preprocesssing,
+                                          n=1000)
+    
     h_tr, h_vl, h_te = happy_set
     h_tr_x, h_tr_y = h_tr
     h_vl_x, h_vl_y = h_vl
@@ -84,7 +86,7 @@ def experimentChild(project_name, mapping, shape, model):
 
     elif model == 'dbn':
         brain_c = get_brain_model_DBN(shape, data_manager)
-        brain_c.pretrain(tr_x, cache=[True, True, True], train_further=False)  # [True, True, True])
+        brain_c.pretrain(tr_x, cache=[True, True, True], train_further=[True, True, True])
 
         recon_pair = brain_c.reconstruct(tr_x, k=1, plot_n=100, img_name='dbn_pair_recon_{}'.format(shape))
         recon_p_tr_x = recon_pair[:, (shape ** 2):]
@@ -96,12 +98,12 @@ def experimentChild(project_name, mapping, shape, model):
         brain_c = get_brain_model_AssociativeDBN(shape, data_manager)
         brain_c.train(h_tr_x, p_tr_x,
                       cache=[[True, True, True], [True, True, True], True],
-                      train_further=False)  # [[False, True, True], [False, True, True], True])
+                      train_further=[[True, True, True], [True, True, True], True])
 
         # Reconstruction
         recon_p_tr_x = brain_c.dbn_right.reconstruct(p_tr_x, k=10, plot_every=1, plot_n=100,
                                                      img_name='adbn_right_recon_{}'.format(shape))
-        recon = brain_c.recall(h_te_x, associate_steps=1, recall_steps=0, img_name='adbn_child_recon_{}'.format(shape))
+        recon = brain_c.recall(h_te_x, associate_steps=10, recall_steps=0, img_name='adbn_child_recon_{}'.format(shape))
 
     # Train classifier on reconstruction
     clf = SimpleClassifier('logistic', recon_p_tr_x, p_tr_y.eval())
@@ -199,7 +201,7 @@ def get_brain_model_AssociativeDBN(shape, data_manager):
                         )
 
     config.top_rbm.train_params = top_tr
-    config.n_association = 300
+    config.n_association = 1000
     config.reuse_dbn = False
     adbn = associative_dbn.AssociativeDBN(config=config, data_manager=data_manager)
     print '... initialised associative DBN'
@@ -214,7 +216,7 @@ def get_brain_model_DBN(shape, data_manager):
                             weight_decay=0.0001,
                             sparsity_constraint=True,
                             sparsity_decay=0.9,
-                            sparsity_cost=100,
+                            sparsity_cost=10,
                             sparsity_target=0.01,
                             batch_size=10,
                             epochs=10)
@@ -241,7 +243,7 @@ def get_brain_model_DBN(shape, data_manager):
     # Layer 1
     # Layer 2
     # Layer 3
-    topology = [2 * (shape ** 2), 500, 300]
+    topology = [2 * (shape ** 2), 500, 1000]
     # batch_size = 10
     first_progress_logger = ProgressLogger(img_shape=(shape * 2, shape))
     rest_progress_logger = ProgressLogger()
@@ -315,7 +317,9 @@ def plot_result(file_name, mapping, architectures=['RBN', 'DBN', 'ADBN']):
     # plt.plot(np.arange(0, attempts), happy, 'g', label='happy')
     # plt.legend()
 
-    plt.show()
+    plt.savefig('.'.join(file_name.split('.')[0],'png'))
+    plt.close()
+#    plt.show()
 
 
 if __name__ == '__main__':
@@ -325,8 +329,9 @@ if __name__ == '__main__':
                 'sadness': {'happy': 0.8, 'anger': 0.1, 'sadness': 0.1},
                 'anger': {'happy': 0.8, 'anger': 0.1, 'sadness': 0.1},
                 })
-    plot_result('data/Experiment4/Experiment4.txt', mapping)
 
+#    plot_result('data/Experiment4/Experiment4.txt', mapping)
+    
     attempt = 20
     for i in xrange(0, attempt):
         print 'attempt %d' % i
@@ -339,7 +344,8 @@ if __name__ == '__main__':
         experimentChild('Experiment4_50', mapping, 50, 'dbn')
         experimentChild('Experiment4_50', mapping, 50, 'adbn')
 
-    # plot_result('data/Experiment1_50/Experiment1_50.txt', mapping)
+
+    # plot_result('data/Experiment4_50/Experiment4_50.txt', mapping)
 
     print 'Experiment 2: Interaction between happy/sad children and Ambivalent Parent'
     mapping = ({'happy': {'happy': 0.5, 'anger': 0.2, 'sadness': 0.3},
