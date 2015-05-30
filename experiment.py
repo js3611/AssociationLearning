@@ -36,7 +36,7 @@ def experimentChild(project_name, mapping, shape, model):
     happy_set = kanade_loader.load_kanade(set_name=dataset_name,
                                           emotions=mapping.keys(),
                                           pre=preprocesssing,
-                                          n=100)
+                                          )
 
     h_tr, h_vl, h_te = happy_set
     h_tr_x, h_tr_y = h_tr
@@ -186,9 +186,14 @@ def get_brain_model_AssociativeDBN(shape, data_manager):
                            h_n=h_n,
                            progress_logger=bottom_logger,
                            train_params=bottom_tr)
+    rest_logger = ProgressLogger()
+    rest_rbm = RBMConfig(v_n=250,
+                         h_n=250,
+                         progress_logger=rest_logger,
+                         train_params=rest_tr)
 
-    config.left_dbn.rbm_configs = [bottom_rbm, rest_tr]
-    config.right_dbn.rbm_configs = [bottom_rbm, rest_tr]
+    config.left_dbn.rbm_configs = [bottom_rbm, rest_rbm]
+    config.right_dbn.rbm_configs = [bottom_rbm, rest_rbm]
     config.left_dbn.topology = [shape ** 2, h_n, 250]
     config.right_dbn.topology = [shape ** 2, h_n, 250]
 
@@ -358,12 +363,12 @@ if __name__ == '__main__':
             experimentChild(proj_name, mapping, shape, 'adbn')
             # experimentChild('Experiment4', mapping, 25, 'adbn')
 
-    experiment_child('Experiment7', secure_mapping, 25)
-    experiment_child('Experiment7_50', secure_mapping, 50)
-    experiment_child('Experiment8', ambivalent_mapping, 25)
-    experiment_child('Experiment8_50', ambivalent_mapping, 50)
-    experiment_child('Experiment9', avoidant_mapping, 25)
-    experiment_child('Experiment9_50', avoidant_mapping, 50)
+    # experiment_child('Experiment7', secure_mapping, 25)
+    # experiment_child('Experiment7_50', secure_mapping, 50)
+    # experiment_child('Experiment8', ambivalent_mapping, 25)
+    # experiment_child('Experiment8_50', ambivalent_mapping, 50)
+    # experiment_child('Experiment9', avoidant_mapping, 25)
+    # experiment_child('Experiment9_50', avoidant_mapping, 50)
 
     # plot_result('data/Experiment4_50/Experiment4_50.txt', mapping)
 
