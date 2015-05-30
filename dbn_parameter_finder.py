@@ -2,7 +2,6 @@ __author__ = 'joschlemper'
 
 import m_loader
 import kanade_loader as k_loader
-import logistic_sgd
 import datastorage as store
 from simple_classifiers import SimpleClassifier
 from rbm import *
@@ -268,10 +267,10 @@ def find_hyper_parameters():
 
 
                                                     dataset[2] = (theano.shared(sampled), dataset[2][1])
-                                                    score = logistic_sgd.sgd_optimization_mnist(0.13, 100, dataset, 10)
+                                                    # TODO insert classifier here
 
-                                                    logging.info(str(dbn) + " : " + str(score))
-                                                    f.write(str(dbn) + ':' + str(score) + '\n')
+                                                    # logging.info(str(dbn) + " : " + str(score))
+                                                    # f.write(str(dbn) + ':' + str(score) + '\n')
 
                                                     print str(dbn)
 

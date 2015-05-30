@@ -1,7 +1,6 @@
 import theano
 import theano.tensor as T
 import numpy as np
-import logistic_sgd
 import rbm as RBM
 import DBN
 import associative_dbn
@@ -140,11 +139,11 @@ def associate_data2data(cache=False):
     # Test set: reconstructed y's become the input. Get the corresponding x's and y's
     dataset01[2] = (theano.shared(reconstructed_y), test_y)
 
-    # Classify the reconstructions
-    score = logistic_sgd.sgd_optimization_mnist(0.13, 100, dataset01, 100)
-
-    print 'Score: {}'.format(str(score))
-    print str(rbm)
+    # Classify the reconstructions TODO
+    # score = logistic_sgd.sgd_optimization_mnist(0.13, 100, dataset01, 100)
+    #
+    # print 'Score: {}'.format(str(score))
+    # print str(rbm)
 
 
 def associate_data2dataDBN(cache=False):
@@ -222,11 +221,11 @@ def associate_data2dataDBN(cache=False):
 
                     dataset01[2] = (theano.shared(sampled), test_y)
 
-                    # Classify the reconstructions
-                    score = logistic_sgd.sgd_optimization_mnist(0.13, 100, dataset01, 100)
-
-                    print 'Score: {}'.format(str(score))
-                    logging.info('{}, {}, {}, {}: {}'.format(cd_type, n_ass, n_recall, n_think, score))
+                    # Classify the reconstructions TODO
+                    # score = logistic_sgd.sgd_optimization_mnist(0.13, 100, dataset01, 100)
+                    #
+                    # print 'Score: {}'.format(str(score))
+                    # logging.info('{}, {}, {}, {}: {}'.format(cd_type, n_ass, n_recall, n_think, score))
 
 
 if __name__ == '__main__':

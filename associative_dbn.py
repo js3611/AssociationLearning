@@ -11,7 +11,6 @@ import theano
 import theano.tensor as T
 from theano.tensor.shared_randomstreams import RandomStreams
 
-from logistic_sgd import sgd_optimization_mnist as LogisticRegression
 from mlp import HiddenLayer
 
 from rbm import *

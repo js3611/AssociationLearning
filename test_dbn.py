@@ -4,14 +4,13 @@ import time
 
 import numpy as np
 import datastorage as store
-import mnist_loader as m_loader
+import m_loader as m_loader
 import kanade_loader as k_loader
 
 import theano
 import theano.tensor as T
 from theano.tensor.shared_randomstreams import RandomStreams
 
-from logistic_sgd import LogisticRegression
 from mlp import HiddenLayer
 from rbm import RBM
 from rbm_config import *
