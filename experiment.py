@@ -36,7 +36,7 @@ def experimentChild(project_name, mapping, shape, model):
     happy_set = kanade_loader.load_kanade(set_name=dataset_name,
                                           emotions=mapping.keys(),
                                           pre=preprocesssing,
-                                          n=1000)
+                                          n=100)
 
     h_tr, h_vl, h_te = happy_set
     h_tr_x, h_tr_y = h_tr
@@ -171,6 +171,14 @@ def get_brain_model_AssociativeDBN(shape, data_manager):
                            sparsity_target=0.01,
                            batch_size=10,
                            epochs=10)
+
+    rest_tr = TrainParam(learning_rate=0.001,
+                         momentum_type=CLASSICAL,
+                         momentum=0.5,
+                         weight_decay=0.0001,
+                         epochs=10,
+                         batch_size=10)
+
     h_n = 250
     bottom_logger = ProgressLogger(img_shape=(shape, shape))
     bottom_rbm = RBMConfig(v_unit=rbm_units.GaussianVisibleUnit,
@@ -179,10 +187,10 @@ def get_brain_model_AssociativeDBN(shape, data_manager):
                            progress_logger=bottom_logger,
                            train_params=bottom_tr)
 
-    config.left_dbn.rbm_configs[0] = bottom_rbm
-    config.right_dbn.rbm_configs[0] = bottom_rbm
-    config.left_dbn.topology = [shape ** 2, h_n, ]
-    config.right_dbn.topology = [shape ** 2, h_n, ]
+    config.left_dbn.rbm_configs = [bottom_rbm, rest_tr]
+    config.right_dbn.rbm_configs = [bottom_rbm, rest_tr]
+    config.left_dbn.topology = [shape ** 2, h_n, 250]
+    config.right_dbn.topology = [shape ** 2, h_n, 250]
 
     top_tr = TrainParam(learning_rate=0.001,
                         momentum_type=NESTEROV,
@@ -220,7 +228,7 @@ def get_brain_model_DBN(shape, data_manager):
     rest_tr = TrainParam(learning_rate=0.001,
                          momentum_type=CLASSICAL,
                          momentum=0.5,
-                         weight_decay=0.001,
+                         weight_decay=0.0001,
                          epochs=10,
                          batch_size=10)
 
@@ -239,7 +247,7 @@ def get_brain_model_DBN(shape, data_manager):
     # Layer 1
     # Layer 2
     # Layer 3
-    topology = [2 * (shape ** 2), 500, 1000]
+    topology = [2 * (shape ** 2), 500, 500, 1000]
     # batch_size = 10
     first_progress_logger = ProgressLogger(img_shape=(shape * 2, shape))
     rest_progress_logger = ProgressLogger()
@@ -252,7 +260,7 @@ def get_brain_model_DBN(shape, data_manager):
     top_rbm_config = RBMConfig(train_params=top_tr,
                                progress_logger=rest_progress_logger)
 
-    rbm_configs = [first_rbm_config, top_rbm_config]
+    rbm_configs = [first_rbm_config, rest_rbm_config, top_rbm_config]
 
     config = DBN.DBNConfig(topology=topology,
                            training_parameters=base_tr,
@@ -341,21 +349,30 @@ if __name__ == '__main__':
     # plot_result('data/remote/Kanade/Experiment1/Experiment1.txt', mapping)
     # plot_result('data/remote/Kanade/Experiment1_50/Experiment1_50.txt', mapping)
 
-    attempt = 10
-    for i in xrange(0, attempt):
-        print 'attempt %d' % i
-        # experimentChild('Experiment4', mapping, 25, 'rbm')
-        experimentChild('Experiment7', secure_mapping, 25, 'dbn')
-        # experimentChild('Experiment4', mapping, 25, 'adbn')
+    def experiment_child(proj_name, mapping, shape):
+        attempt = 10
+        for i in xrange(0, attempt):
+            print 'attempt %d' % i
+            # experimentChild('Experiment4', mapping, 25, 'rbm')
+            experimentChild(proj_name, mapping, shape, 'dbn')
+            experimentChild(proj_name, mapping, shape, 'adbn')
+            # experimentChild('Experiment4', mapping, 25, 'adbn')
 
+    experiment_child('Experiment7', secure_mapping, 25)
+    experiment_child('Experiment7_50', secure_mapping, 50)
+    experiment_child('Experiment8', ambivalent_mapping, 25)
+    experiment_child('Experiment8_50', ambivalent_mapping, 50)
+    experiment_child('Experiment9', avoidant_mapping, 25)
+    experiment_child('Experiment9_50', avoidant_mapping, 50)
 
     # plot_result('data/Experiment4_50/Experiment4_50.txt', mapping)
 
-
+    attempt = 0
     #
     for i in xrange(0, attempt):
         # experimentChild('Experiment5', mapping, 25, 'rbm')
         experimentChild('Experiment8', ambivalent_mapping, 25, 'dbn')
+        experimentChild('Experiment8', ambivalent_mapping, 25, 'adbn')
         # experimentChild('Experiment5', mapping, 25, 'adbn')
 
     #
@@ -369,18 +386,18 @@ if __name__ == '__main__':
     for i in xrange(0, attempt):
         # experimentChild('Experiment6', mapping, 25, 'rbm')
         experimentChild('Experiment9', avoidant_mapping, 25, 'dbn')
+        experimentChild('Experiment9', avoidant_mapping, 25, 'adbn')
         # experimentChild('Experiment6', mapping, 25, 'adbn')
-
-
 
     for i in xrange(0, attempt):
         # experimentChild('Experiment4_50', mapping, 50, 'rbm')
         experimentChild('Experiment7_50', secure_mapping, 50, 'dbn')
+        experimentChild('Experiment7_50', secure_mapping, 50, 'adbn')
         # experimentChild('Experiment4_50', mapping, 50, 'adbn')
 
     for i in xrange(0, attempt):
         # experimentChild('Experiment5_50', mapping, 50, 'rbm')
-        experimentChild('Experiment8_50', ambivalent_mapping, 50, 'dbn')
+        experimentChild('Experiment8_50', ambivalent_mapping, 50, 'adbn')
         # experimentChild('Experiment5_50', mapping, 50, 'adbn')
 
     for i in xrange(0, attempt):
