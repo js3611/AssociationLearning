@@ -37,9 +37,9 @@ data_dir = "/".join([root_dir, "data"])
 def test_rbm():
     print "Testing RBM"
 
-    data_manager = store.StorageManager('GBRBM_SparseC')
+    data_manager = store.StorageManager('Dropout0.2nosparse')
     # Load mnist hand digits
-    datasets = loader.load_kanade(pre={'scale': True})
+    datasets = loader.load_kanade(set_name='sharp_equi25_25', pre={'scale': True})
     # datasets = loader.load_kanade(pre={'scale2unit': True})
     train_set_x, train_set_y = datasets[0]
     test_set_x, test_set_y = datasets[2]
@@ -50,11 +50,13 @@ def test_rbm():
                     momentum=0.9,
                     weight_decay=0.0001,
                     sparsity_constraint=True,
-                    sparsity_target=0.01,
-                    sparsity_cost=100,
+                    sparsity_target=0.0001,
+                    sparsity_cost=0.001,
                     sparsity_decay=0.9,
+                    dropout=False,
+                    dropout_rate=0.8,
                     batch_size=10,
-                    epochs=10)
+                    epochs=100)
 
     n_visible = train_set_x.get_value(borrow=True).shape[1]
     n_hidden = 250
@@ -87,7 +89,7 @@ def test_rbm():
     if load:
         rbm = load
 
-    for i in xrange(0, 100):
+    for i in xrange(0, 1):
         # Train RBM
         rbm.train(train_set_x)
         data_manager.persist(rbm)

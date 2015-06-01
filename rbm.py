@@ -52,7 +52,6 @@ class RBM(object):
         cd_type = config.cd_type
         cd_steps = config.cd_steps
         associative = config.associative
-        dropout = config.dropout
         v_n = config.v_n
         v_n2 = config.v2_n
         h_n = config.h_n
@@ -73,11 +72,12 @@ class RBM(object):
         active_probability_h = theano.shared(value=np.zeros(h_n, dtype=t_float_x),
                                              name="active_probability_h")
 
-        if dropout:
-            self.dropout_mask = self.rand.binomial(size=(h_n,), p=0.8)
+        self.dropout = train_params.dropout
+        self.dropout_rate = train_params.dropout_rate
+        if self.dropout:
+            self.dropout_mask = self.rand.binomial(size=(h_n,), p=self.dropout_rate)
 
         self.train_parameters = train_params
-        self.dropout = dropout
 
         # Weights
         self.W = W
@@ -111,6 +111,7 @@ class RBM(object):
         self.associative = associative
         self.track_progress = config.progress_logger
         self.config = config
+        self.training = False
 
         # Check for legit configuration
         if train_params.sparsity_constraint and type(self.h_unit) is not RBMUnit:
@@ -201,7 +202,7 @@ class RBM(object):
             h_total_input += T.dot(v2, self.U)
 
         h_p_activation = self.h_unit.scale(h_total_input)
-        if self.train and self.dropout:
+        if self.training and self.dropout:
             h_p_activation *= self.dropout_mask
 
         return [h_total_input, h_p_activation]
@@ -802,6 +803,7 @@ class RBM(object):
         self.set_default_weights()
 
     def train(self, train_data, train_label=None):
+        self.training = True
         """Trains RBM. For now, input needs to be Theano matrix"""
         param = self.train_parameters
         batch_size = param.batch_size
@@ -813,6 +815,9 @@ class RBM(object):
         for epoch in xrange(param.epochs):
             mean_cost = []
             for batch_index in xrange(mini_batches):
+                if self.dropout:
+                    self.dropout_mask = self.np_rand.binomial(n=1, p=self.dropout_rate, size=self.h_n).astype(t_float_x)
+
                 cost = train_fn(batch_index)
                 if not math.isnan(cost):
                     # continue
@@ -842,6 +847,7 @@ class RBM(object):
                 print self.track_progress.weight_hist['min']
                 print self.track_progress.weight_hist['max']
 
+        self.training = False
         return [mean_cost]
 
     def save(self):

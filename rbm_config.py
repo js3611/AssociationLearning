@@ -24,6 +24,8 @@ class TrainParam(object):
                  sparsity_target=0.01,  # in range (0.1^9, 0.01)
                  sparsity_cost=0.01,
                  sparsity_decay=0.1,
+                 dropout=False,
+                 dropout_rate=0.8
                  ):
         self.epochs = epochs
         self.batch_size = batch_size
@@ -42,6 +44,10 @@ class TrainParam(object):
         self.sparsity_target = sparsity_target
         self.sparsity_cost = sparsity_cost
         self.sparsity_decay = sparsity_decay
+
+        self.dropout = dropout
+        self.dropout_rate = dropout_rate
+
 
     def __str__(self):
         return "batch" + str(self.batch_size) + \
