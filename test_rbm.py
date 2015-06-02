@@ -50,13 +50,13 @@ def test_rbm():
                     momentum=0.9,
                     weight_decay=0.0001,
                     sparsity_constraint=True,
-                    sparsity_target=0.0001,
+                    sparsity_target=0.01,
                     sparsity_cost=0.001,
                     sparsity_decay=0.9,
                     dropout=False,
                     dropout_rate=0.8,
                     batch_size=10,
-                    epochs=100)
+                    epochs=10)
 
     n_visible = train_set_x.get_value(borrow=True).shape[1]
     n_hidden = 250

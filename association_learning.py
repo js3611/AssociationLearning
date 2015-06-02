@@ -1,16 +1,21 @@
 import theano
 import theano.tensor as T
 import numpy as np
-import rbm as RBM
+from rbm import RBM
+from rbm_config import *
+from rbm_units import *
+from rbm_logger import *
 import DBN
 import associative_dbn
 import utils
 import m_loader as m_loader
 import datastorage as store
+from simple_classifiers import SimpleClassifier
 
 import logging
 
 logging.basicConfig(filename='trace.log', level=logging.INFO)
+
 
 def associate_data2label(cache=False):
     print "Testing ClassRBM with generative target (i.e. AssociativeRBM with picture-label association)"
@@ -45,7 +50,7 @@ def associate_data2label(cache=False):
                   train_parameters=tr,
                   progress_logger=RBM.ProgressLogger())
 
-    store.move_to('label_test/'+str(rbm))
+    store.move_to('label_test/' + str(rbm))
 
     loaded = store.retrieve_object(str(rbm))
     if loaded and cache:
@@ -68,82 +73,79 @@ def associate_data2label(cache=False):
     print "Classification Rate: {}".format((diff / float(test_y.eval().shape[0])))
 
 
-def associate_data2data(cache=False):
+def associate_data2data(cache=False, train_further=True):
     print "Testing Associative RBM which tries to learn even-oddness of numbers"
     # project set-up
-    data_manager = store.StorageManager('AssociationRBMTest', log=True)
-
+    data_manager = store.StorageManager('EvenOdd', log=True)
 
     # Load mnist hand digits, class label is already set to binary
-    train, valid, test = m_loader.load_digits(n=[500, 100, 500], digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], pre={'binary_label': True})
-    train_x, train_y = train
-    test_x, test_y = test
-    train_x01 = m_loader.sample_image(train_y)
+    dataset = m_loader.load_digits(n=[10000, 100, 500],
+                                   digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+                                   pre={'binary_label': True})
 
-    dataset01 = m_loader.load_digits(n=[500, 100, 100], digits=[0, 1])
+    tr_x, tr_y = dataset[0]
+    te_x, te_y = dataset[2]
+    tr_x01 = m_loader.sample_image(tr_y)
 
+    concat1 = theano.function([], T.concatenate([tr_x, tr_x01], axis=1))()
+    tr_concat_x = theano.shared(concat1, name='tr_concat_x')
 
     # Initialise the RBM and training parameters
-    tr = RBM.TrainParam(learning_rate=0.1,
-                        momentum_type=RBM.CLASSICAL,
-                        momentum=0.5,
-                        weight_decay=0.001,
-                        sparsity_constraint=True,
-                        sparsity_target=0.1 ** 9,
-                        sparsity_cost=0.9,
-                        sparsity_decay=0.99,
-                        epochs=50)
-    # tr = RBM.TrainParam(learning_rate=0.005,
-                        # momentum_type=RBM.CLASSICAL,
-                        # momentum=0.5,
-                        # weight_decay=0.001,
-                        # sparsity_constraint=False,
-                        # sparsity_target=0.01,
-                        # sparsity_cost=0.5,
-                        # sparsity_decay=0.9,
-                        # epochs=20)
+    # tr = TrainParam(learning_rate=0.1,
+    # momentum_type=NESTEROV,
+    # momentum=0.5,
+    # weight_decay=0.001,
+    #                 sparsity_constraint=True,
+    #                 sparsity_target=0.1 ** 9,
+    #                 sparsity_cost=0.9,
+    #                 sparsity_decay=0.99,
+    #                 epochs=50)
+
+    tr = TrainParam(learning_rate=0.001,
+                    momentum_type=NESTEROV,
+                    momentum=0.5,
+                    weight_decay=0.0001,
+                    dropout=True,
+                    dropout_rate=0.8,
+                    epochs=10)
 
     # Even odd test
     k = 1
-    n_visible = train_x.get_value().shape[1]
-    n_visible2 = n_visible
-    n_hidden = 200
+    n_visible = 784 * 2
+    n_visible2 = 0
+    n_hidden = 500
 
-    rbm = RBM.RBM(n_visible,
-                  n_visible2,
-                  n_hidden,
-                  associative=True,
-                  cd_type=RBM.CLASSICAL,
-                  cd_steps=k,
-                  train_parameters=tr,
-                  progress_logger=RBM.AssociationProgressLogger())
+    config = RBMConfig(v_n=n_visible,
+                       v2_n=n_visible2,
+                       h_n=n_hidden,
+                       cd_type=CLASSICAL,
+                       cd_steps=k,
+                       train_params=tr,
+                       progress_logger=ProgressLogger(img_shape=(28 * 2, 28)))
+
+    rbm = RBM(config=config)
 
     # Load RBM (test)
     loaded = store.retrieve_object(str(rbm))
     if loaded and cache:
         rbm = loaded
         print "... loaded precomputed rbm"
-    else:
-        # Train RBM - learn joint distribution
-        rbm.pretrain_lr(train_x, train_x01)
-        rbm.train(train_x, train_x01)
-        rbm.save()
 
-    print "... reconstruction of associated images"
-    reconstructed_y = rbm.reconstruct_association(test_x, None, 30, 0.01, plot_n=100, plot_every=1)
-    print "... reconstructed"
+    # Train RBM
+    if not loaded or train_further:
+        rbm.train(tr_concat_x)
 
-    # TODO use sklearn to obtain accuracy/precision etc
+    # Save RBM
+    data_manager.persist(rbm)
 
-    # Create Dataset to feed into logistic regression
-    # Test set: reconstructed y's become the input. Get the corresponding x's and y's
-    dataset01[2] = (theano.shared(reconstructed_y), test_y)
+    # Reconstruct using RBM
+    recon_x = rbm.reconstruct_association_opt(te_x, None, 5, 0.1, plot_n=100, plot_every=1)
 
-    # Classify the reconstructions TODO
-    # score = logistic_sgd.sgd_optimization_mnist(0.13, 100, dataset01, 100)
-    #
-    # print 'Score: {}'.format(str(score))
-    # print str(rbm)
+    clf = SimpleClassifier('knn', tr_x.get_value(), tr_y.eval())
+    orig = te_y.eval()
+    pred = clf.classify(recon_x)
+    error = np.sum(orig != pred) * 1. / len(orig)
+    print error
 
 
 def associate_data2dataDBN(cache=False):
@@ -153,7 +155,8 @@ def associate_data2dataDBN(cache=False):
 
 
     # Load mnist hand digits, class label is already set to binary
-    train, valid, test = m_loader.load_digits(n=[500, 100, 100], digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], pre={'binary_label': True})
+    train, valid, test = m_loader.load_digits(n=[500, 100, 100], digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+                                              pre={'binary_label': True})
     train_x, train_y = train
     test_x, test_y = test
     train_x01 = m_loader.sample_image(train_y)
@@ -163,11 +166,11 @@ def associate_data2dataDBN(cache=False):
     # Initialise RBM parameters
     # fixed base train param
     base_tr = RBM.TrainParam(learning_rate=0.01,
-                    momentum_type=RBM.CLASSICAL,
-                    momentum=0.5,
-                    weight_decay=0.0005,
-                    sparsity_constraint=False,
-                    epochs=20)
+                             momentum_type=RBM.CLASSICAL,
+                             momentum=0.5,
+                             weight_decay=0.0005,
+                             sparsity_constraint=False,
+                             epochs=20)
 
     # top layer parameters
     tr = RBM.TrainParam(learning_rate=0.1,
@@ -211,13 +214,14 @@ def associate_data2dataDBN(cache=False):
             ass_dbn.train(train_x, train_x01, cache=cache, optimise=True)
 
             for n_recall in [1, 3, 5, 7, 10]:
-                for n_think in [0, 1, 3, 5, 7, 10]: #1, 3, 5, 7, 10]:
+                for n_think in [0, 1, 3, 5, 7, 10]:  # 1, 3, 5, 7, 10]:
                     # Reconstruct
                     sampled = ass_dbn.recall(test_x, n_recall, n_think)
 
                     # Sample from top layer to generate data
                     sample_n = 100
-                    utils.save_images(sampled, image_name='reconstruced_{}_{}_{}.png'.format(n_ass, n_recall, n_think), shape=(sample_n / 10, 10))
+                    utils.save_images(sampled, image_name='reconstruced_{}_{}_{}.png'.format(n_ass, n_recall, n_think),
+                                      shape=(sample_n / 10, 10))
 
                     dataset01[2] = (theano.shared(sampled), test_y)
 
