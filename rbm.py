@@ -14,11 +14,11 @@ import sys
 import os
 import time
 import math
+
 try:
     import PIL.Image as Image
 except ImportError:
     import Image
-
 
 CLASSICAL = 'classical'
 NESTEROV = "nesterov"
@@ -40,7 +40,6 @@ theano.config.exception_verbosity = 'high'
 
 
 class RBM(object):
-
     def __init__(self,
                  config,
                  W=None,
@@ -124,7 +123,7 @@ class RBM(object):
                 self.np_rand.normal(0, scale=0.01, size=(nrow, ncol)),
                 # self.np_rand.uniform(low=-1./10, high=1./10, size=(nrow, ncol)),
                 # self.np_rand.uniform(
-                #     low=-4 * np.sqrt(6. / (nrow + ncol)),
+                # low=-4 * np.sqrt(6. / (nrow + ncol)),
                 #     high=4 * np.sqrt(6. / (nrow + ncol)),
                 #     size=(nrow, ncol)
                 # ),
@@ -198,7 +197,7 @@ class RBM(object):
         """Propagates v to the hidden layer. """
         h_total_input = T.dot(v, self.W) + self.h_bias
 
-        if np.any(v2): # Associative
+        if np.any(v2):  # Associative
             h_total_input += T.dot(v2, self.U)
 
         h_p_activation = self.h_unit.scale(h_total_input)
@@ -232,7 +231,8 @@ class RBM(object):
         return self.__sample_v_given_h(h_sample, self.prop_down)
 
     def sample_v_given_h_assoc(self, h_sample):
-        return self.__sample_v_given_h(h_sample, self.prop_down) + self.__sample_v_given_h(h_sample, self.prop_down_assoc)
+        return self.__sample_v_given_h(h_sample, self.prop_down) + self.__sample_v_given_h(h_sample,
+                                                                                           self.prop_down_assoc)
 
     def gibbs_hvh(self, h):
         v_total_input, v_p_activation, v_sample = self.sample_v_given_h(h)
@@ -247,7 +247,9 @@ class RBM(object):
                 v_total_input, v_p_activation, v_sample]
 
     def gibbs_hvh_assoc(self, h):
-        v_total_input, v_p_activation, v_sample, v2_total_input, v2_p_activation, v2_sample = self.sample_v_given_h_assoc(h)
+        v_total_input, v_p_activation, v_sample, v2_total_input, v2_p_activation, v2_sample = self.sample_v_given_h_assoc(
+
+            h)
         h_total_input, h_p_activation, h_sample = self.sample_h_given_v(v_sample, v2_sample)
         return [v_total_input, v_p_activation, v_sample,
                 v2_total_input, v2_p_activation, v2_sample,
@@ -255,7 +257,8 @@ class RBM(object):
 
     # For getting y's
     def gibbs_hvh_fixed(self, h, x):
-        v_total_input, v_p_activation, v_sample, v2_total_input, v2_p_activation, v2_sample = self.sample_v_given_h_assoc(h)
+        v_total_input, v_p_activation, v_sample, v2_total_input, v2_p_activation, v2_sample = self.sample_v_given_h_assoc(
+            h)
         h_total_input, h_p_activation, h_sample = self.sample_h_given_v(x, v2_sample)
         return [v_total_input, v_p_activation, v_sample,
                 v2_total_input, v2_p_activation, v2_sample,
@@ -264,7 +267,7 @@ class RBM(object):
     # For getting y's
     def gibbs_hvh_fixed2(self, h, x):
         v_total_input, v_p_activation, v_sample = self.sample_v_given_h(h)
-        v_sample = T.concatenate([x, v_sample[:, (self.v_n/2):]], axis=1)
+        v_sample = T.concatenate([x, v_sample[:, (self.v_n / 2):]], axis=1)
         h_total_input, h_p_activation, h_sample = self.sample_h_given_v(v_sample)
         return [v_total_input, v_p_activation, v_sample,
                 h_total_input, h_p_activation, h_sample]
@@ -532,7 +535,7 @@ class RBM(object):
         old_ds = param_increments[:-1]
 
         # if self.associative:
-        #     old_DW, old_Dvbias, old_Dhbias, old_DU, old_Dvbias2 = old_ds
+        # old_DW, old_Dvbias, old_Dhbias, old_DU, old_Dvbias2 = old_ds
         # else:
         #     old_DW, old_Dvbias, old_Dhbias = old_ds
 
@@ -582,9 +585,9 @@ class RBM(object):
         # Sparsity
         if param.sparsity_constraint:
             active_probability_h = param_increments[-1]
-            sparsity_target = param.sparsity_target
-            sparsity_cost = param.sparsity_cost
-            sparsity_decay_rate = param.sparsity_decay
+            sparsity_target = T.cast(param.sparsity_target, t_float_x)
+            sparsity_cost = T.cast(param.sparsity_cost, t_float_x)
+            sparsity_decay_rate = T.cast(param.sparsity_decay, t_float_x)
             # 1. Compute actual probability of hidden unit being active, q
             # 1.1 Get q_current (mean probability that a unit is active in each mini-batch
             if self.associative:
@@ -592,7 +595,7 @@ class RBM(object):
             else:
                 _, h_p_activation = self.prop_up(x)
             # q is the decaying average of mean active probability in each batch
-            q = sparsity_decay_rate * active_probability_h + (1-sparsity_decay_rate) * T.mean(h_p_activation, axis=0)
+            q = sparsity_decay_rate * active_probability_h + (1 - sparsity_decay_rate) * T.mean(h_p_activation, axis=0)
 
             # 1.2 Update q_current = q for next iteration
             updates[active_probability_h] = q
@@ -601,7 +604,7 @@ class RBM(object):
             sparsity_penalty = T.nnet.binary_crossentropy(sparsity_target, q)
 
             # 3. Get the derivative
-            if isinstance(self.h_unit, BinaryUnit):     # if sigmoid
+            if isinstance(self.h_unit, BinaryUnit):  # if sigmoid
                 d_sparsity = q - sparsity_target
             else:
                 # Summation is a trick to differentiate element-wise
@@ -676,14 +679,14 @@ class RBM(object):
             old_DU = theano.shared(value=np.zeros(self.U.get_value().shape, dtype=t_float_x),
                                    name='old_DU', borrow=True)
             old_Dvbias2 = theano.shared(value=np.zeros(self.v_n2, dtype=t_float_x),
-                                       name='old_Dvbias2', borrow=True)
+                                        name='old_Dvbias2', borrow=True)
             param_increments += [old_DU, old_Dvbias2]
 
         active_probability_h = self.active_probability_h
 
         # # For sparsity cost
         # active_probability_h = theano.shared(value=np.zeros(self.h_n, dtype=t_float_x),
-        #                                      name="active_probability_h",
+        # name="active_probability_h",
         #                                      borrow=True)
 
 
@@ -754,7 +757,8 @@ class RBM(object):
             active_probability_h = f()
             self.active_probability_h = theano.shared(active_probability_h, 'active_probability_h')
 
-            print 'mean, max, min', np.mean(active_probability_h), np.max(active_probability_h), np.min(active_probability_h)
+            print 'mean, max, min', np.mean(active_probability_h), np.max(active_probability_h), np.min(
+                active_probability_h)
 
             self.set_default_weights()
             if np.mean(np.abs(active_probability_h - self.train_parameters.sparsity_target)) < 0.1:
@@ -799,7 +803,7 @@ class RBM(object):
 
         # update the learning rate
         tr.learning_rate = adjusted_lr
-        self.train_parameters =tr
+        self.train_parameters = tr
         self.set_default_weights()
 
     def train(self, train_data, train_label=None):
@@ -811,7 +815,7 @@ class RBM(object):
         train_fn = self.get_train_fn(train_data, train_label)
 
         plotting_time = 0.
-        start_time = time.clock()       # Measure training time
+        start_time = time.clock()  # Measure training time
         for epoch in xrange(param.epochs):
             mean_cost = []
             for batch_index in xrange(mini_batches):
@@ -823,7 +827,7 @@ class RBM(object):
                     # continue
                     # raise Exception('training cost is infty -- try lowering learning rate')
 
-                   mean_cost += [cost]
+                    mean_cost += [cost]
                 if self.track_progress and self.track_progress.monitor_weights:
                     self.track_progress.monitor_wt(self)
                     self.track_progress.monitor_mean_activity(self, train_data, train_label)
@@ -876,9 +880,9 @@ class RBM(object):
             orig = data
 
         # Set the initial chain
-        chain_state = theano.shared(np.asarray(orig,dtype=theano.config.floatX),name='reconstruct_root')
+        chain_state = theano.shared(np.asarray(orig, dtype=theano.config.floatX), name='reconstruct_root')
 
-         # Gibbs sampling
+        # Gibbs sampling
         k_batch = k / plot_every
         (res, updates) = theano.scan(self.gibbs_vhv,
                                      outputs_info=[None, None, None,
@@ -899,7 +903,8 @@ class RBM(object):
 
         return reconstructions[-1]
 
-    def reconstruct_association(self, x, y=None, k=1, bit_p=0, plot_n=None, plot_every=1, img_name='association_reconstruction.png'):
+    def reconstruct_association(self, x, y=None, k=1, bit_p=0, plot_n=None, plot_every=1,
+                                img_name='association_reconstruction.png'):
         # Initialise parameters
         if not utils.isSharedType(x):
             x = theano.shared(x, allow_downcast=True)
@@ -928,11 +933,13 @@ class RBM(object):
             reconstructions.append(reconstruction_chain[-1])
 
         if self.track_progress:
-            self.track_progress.visualise_reconstructions(x.get_value(borrow=True), reconstructions, plot_n, img_name=img_name)
+            self.track_progress.visualise_reconstructions(x.get_value(borrow=True), reconstructions, plot_n,
+                                                          img_name=img_name)
 
         return reconstruction_chain[-1]
 
-    def reconstruct_association_opt(self, x, y=None, k=1, bit_p=0, plot_n=None, plot_every=1, img_name='association_reconstruction.png'):
+    def reconstruct_association_opt(self, x, y=None, k=1, bit_p=0, plot_n=None, plot_every=1,
+                                    img_name='association_reconstruction.png'):
         '''
         As an optimisation, we can concatenate two images and feed it as a single image to train the network.
         In this way theano performs matrix optimisation so its much faster.
@@ -971,20 +978,22 @@ class RBM(object):
         for i in xrange(k_batch):
             result = gibbs_sampling_assoc()
             [_, reconstruction_chain, _, _, _, _] = result
-            reconstructions.append(reconstruction_chain[-1][:, (self.v_n/2):])
+            reconstructions.append(reconstruction_chain[-1][:, (self.v_n / 2):])
 
         if self.track_progress:
-            self.track_progress.visualise_reconstructions(x.get_value(borrow=True), reconstructions, plot_n, img_name=img_name, opt=True)
+            self.track_progress.visualise_reconstructions(x.get_value(borrow=True), reconstructions, plot_n,
+                                                          img_name=img_name, opt=True)
 
-        return reconstruction_chain[-1][:, (self.v_n/2):]
+        return reconstruction_chain[-1][:, (self.v_n / 2):]
 
-    def mean_field_inference(self, x, tolerance=0.01, sample=False, k=100, bit_p=0, plot_n=None, plot_every=1, img_name='mean_field'):
+    def mean_field_inference(self, x, tolerance=0.01, sample=False, k=100, bit_p=0, plot_n=None, plot_every=1,
+                             img_name='mean_field'):
         # Initialise parameters
         if not utils.isSharedType(x):
             x = theano.shared(x, allow_downcast=True)
         data_size = x.get_value().shape[0]
 
-        plot_every=100
+        plot_every = 100
         mu = theano.shared(np.zeros((data_size, self.v_n2), dtype=t_float_x), name='mu')
         tau = theano.shared(np.zeros((data_size, self.h_n), dtype=t_float_x), name='tau')
 
@@ -992,12 +1001,12 @@ class RBM(object):
         def mean_field(m, t, x):
             _, mu2 = self.prop_down_assoc(t)
             _, tau2 = self.prop_up(x, mu2)
-            return mu2, tau2 #, {ctr: ctr+1}, theano.scan_module.until(ctr < 50)
+            return mu2, tau2  # , {ctr: ctr+1}, theano.scan_module.until(ctr < 50)
 
         def mean_field_rev(m, t, x):
             _, tau2 = self.prop_up(x, m)
             _, mu2 = self.prop_down_assoc(tau2)
-            return mu2, tau2 #, {ctr: ctr+1}, theano.scan_module.until(ctr < 50)
+            return mu2, tau2  # , {ctr: ctr+1}, theano.scan_module.until(ctr < 50)
 
         k_batch = k / plot_every
         (res, updates) = theano.scan(
@@ -1016,14 +1025,15 @@ class RBM(object):
             reconstructions.append(m[-1])
 
         if self.track_progress:
-            self.track_progress.visualise_reconstructions(x.get_value(borrow=True), reconstructions, plot_n, img_name=img_name)
+            self.track_progress.visualise_reconstructions(x.get_value(borrow=True), reconstructions, plot_n,
+                                                          img_name=img_name)
 
         if sample:
             return self.np_rand.binomial(1, m[-1]).astype(t_float_x)
         else:
             return m[-1]
 
-    def mean_field_inference_opt(self, x, y=None, sample=False, k=100, img_name = 'mean_field_inference'):
+    def mean_field_inference_opt(self, x, y=None, sample=False, k=100, img_name='mean_field_inference'):
         '''
         As an optimisation, we can concatenate two images and feed it as a single image to train the network.
         In this way theano performs matrix optimisation so its much faster.
@@ -1049,9 +1059,9 @@ class RBM(object):
         # mean field func
         def mean_field(tau1, fixed):
             _, mu2 = self.prop_down(tau1)
-            mu2 = T.concatenate([fixed, mu2[:, (self.v_n/2):]], axis=1)
+            mu2 = T.concatenate([fixed, mu2[:, (self.v_n / 2):]], axis=1)
             _, tau2 = self.prop_up(mu2)
-            return mu2, tau2 #, {ctr: ctr+1}, theano.scan_module.until(ctr < 50)
+            return mu2, tau2  # , {ctr: ctr+1}, theano.scan_module.until(ctr < 50)
 
         # loop
         k_batch = k / plot_every
@@ -1068,15 +1078,16 @@ class RBM(object):
         for i in xrange(k_batch):
             result = mean_field_opt()
             [reconstruction_chain, _] = result
-            reconstructions.append(reconstruction_chain[-1][:, (self.v_n/2):])
+            reconstructions.append(reconstruction_chain[-1][:, (self.v_n / 2):])
 
         if self.track_progress:
-            self.track_progress.visualise_reconstructions(x.get_value(borrow=True), reconstructions, plot_n, img_name=img_name, opt=True)
+            self.track_progress.visualise_reconstructions(x.get_value(borrow=True), reconstructions, plot_n,
+                                                          img_name=img_name, opt=True)
 
         if sample and type(self.v_unit) is RBMUnit:
-            return self.np_rand.binomial(1, reconstruction_chain[-1][:, (self.v_n/2):])
+            return self.np_rand.binomial(1, reconstruction_chain[-1][:, (self.v_n / 2):])
         else:
-            return reconstruction_chain[-1][:, (self.v_n/2):]
+            return reconstruction_chain[-1][:, (self.v_n / 2):]
 
 
 class AssociativeRBM(RBM):
@@ -1093,13 +1104,13 @@ def test_rbm():
 
     # Initialise the RBM and training parameters
     tr = rbm_config.TrainParam(learning_rate=0.01,
-                    momentum_type=NESTEROV,
-                    momentum=0.5,
-                    weight_decay=0.01,
-                    sparsity_constraint=True,
-                    sparsity_target=0.01,
-                    sparsity_cost=0.01,
-                    sparsity_decay=0.1)
+                               momentum_type=NESTEROV,
+                               momentum=0.5,
+                               weight_decay=0.01,
+                               sparsity_constraint=True,
+                               sparsity_target=0.01,
+                               sparsity_cost=0.01,
+                               sparsity_decay=0.1)
 
     n_visible = train_set_x.get_value().shape[1]
     n_hidden = 2
