@@ -130,8 +130,8 @@ def associate_data2data(cache=False, train_further=True):
     # Hinton way
     # 10 classes that are equi-probable: p(x) = 0.1
     n_hidden = min(1000, int((- np.log2(0.1)) * train_n / 10))
-    print "number of hidden nodes: %d" % n_hidden
     # n_hidden = 100
+    print "number of hidden nodes: %d" % n_hidden
 
     config = RBMConfig(v_n=n_visible,
                        v2_n=n_visible2,

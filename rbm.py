@@ -116,6 +116,11 @@ class RBM(object):
         if train_params.sparsity_constraint and type(self.h_unit) is not RBMUnit:
             raise Exception('Sparsity Constraint can be used only for Stochastic Binary Hidden Unit')
 
+        if train_params.sparsity_constraint:
+            self.set_initial_hidden_bias()
+            new_p_h = np.repeat(train_params.sparsity_target, h_n).astype(t_float_x)
+            self.active_probability_h = theano.shared(value=new_p_h,
+                                                      name="active_probability_h")
 
     def get_initial_weight(self, w, nrow, ncol, name):
         if w is None:
@@ -124,8 +129,8 @@ class RBM(object):
                 # self.np_rand.uniform(low=-1./10, high=1./10, size=(nrow, ncol)),
                 # self.np_rand.uniform(
                 # low=-4 * np.sqrt(6. / (nrow + ncol)),
-                #     high=4 * np.sqrt(6. / (nrow + ncol)),
-                #     size=(nrow, ncol)
+                # high=4 * np.sqrt(6. / (nrow + ncol)),
+                # size=(nrow, ncol)
                 # ),
                 dtype=t_float_x
             )
@@ -537,7 +542,7 @@ class RBM(object):
         # if self.associative:
         # old_DW, old_Dvbias, old_Dhbias, old_DU, old_Dvbias2 = old_ds
         # else:
-        #     old_DW, old_Dvbias, old_Dhbias = old_ds
+        # old_DW, old_Dvbias, old_Dhbias = old_ds
 
         pre_updates = []
         if param.momentum_type is NESTEROV:
@@ -619,7 +624,7 @@ class RBM(object):
 
             # chain_p = T.grad(T.sum(q), self.params, disconnected_inputs='ignore')
             # for i in xrange(len(new_params)):
-            #     new_params = [p - lr * sparsity_cost * d_sparsity * chain_p[i] for i, p in enumerate(new_params)]
+            # new_params = [p - lr * sparsity_cost * d_sparsity * chain_p[i] for i, p in enumerate(new_params)]
 
             if self.associative:
                 chain_W, chain_h, chain_U = T.grad(T.sum(q), [self.W, self.h_bias, self.U])
@@ -687,7 +692,7 @@ class RBM(object):
         # # For sparsity cost
         # active_probability_h = theano.shared(value=np.zeros(self.h_n, dtype=t_float_x),
         # name="active_probability_h",
-        #                                      borrow=True)
+        # borrow=True)
 
 
         param_increments += [active_probability_h]
