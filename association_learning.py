@@ -10,6 +10,7 @@ import associative_dbn
 import utils
 import m_loader as m_loader
 import datastorage as store
+# import matplotlib.pyplot as plt
 from simple_classifiers import SimpleClassifier
 
 import logging
@@ -77,17 +78,25 @@ def associate_data2data(cache=False, train_further=True):
     print "Testing Associative RBM which tries to learn even-oddness of numbers"
     # project set-up
     data_manager = store.StorageManager('EvenOdd', log=True)
-
+    train_n = 10000
+    test_n = 1000
     # Load mnist hand digits, class label is already set to binary
-    dataset = m_loader.load_digits(n=[10000, 100, 500],
+    dataset = m_loader.load_digits(n=[train_n, 100, test_n],
                                    digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
                                    pre={'binary_label': True})
 
     tr_x, tr_y = dataset[0]
     te_x, te_y = dataset[2]
     tr_x01 = m_loader.sample_image(tr_y)
+    te_x01 = m_loader.sample_image(te_y)
+    ones = m_loader.load_digits(n=[test_n, 0, 0], digits=[1])[0][0]
+    zeroes = m_loader.load_digits(n=[test_n, 0, 0], digits=[0])[0][0]
 
     concat1 = theano.function([], T.concatenate([tr_x, tr_x01], axis=1))()
+    # concat2 = theano.function([], T.concatenate([tr_x01, tr_x], axis=1))()
+    # c = np.concatenate([concat1, concat2], axis=0)
+    # np.random.shuffle(c)
+    # tr_concat_x = theano.shared(c, name='tr_concat_x')
     tr_concat_x = theano.shared(concat1, name='tr_concat_x')
 
     # Initialise the RBM and training parameters
@@ -95,7 +104,7 @@ def associate_data2data(cache=False, train_further=True):
     # momentum_type=NESTEROV,
     # momentum=0.5,
     # weight_decay=0.001,
-    #                 sparsity_constraint=True,
+    # sparsity_constraint=True,
     #                 sparsity_target=0.1 ** 9,
     #                 sparsity_cost=0.9,
     #                 sparsity_decay=0.99,
@@ -105,15 +114,24 @@ def associate_data2data(cache=False, train_further=True):
                     momentum_type=NESTEROV,
                     momentum=0.5,
                     weight_decay=0.0001,
+                    sparsity_constraint=True,
+                    sparsity_target=0.1,
+                    sparsity_decay=0.9,
+                    sparsity_cost=0.1,
                     dropout=True,
-                    dropout_rate=0.8,
-                    epochs=10)
+                    dropout_rate=0.5,
+                    epochs=1)
 
     # Even odd test
     k = 1
     n_visible = 784 * 2
     n_visible2 = 0
-    n_hidden = 500
+
+    # Hinton way
+    # 10 classes that are equi-probable: p(x) = 0.1
+    n_hidden = min(1000, int((- np.log2(0.1)) * train_n / 10))
+    print "number of hidden nodes: %d" % n_hidden
+    # n_hidden = 100
 
     config = RBMConfig(v_n=n_visible,
                        v2_n=n_visible2,
@@ -131,22 +149,60 @@ def associate_data2data(cache=False, train_further=True):
         rbm = loaded
         print "... loaded precomputed rbm"
 
-    # Train RBM
-    if not loaded or train_further:
-        rbm.train(tr_concat_x)
+    errors = []
+    for i in xrange(0, 5):
+        # Train RBM
+        if not loaded or train_further:
+            rbm.train(tr_concat_x)
 
-    # Save RBM
-    data_manager.persist(rbm)
+        # Save RBM
+        data_manager.persist(rbm)
 
-    # Reconstruct using RBM
-    recon_x = rbm.reconstruct_association_opt(te_x, None, 5, 0.1, plot_n=100, plot_every=1)
+        # Reconstruct using RBM
+        y = rbm.np_rand.binomial(1, 0.0, size=(test_n, 784)).astype(t_float_x)
 
-    clf = SimpleClassifier('knn', tr_x.get_value(), tr_y.eval())
-    orig = te_y.eval()
-    pred = clf.classify(recon_x)
-    error = np.sum(orig != pred) * 1. / len(orig)
-    print error
+        recon_x = rbm.mean_field_inference_opt(te_x,
+                                               y,
+                                               # te_x01,
+                                               sample=False,
+                                               k=10,
+                                               img_name="te_recon_%d" % i)
 
+
+        # Compare free energy
+        te_x_one = theano.function([], T.concatenate([te_x, ones], axis=1))()
+        te_x_one = theano.shared(te_x_one, name='te_x_one')
+        te_x_zero = theano.function([], T.concatenate([te_x, zeroes], axis=1))()
+        te_x_zero = theano.shared(te_x_zero, name='te_x_zero')
+
+        e0 = rbm.free_energy(te_x_zero)
+        e1 = rbm.free_energy(te_x_one)
+
+        e0, e1 = theano.function([], [e0, e1])()
+        # take column that's bigger
+
+        # print e0
+        # print e1
+        #
+        # print e1 > e0
+
+        clf_tr = rbm.mean_field_inference_opt(te_x,
+                                              te_x01,
+                                              sample=False,
+                                              k=10,
+                                              img_name="tr_recon_%d" % i)
+
+        clf = SimpleClassifier('logistic', te_x.get_value(), te_y.eval())
+        orig = te_y.eval()
+        pred = clf.classify(recon_x)
+
+        error = np.sum(orig != pred) * 1. / len(orig)
+        print error
+        errors.append(error)
+
+    # plt.plot(errors)
+    # plt.show()
+    print errors
 
 def associate_data2dataDBN(cache=False):
     print "Testing Associative DBN which tries to learn even-oddness of numbers"
@@ -234,5 +290,5 @@ def associate_data2dataDBN(cache=False):
 
 if __name__ == '__main__':
     # associate_data2label()
-    associate_data2data(True)
+    associate_data2data(True, True)
     # associate_data2dataDBN(False)

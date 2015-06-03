@@ -1038,7 +1038,7 @@ class RBM(object):
         if not utils.isSharedType(x):
             x = theano.shared(x, allow_downcast=True)
         data_size = x.get_value().shape[0]
-        if not y:
+        if type(y) is None:
             y = self.rand.binomial(size=(data_size, self.v_n / 2), n=1, p=0, dtype=t_float_x)
 
         # get initial values of tau (Concatenate x and y)
