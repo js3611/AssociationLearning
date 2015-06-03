@@ -598,7 +598,7 @@ class RBM(object):
             q = sparsity_decay_rate * active_probability_h + (1 - sparsity_decay_rate) * T.mean(h_p_activation, axis=0)
 
             # 1.2 Update q_current = q for next iteration
-            updates[active_probability_h] = q
+            updates[active_probability_h] = T.cast(q, t_float_x)
 
             # 2. Define Sparsity Penalty Measure (dim = 1 x n_hidden)
             sparsity_penalty = T.nnet.binary_crossentropy(sparsity_target, q)
