@@ -249,6 +249,11 @@ class AssociativeDBN(object):
 
         return res
 
+    def fine_tune(self):
+        # TODO
+        pass
+
+
 
 def test_associative_dbn(i=0):
     print "Testing Associative DBN which tries to learn even-odd of numbers"
@@ -297,7 +302,7 @@ def test_associative_dbn(i=0):
     out_msg = '{} (orig, retrain):{}'.format(associative_dbn, score_orig)
     print out_msg
 
-    
+
 if __name__ == '__main__':
     pass
     # test_associative_dbn()

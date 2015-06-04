@@ -299,20 +299,21 @@ def plot_result(file_name, mapping, architectures=['RBN', 'DBN', 'ADBN']):
     sadness = graphs['sadness']
     child_reaction = mapping['sadness']
     plt.figure(1)
-    attempts = np.min(map(len, graphs.values())) / len(architectures)
+    len_arc = len(architectures)
+    attempts = np.min(map(len, graphs.values())) / len_arc
     print attempts
 
-    for i in xrange(0, 3):
-        plt.subplot(130 + i + 1)
+    for i in xrange(0, len_arc):
+        plt.subplot(100 + len_arc * 10 + i + 1)
         plt.title(architectures[i])
 
         plt.plot(np.arange(0, attempts), np.repeat(child_reaction['anger'], attempts), 'r--')
         plt.plot(np.arange(0, attempts), np.repeat(child_reaction['sadness'], attempts), 'b--')
         plt.plot(np.arange(0, attempts), np.repeat(child_reaction['happy'], attempts), 'g--')
 
-        plt.plot(np.arange(0, attempts), anger[i::3], 'r', )
-        plt.plot(np.arange(0, attempts), sadness[i::3], 'b')
-        plt.plot(np.arange(0, attempts), happy[i::3], 'g')
+        plt.plot(np.arange(0, attempts), anger[i::len_arc], 'r', )
+        plt.plot(np.arange(0, attempts), sadness[i::len_arc], 'b')
+        plt.plot(np.arange(0, attempts), happy[i::len_arc], 'g')
         plt.legend()
 
     # plt.title(architectures[0])
@@ -351,8 +352,12 @@ if __name__ == '__main__':
                          'sadness': {'happy': 0.3, 'anger': 0.5, 'sadness': 0.2},
                          })
 
-    # plot_result('data/remote/Kanade/Experiment1/Experiment1.txt', mapping)
-    # plot_result('data/remote/Kanade/Experiment1_50/Experiment1_50.txt', mapping)
+    plot_result('data/remote/Experiment7.txt', secure_mapping, architectures=['DBN','ADBN'])
+    plot_result('data/remote/Experiment7_50.txt', secure_mapping, architectures=['DBN','ADBN'])
+    plot_result('data/remote/Experiment8.txt', ambivalent_mapping, architectures=['DBN','ADBN'])
+    plot_result('data/remote/Experiment8_50.txt', ambivalent_mapping, architectures=['DBN','ADBN'])
+    plot_result('data/remote/Experiment9.txt', avoidant_mapping, architectures=['DBN','ADBN'])
+    plot_result('data/remote/Experiment9_50.txt', avoidant_mapping, architectures=['DBN','ADBN'])
 
     def experiment_child(proj_name, mapping, shape):
         attempt = 10
