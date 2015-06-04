@@ -284,10 +284,8 @@ def associate_data2dataADBN(cache=False, train_further=True):
         recon_x = brain_c.recall(te_x, associate_steps=5, recall_steps=0, img_name='adbn_child_recon_{}'.format(shape))
 
         clf = SimpleClassifier('logistic', te_x.get_value(), te_y.eval())
-        orig = te_y.eval()
-        pred = clf.classify(recon_x)
 
-        error = np.sum(orig != pred) * 1. / len(orig)
+        error = clf.get_score(recon_x, te_y.eval())
         print error
         errors.append(error)
 
@@ -312,6 +310,18 @@ def get_brain_model_AssociativeDBN(shape, data_manager):
                            sparsity_cost=0.1,
                            dropout=True,
                            dropout_rate=0.5,
+                           epochs=50)
+
+    bottom_tr_r = TrainParam(learning_rate=0.001,
+                           momentum_type=NESTEROV,
+                           momentum=0.5,
+                           weight_decay=0.0001,
+                           sparsity_constraint=True,
+                           sparsity_target=0.1,
+                           sparsity_decay=0.9,
+                           sparsity_cost=0.1,
+                           dropout=True,
+                           dropout_rate=0.5,
                            epochs=10)
 
     rest_tr = TrainParam(learning_rate=0.0001,
@@ -321,14 +331,21 @@ def get_brain_model_AssociativeDBN(shape, data_manager):
                          dropout=True,
                          dropout_rate=0.8,
                          epochs=10,
-                         batch_size=10)
+                         batch_size=20)
 
-    h_n = 250
+    h_n = 300
     bottom_logger = ProgressLogger(img_shape=(shape, shape))
     bottom_rbm = RBMConfig(v_n=shape ** 2,
                            h_n=h_n,
                            progress_logger=bottom_logger,
                            train_params=bottom_tr)
+
+    bottom_rbm_r = RBMConfig(v_n=shape ** 2,
+                           h_n=h_n,
+                           progress_logger=bottom_logger,
+                           train_params=bottom_tr_r)
+
+
     rest_logger = ProgressLogger()
     rest_rbm = RBMConfig(v_n=250,
                          h_n=250,
@@ -340,9 +357,9 @@ def get_brain_model_AssociativeDBN(shape, data_manager):
     config.left_dbn.topology = [shape ** 2, h_n]  # , 250]
     config.right_dbn.topology = [shape ** 2, h_n]  # , 250]
 
-    top_tr = TrainParam(learning_rate=0.00001,
+    top_tr = TrainParam(learning_rate=0.0001,
                         momentum_type=NESTEROV,
-                        momentum=0.9,
+                        momentum=0.5,
                         weight_decay=0.0001,
                         sparsity_constraint=True,
                         sparsity_target=0.1,
@@ -351,11 +368,11 @@ def get_brain_model_AssociativeDBN(shape, data_manager):
                         dropout=False,
                         dropout_rate=0.5,
                         batch_size=10,
-                        epochs=10
+                        epochs=50
                         )
 
     config.top_rbm.train_params = top_tr
-    config.n_association = 500
+    config.n_association = 300
     config.reuse_dbn = False
     adbn = associative_dbn.AssociativeDBN(config=config, data_manager=data_manager)
     print '... initialised associative DBN'
