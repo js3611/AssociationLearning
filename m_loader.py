@@ -399,9 +399,11 @@ def construct_atlas():
     for k in d_img_arrays:
         d_img_arrays[k] = np.mean(d_img_arrays[k],axis=0)
 
+    d_img_arrays[len(d_img_arrays)+1] = np.mean(d_img_arrays.values(), axis=0)
+
     return d_img_arrays
 
 if __name__ == '__main__':
     atlas = construct_atlas()
     for k in atlas:
-        save_digit(atlas[k],"digit_%d.png" % k)
+        save_digit(atlas[k],"atlas/digit_%d.png" % k)

@@ -241,9 +241,9 @@ def get_p_h(brain_c, tr_x, tr_x01):
 def associate_data2dataADBN(cache=False, train_further=True):
     print "Testing Associative RBM which tries to learn even-oddness of numbers"
     # project set-up
-    data_manager = store.StorageManager('AssDBN_digits', log=True)
+    data_manager = store.StorageManager('AssDBN_digits_new_dropout', log=True)
     shape = 28
-    train_n = 1000
+    train_n = 10000
     test_n = 1000
     # Load mnist hand digits, class label is already set to binary
     dataset = m_loader.load_digits(n=[train_n, 100, test_n],
@@ -266,8 +266,32 @@ def associate_data2dataADBN(cache=False, train_further=True):
                   cache=[[True, True, True], [True, True, True], True],
                   train_further=[[False, True, True], [False, True, True], False])
 
+    clf = SimpleClassifier('logistic', te_x.get_value(), te_y.eval())
+
+
+    for i in [1, 3, 5, 10, 50]:
+        recon_x = brain_c.recall(te_x, associate_steps=i, recall_steps=0, img_name='adbn_child_recon_{}1'.format(shape), y_type='sample_active_h')
+        error = clf.get_score(recon_x, te_y.eval())
+        print "sample_active_h %f" % error
+
+        recon_x = brain_c.recall(te_x, associate_steps=i, recall_steps=0, img_name='adbn_child_recon_{}2'.format(shape), y_type='active_h')
+        error = clf.get_score(recon_x, te_y.eval())
+        print "active_h %f" % error
+
+        recon_x = brain_c.recall(te_x, associate_steps=i, recall_steps=0, img_name='adbn_child_recon_{}3'.format(shape), y_type='noisy_active_h')
+        error = clf.get_score(recon_x, te_y.eval())
+        print "noisy_active_h %f" % error
+
+        recon_x = brain_c.recall(te_x, associate_steps=i, recall_steps=0, img_name='adbn_child_recon_{}4'.format(shape), y_type='v_noisy_active_h')
+        error = clf.get_score(recon_x, te_y.eval())
+        print "v_noisy_active_h %f" % error
+
+
+
+    print error
+
     errors = []
-    for i in xrange(0, 10):
+    for i in xrange(0, 20):
 
         brain_c.train(tr_x, tr_x01,
                       cache=[[True, True, True], [True, True, True], False],
@@ -285,7 +309,24 @@ def associate_data2dataADBN(cache=False, train_further=True):
 
         recon_x = brain_c.recall(te_x, associate_steps=5, recall_steps=0, img_name='adbn_child_recon_{}'.format(shape))
 
-        clf = SimpleClassifier('logistic', te_x.get_value(), te_y.eval())
+        # clf = SimpleClassifier('logistic', te_x.get_value(), te_y.eval())
+
+        for j in [1, 3, 5, 10, 50]:
+            recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}1'.format(shape), y_type='sample_active_h')
+            error = clf.get_score(recon_x, te_y.eval())
+            print "sample_active_h %f" % error
+
+            recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}2'.format(shape), y_type='active_h')
+            error = clf.get_score(recon_x, te_y.eval())
+            print "active_h %f" % error
+
+            recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}3'.format(shape), y_type='noisy_active_h')
+            error = clf.get_score(recon_x, te_y.eval())
+            print "noisy_active_h %f" % error
+
+            recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}4'.format(shape), y_type='v_noisy_active_h')
+            error = clf.get_score(recon_x, te_y.eval())
+            print "v_noisy_active_h %f" % error
 
         error = clf.get_score(recon_x, te_y.eval())
         print error
@@ -312,7 +353,7 @@ def get_brain_model_AssociativeDBN(shape, data_manager):
                            sparsity_cost=0.1,
                            dropout=True,
                            dropout_rate=0.8,
-                           epochs=100)
+                           epochs=10)
 
     bottom_tr_r = TrainParam(learning_rate=0.001,
                            momentum_type=NESTEROV,
@@ -361,16 +402,16 @@ def get_brain_model_AssociativeDBN(shape, data_manager):
 
     top_tr = TrainParam(learning_rate=0.00001,
                         momentum_type=NESTEROV,
-                        momentum=0.5,
+                        momentum=0.9,
                         weight_decay=0.0001,
-                        sparsity_constraint=True,
+                        sparsity_constraint=False,
                         sparsity_target=0.1,
                         sparsity_decay=0.9,
                         sparsity_cost=0.1,
-                        dropout=False,
+                        dropout=True,
                         dropout_rate=0.5,
                         batch_size=10,
-                        epochs=100
+                        epochs=10
                         )
 
     config.top_rbm.train_params = top_tr

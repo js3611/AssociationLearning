@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import copy
 import datastorage as store
 
 import numpy as np
@@ -56,6 +57,9 @@ class DBN(object):
 
         self.sigmoid_layers = []
         self.rbm_layers = []
+        self.fine_tuned = False
+        self.inference_layers = []
+        self.generative_layers = []
         self.params = []
         self.n_layers = len(hidden_layers_sizes)
         self.topology = topology
@@ -391,5 +395,21 @@ class DBN(object):
 
         return sampled
 
-    def fine_tune(self):
-        pass
+    def untie_weights(self):
+        layers = self.rbm_layers
+        for rbm in layers:
+            W = rbm.W.get_value(borrow=False)
+            h_bias = rbm.h_bias.get_value(borrow=False)
+            v_bias = rbm.v_bias.get_value(borrow=False)
+            self.inference_layers.append(RBM(config=rbm.config, W=W, h_bias=h_bias, v_bias=v_bias))
+            self.generative_layers.append(RBM(config=rbm.config, W=copy.deepcopy(W), h_bias=copy.deepcopy(h_bias), v_bias=copy.deepcopy(v_bias)))
+
+    def fine_tune(self, x):
+        '''
+        Fine tunes DBN. Inference weights and Generative weights will be untied
+        :param x:
+        :return:
+        '''
+
+        self.untie_weights()
+

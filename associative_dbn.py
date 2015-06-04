@@ -17,7 +17,6 @@ from rbm import *
 from DBN import *
 from simple_classifiers import SimpleClassifier
 
-
 try:
     import PIL.Image as Image
 except ImportError:
@@ -39,16 +38,16 @@ class DefaultADBNConfig(object):
                         weight_decay=0.0001,
                         epochs=20)
 
-        first_progress_logger = ProgressLogger(img_shape=(25,25))
+        first_progress_logger = ProgressLogger(img_shape=(25, 25))
         first_rbm_config = RBMConfig(train_params=tr,
                                      progress_logger=first_progress_logger)
-                    
+
         # Layer 2 onwards
         tr2 = tr
         rest_progress_logger = ProgressLogger()
         rbm_config = RBMConfig(train_params=tr,
                                progress_logger=rest_progress_logger)
-        
+
         # Left DBN
         left_topology = [625, 100]
         tr_list = [tr, tr2, tr2]
@@ -74,7 +73,7 @@ class DefaultADBNConfig(object):
             # Top AssociativeRBM
             top_rbm_config = RBMConfig(tr, progress_logger=AssociationProgressLogger())
             top_rbm_config.associative = True
-                
+
         # Set configurations
         self.reuse_dbn = False
         self.left_dbn = left_dbn_config
@@ -82,14 +81,13 @@ class DefaultADBNConfig(object):
         self.top_rbm = top_rbm_config
         self.n_association = 100
 
-        
-class AssociativeDBN(object):
 
+class AssociativeDBN(object):
     def __init__(self, config, data_manager=None):
 
         # Set parameters / Assertion
         config.left_dbn.data_manager = data_manager
-        config.right_dbn.data_manager = data_manager        
+        config.right_dbn.data_manager = data_manager
         top_rbm_config = config.top_rbm
         top_rbm_config.h_n = config.n_association
         v_n = config.left_dbn.topology[-1]
@@ -103,8 +101,8 @@ class AssociativeDBN(object):
         config.top_rbm = top_rbm_config
         self.config = config
         self.opt_top = config.opt_top
-        self.data_manager=data_manager        
-        self.dbn_left = DBN(config.left_dbn)        
+        self.data_manager = data_manager
+        self.dbn_left = DBN(config.left_dbn)
         self.dbn_right = DBN(config.right_dbn) if not config.reuse_dbn else self.dbn_left
         self.association_layer = RBM(config=config.top_rbm)
 
@@ -180,7 +178,7 @@ class AssociativeDBN(object):
                                       out_dir=out_dir)
 
     # TODO clean up input and output of each function (i.e. they should all return theano or optional flag)
-    def recall(self, x, associate_steps=10, recall_steps=5, img_name='dbn'):
+    def recall(self, x, associate_steps=10, recall_steps=5, img_name='dbn', y=None, y_type='sample_active_h'):
         ''' left dbn bottom-up -> associate -> right dbn top-down
         :param x: data
         :param associate_steps: top level gibbs sampling steps
@@ -209,12 +207,43 @@ class AssociativeDBN(object):
                 # TODO
                 print 'GAUSSIAN INPUT IS NOT SUPPORTED'
 
+            y_base = np.zeros(top_out.shape).astype(t_float_x)
+
             right_top_rbm = right.rbm_layers[-1]
-            p = right_top_rbm.active_probability_h.get_value(borrow=True)
-            y = theano.shared(right_top_rbm.np_rand.binomial(size=top_out.shape,
-                                                             n=1,
-                                                             p=p).astype(t_float_x),
-                              name='assoc_y')
+            if y_type == 'sample_active_h' or type(y) is None:
+                print 'initialise reconstruction by active_h'
+
+                p = right_top_rbm.active_probability_h.get_value(borrow=True)
+                # import matplotlib.pyplot as plt
+                # plt.plot(p)
+                # plt.show()
+
+                y_base = right_top_rbm.np_rand.binomial(size=top_out.shape,
+                                                                 n=1,
+                                                                 p=p).astype(t_float_x)
+
+            if y_type == 'active_h':
+                p = right_top_rbm.active_probability_h.get_value(borrow=True)
+                y_base = np.tile(p, (top_out.shape[0],1)).astype(t_float_x)
+
+            if y_type == 'v_noisy_active_h':
+                p = right_top_rbm.active_probability_h.get_value(borrow=True)
+                y_base = right_top_rbm.np_rand.normal(loc=0, scale=0.2, size = top_out.shape) + np.tile(p,(top_out.shape[0],1))
+                y_base = y_base.astype(t_float_x)
+
+            if y_type == 'noisy_active_h':
+                p = right_top_rbm.active_probability_h.get_value(borrow=True)
+                y_base = right_top_rbm.np_rand.normal(loc=0, scale=0.1, size = top_out.shape) + np.tile(p,(top_out.shape[0],1))
+                y_base = y_base.astype(t_float_x)
+
+            if 'binomial' in y_type:
+                p = float(y_type.strip('binomial'))
+                y_base = right_top_rbm.np_rand.binomial(size=top_out.shape,
+                                                                 n=1,
+                                                                 p=p).astype(t_float_x)
+
+
+            y = theano.shared(y_base, name='assoc_y')
             associate_x = top.mean_field_inference_opt(assoc_in, y, sample=True, k=associate_steps)
         else:
             associate_x = top.mean_field_inference(assoc_in, sample=True, k=associate_steps)
@@ -232,18 +261,18 @@ class AssociativeDBN(object):
 
             # pass down to visible units, take the penultimate layer because we sampled at the top layer
             if len(right.rbm_layers) > 1:
-                res = right.top_down_pass(associate_x_reconstruct, start=len(right.rbm_layers)-1)
+                res = right.top_down_pass(associate_x_reconstruct, start=len(right.rbm_layers) - 1)
             else:
                 res = associate_x_reconstruct
-            # res = result.get_value(borrow=True)
+                # res = result.get_value(borrow=True)
         else:
             res = right.top_down_pass(associate_x.astype(t_float_x))
 
         n = res.shape[0]
 
         img_shape = right.rbm_layers[0].track_progress.img_shape
-        save_images(x, img_name+'_orig.png', shape=(n / 10, 10), img_shape=img_shape)
-        save_images(res, img_name+'_recon.png', shape=(n / 10, 10), img_shape=img_shape)
+        save_images(x, img_name + '_orig.png', shape=(n / 10, 10), img_shape=img_shape)
+        save_images(res, img_name + '_recon.png', shape=(n / 10, 10), img_shape=img_shape)
 
         self.data_manager.move_to_project_root()
 
@@ -252,7 +281,6 @@ class AssociativeDBN(object):
     def fine_tune(self):
         # TODO
         pass
-
 
 
 def test_associative_dbn(i=0):
@@ -276,12 +304,12 @@ def test_associative_dbn(i=0):
     config.right_dbn.rbm_configs[0].progress_logger = ProgressLogger(img_shape=(28, 28))
     config.left_dbn.topology = [784, 500]
     config.right_dbn.topology = [784, 500]
-    config.n_association = 300    
+    config.n_association = 300
     associative_dbn = AssociativeDBN(config=config, data_manager=data_manager)
 
     # Plot sample
-    save_images(train_x.get_value(borrow=True)[1:100], 'n_orig.png',(10, 10))
-    save_images(train_x01.get_value(borrow=True)[1:100], 'n_ass.png',(10, 10))
+    save_images(train_x.get_value(borrow=True)[1:100], 'n_orig.png', (10, 10))
+    save_images(train_x01.get_value(borrow=True)[1:100], 'n_ass.png', (10, 10))
 
     # Train RBM - learn joint distribution
     associative_dbn.train(train_x, train_x01, cache=True)
@@ -297,7 +325,7 @@ def test_associative_dbn(i=0):
     dataset01[2] = (theano.shared(reconstructed_y), test_y)
 
     # Classify the reconstructions
-    clf = SimpleClassifier('logistic',dataset01[0][0],dataset01[0][1])
+    clf = SimpleClassifier('logistic', dataset01[0][0], dataset01[0][1])
     score_orig = clf.get_score(reconstructed_y, test_y.eval())
     out_msg = '{} (orig, retrain):{}'.format(associative_dbn, score_orig)
     print out_msg

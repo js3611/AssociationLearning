@@ -519,6 +519,9 @@ def construct_atlas(set_name='25_25', pre=None):
     for i in f_arrays:
         f_arrays[i] = np.mean(f_arrays[i], axis=0)
 
+    f_arrays[len(f_arrays)+1] = np.mean(f_arrays.values(), axis=0)
+
+
     return f_arrays
 
 if __name__ == '__main__':
@@ -527,7 +530,10 @@ if __name__ == '__main__':
     #                   mapping={ 'happy': {'happy':0.5, 'sadness':0.5}, 'sadness': {'happy':0.2, 'sadness':0.8} },
     #                   pre={'scale':True})
 
-    faces = construct_atlas()
+    faces = construct_atlas('50_50', pre={'scale2unit':True})
 
     for i in faces:
-        save_face(faces[i], name="face_"+emotion_rev_dict[i]+".png")
+        if i == 8:
+            save_face(faces[i],name='atlas/unit_mean_face.png',img_shape=(50,50))
+        else:
+            save_face(faces[i], name="atlas/unit_face_"+emotion_rev_dict[i]+".png",img_shape=(50,50))

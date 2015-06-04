@@ -74,7 +74,7 @@ class RBM(object):
         self.dropout = train_params.dropout
         self.dropout_rate = train_params.dropout_rate
         if self.dropout:
-            self.dropout_mask = self.rand.binomial(size=(h_n,), p=self.dropout_rate)
+            self.dropout_mask = self.rand.binomial(size=(h_n,), p=self.dropout_rate, n=1)
 
         self.train_parameters = train_params
 
@@ -825,7 +825,8 @@ class RBM(object):
             mean_cost = []
             for batch_index in xrange(mini_batches):
                 if self.dropout:
-                    self.dropout_mask = self.np_rand.binomial(n=1, p=self.dropout_rate, size=self.h_n).astype(t_float_x)
+                    # self.dropout_mask = self.np_rand.binomial(n=1, p=self.dropout_rate, size=self.h_n).astype(t_float_x)
+                    self.dropout_mask = self.np_rand.binomial(n=1, p=self.dropout_rate, size=(batch_size,self.h_n)).astype(t_float_x)
 
                 cost = train_fn(batch_index)
                 if not math.isnan(cost):
@@ -1034,7 +1035,7 @@ class RBM(object):
                                                           img_name=img_name)
 
         if sample:
-            return self.np_rand.binomial(1, m[-1]).astype(t_float_x)
+            return self.np_rand.binomial(n=1, p=m[-1]).astype(t_float_x)
         else:
             return m[-1]
 
@@ -1090,7 +1091,7 @@ class RBM(object):
                                                           img_name=img_name, opt=True)
 
         if sample and type(self.v_unit) is RBMUnit:
-            return self.np_rand.binomial(1, reconstruction_chain[-1][:, (self.v_n / 2):])
+            return self.np_rand.binomial(n=1, p=reconstruction_chain[-1][:, (self.v_n / 2):])
         else:
             return reconstruction_chain[-1][:, (self.v_n / 2):]
 
