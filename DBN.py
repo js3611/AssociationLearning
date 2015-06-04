@@ -37,6 +37,7 @@ class DBNConfig(object):
         self.rbm_configs = rbm_configs
         self.out_dir = out_dir
 
+
 class DBN(object):
     def __init__(self, config=DBNConfig()):
 
@@ -389,3 +390,6 @@ class DBN(object):
             sampled = x
 
         return sampled
+
+    def fine_tune(self):
+        pass
