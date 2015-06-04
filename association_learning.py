@@ -262,13 +262,15 @@ def associate_data2dataADBN(cache=False, train_further=True):
     #               cache=[[True, True, True], [True, True, True], True],
     #               train_further=[[True, True, True], [True, True, True], False])
 
-
+    brain_c.train(tr_x, tr_x01,
+                  cache=[[True, True, True], [True, True, True], True],
+                  train_further=[[False, True, True], [False, True, True], False])
 
     errors = []
     for i in xrange(0, 10):
 
         brain_c.train(tr_x, tr_x01,
-                      cache=[[True, True, True], [True, True, True], True],
+                      cache=[[True, True, True], [True, True, True], False],
                       train_further=[[False, True, True], [False, True, True], True])
 
         if i == 0:
@@ -302,15 +304,15 @@ def get_brain_model_AssociativeDBN(shape, data_manager):
     # Gaussian Input Layer
     bottom_tr = TrainParam(learning_rate=0.001,
                            momentum_type=NESTEROV,
-                           momentum=0.5,
+                           momentum=0.9,
                            weight_decay=0.0001,
                            sparsity_constraint=True,
                            sparsity_target=0.1,
                            sparsity_decay=0.9,
                            sparsity_cost=0.1,
                            dropout=True,
-                           dropout_rate=0.5,
-                           epochs=50)
+                           dropout_rate=0.8,
+                           epochs=100)
 
     bottom_tr_r = TrainParam(learning_rate=0.001,
                            momentum_type=NESTEROV,
@@ -353,11 +355,11 @@ def get_brain_model_AssociativeDBN(shape, data_manager):
                          train_params=rest_tr)
 
     config.left_dbn.rbm_configs = [bottom_rbm]  # , rest_rbm]
-    config.right_dbn.rbm_configs = [bottom_rbm]  # , rest_rbm]
+    config.right_dbn.rbm_configs = [bottom_rbm_r]  # , rest_rbm]
     config.left_dbn.topology = [shape ** 2, h_n]  # , 250]
     config.right_dbn.topology = [shape ** 2, h_n]  # , 250]
 
-    top_tr = TrainParam(learning_rate=0.0001,
+    top_tr = TrainParam(learning_rate=0.00001,
                         momentum_type=NESTEROV,
                         momentum=0.5,
                         weight_decay=0.0001,
@@ -368,7 +370,7 @@ def get_brain_model_AssociativeDBN(shape, data_manager):
                         dropout=False,
                         dropout_rate=0.5,
                         batch_size=10,
-                        epochs=50
+                        epochs=100
                         )
 
     config.top_rbm.train_params = top_tr

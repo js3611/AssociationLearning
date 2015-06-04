@@ -198,6 +198,7 @@ def sample_image(data, shared=True):
     else:
         return np.asarray(sample_data, dtype=theano.config.floatX)
 
+
 def vectorise_label(data):
     new_data = []
     for (x, y) in data:
@@ -379,3 +380,28 @@ def tile_raster_images(X, img_shape, tile_shape, tile_spacing=(0, 0),
                         tile_col * (W + Ws): tile_col * (W + Ws) + W
                     ] = this_img * c
         return out_array
+
+def construct_atlas():
+    '''
+    :return: statistical mean image of digits from 0 to 9
+    '''
+    dataset = load_digits(shared=False)
+    tr, vl, te = dataset
+    tr_x, tr_y = tr
+
+    d_img_arrays = {}
+    for i in xrange(0,10):
+        d_img_arrays[i] = []
+
+    for x, y in zip(tr_x, tr_y):
+        d_img_arrays[y].append(x)
+
+    for k in d_img_arrays:
+        d_img_arrays[k] = np.mean(d_img_arrays[k],axis=0)
+
+    return d_img_arrays
+
+if __name__ == '__main__':
+    atlas = construct_atlas()
+    for k in atlas:
+        save_digit(atlas[k],"digit_%d.png" % k)

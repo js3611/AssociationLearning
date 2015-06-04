@@ -503,8 +503,31 @@ def tile_raster_images(X, img_shape, tile_shape, tile_spacing=(0, 0),
                     ] = this_img * c
         return out_array
 
+def construct_atlas(set_name='25_25', pre=None):
+    dataset = load_kanade(shared=False, set_name=set_name, pre=pre)
+    tr, vl, te = dataset
+    tr_x, tr_y = tr
+
+    f_arrays = {}
+    for i in emotion_rev_dict:
+        f_arrays[i] = []
+
+
+    for x, y in zip(tr_x, tr_y):
+        f_arrays[y].append(x)
+
+    for i in f_arrays:
+        f_arrays[i] = np.mean(f_arrays[i], axis=0)
+
+    return f_arrays
 
 if __name__ == '__main__':
-    d = sample_image2(np.array([5, 6, 5, 5, 5, 6]),
-                      mapping={ 'happy': {'happy':0.5, 'sadness':0.5}, 'sadness': {'happy':0.2, 'sadness':0.8} },
-                      pre={'scale':True})
+
+    # d = sample_image2(np.array([5, 6, 5, 5, 5, 6]),
+    #                   mapping={ 'happy': {'happy':0.5, 'sadness':0.5}, 'sadness': {'happy':0.2, 'sadness':0.8} },
+    #                   pre={'scale':True})
+
+    faces = construct_atlas()
+
+    for i in faces:
+        save_face(faces[i], name="face_"+emotion_rev_dict[i]+".png")
