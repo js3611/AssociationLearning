@@ -57,7 +57,8 @@ class TrainParam(object):
                ("_sparsity"
                 + "_t" + str(self.sparsity_target)
                 + "_c" + str(self.sparsity_cost) +
-                "_d" + str(self.sparsity_decay) if self.sparsity_constraint else "")
+                "_d" + str(self.sparsity_decay) if self.sparsity_constraint else "") + \
+               ("_dropout%.2f" % self.dropout_rate if self.dropout else "")
 
 
 class RBMConfig(object):

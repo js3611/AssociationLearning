@@ -10,6 +10,7 @@ import associative_dbn
 import utils
 import m_loader as m_loader
 import datastorage as store
+# from matplotlib.pyplot import plot, show, ion
 # import matplotlib.pyplot as plt
 from simple_classifiers import SimpleClassifier
 
@@ -78,7 +79,7 @@ def associate_data2data(cache=False, train_further=True):
     print "Testing Associative RBM which tries to learn even-oddness of numbers"
     # project set-up
     data_manager = store.StorageManager('EvenOdd', log=True)
-    train_n = 10000
+    train_n = 1000
     test_n = 1000
     # Load mnist hand digits, class label is already set to binary
     dataset = m_loader.load_digits(n=[train_n, 100, test_n],
@@ -105,7 +106,7 @@ def associate_data2data(cache=False, train_further=True):
     # momentum=0.5,
     # weight_decay=0.001,
     # sparsity_constraint=True,
-    #                 sparsity_target=0.1 ** 9,
+    # sparsity_target=0.1 ** 9,
     #                 sparsity_cost=0.9,
     #                 sparsity_decay=0.99,
     #                 epochs=50)
@@ -204,6 +205,163 @@ def associate_data2data(cache=False, train_further=True):
     # plt.show()
     print errors
 
+
+def get_p_h(brain_c, tr_x, tr_x01):
+    rbm_top = brain_c.association_layer
+    dbn_left = brain_c.dbn_left
+    dbn_right = brain_c.dbn_right
+    left_in = dbn_left.bottom_up_pass(tr_x)
+    right_in = dbn_right.bottom_up_pass(tr_x01)
+    _, p_h = rbm_top.prop_up(np.concatenate((left_in, right_in), axis=1))
+    p_h = theano.function([], T.mean(p_h, axis=0))()
+    return p_h
+
+
+# def plot_hidden_activity(brain_c, tr_x, tr_x01):
+#     p_h = get_p_h(brain_c, tr_x.get_value(), tr_x01.get_value())
+#     plt.clf()
+#     plt.figure(0)
+#     plt.plot(p_h)
+#     # plt.show(block=False)
+#
+#     t0 = m_loader.load_digits(shared=False, n=[100, 0, 0], digits=[0])[0][0]
+#     t1 = m_loader.load_digits(shared=False, n=[100, 0, 0], digits=[1])[0][0]
+#     zero = np.zeros((100, 784)).astype(t_float_x)
+#
+#     plt.figure(1)
+#     plt.subplot(321)
+#     p_h1 = get_p_h(brain_c, t0, t0)
+#     plt.plot(p_h1)
+#     plt.subplot(322)
+#     p_h2 = get_p_h(brain_c, t0, zero)
+#     plt.plot(p_h2)
+#     plt.show(block=False)
+
+
+def associate_data2dataADBN(cache=False, train_further=True):
+    print "Testing Associative RBM which tries to learn even-oddness of numbers"
+    # project set-up
+    data_manager = store.StorageManager('AssDBN_digits', log=True)
+    shape = 28
+    train_n = 1000
+    test_n = 1000
+    # Load mnist hand digits, class label is already set to binary
+    dataset = m_loader.load_digits(n=[train_n, 100, test_n],
+                                   digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+                                   pre={'binary_label': True})
+
+    tr_x, tr_y = dataset[0]
+    te_x, te_y = dataset[2]
+    tr_x01 = m_loader.sample_image(tr_y)
+    te_x01 = m_loader.sample_image(te_y)
+    ones = m_loader.load_digits(n=[test_n, 0, 0], digits=[1])[0][0]
+    zeroes = m_loader.load_digits(n=[test_n, 0, 0], digits=[0])[0][0]
+
+    brain_c = get_brain_model_AssociativeDBN(shape, data_manager)
+    # brain_c.train(tr_x, tr_x01,
+    #               cache=[[True, True, True], [True, True, True], True],
+    #               train_further=[[True, True, True], [True, True, True], False])
+
+
+
+    errors = []
+    for i in xrange(0, 10):
+
+        brain_c.train(tr_x, tr_x01,
+                      cache=[[True, True, True], [True, True, True], True],
+                      train_further=[[False, True, True], [False, True, True], True])
+
+        if i == 0:
+            # Reconstruction
+            recon_right = brain_c.dbn_left.reconstruct(tr_x, k=10, plot_every=1, plot_n=100,
+                                                         img_name='adbn_left_recon_{}'.format(shape))
+            recon_left = brain_c.dbn_right.reconstruct(tr_x01, k=10, plot_every=1, plot_n=100,
+                                                         img_name='adbn_right_recon_{}'.format(shape))
+
+        # Plot hidden activity
+        # plot_hidden_activity(brain_c, tr_x, tr_x01)
+
+        recon_x = brain_c.recall(te_x, associate_steps=5, recall_steps=0, img_name='adbn_child_recon_{}'.format(shape))
+
+        clf = SimpleClassifier('logistic', te_x.get_value(), te_y.eval())
+        orig = te_y.eval()
+        pred = clf.classify(recon_x)
+
+        error = np.sum(orig != pred) * 1. / len(orig)
+        print error
+        errors.append(error)
+
+        # plt.plot(errors)
+        # plt.show()
+    print errors
+    # plt.show(block=True)
+
+
+def get_brain_model_AssociativeDBN(shape, data_manager):
+    # initialise AssociativeDBN
+    config = associative_dbn.DefaultADBNConfig()
+
+    # Gaussian Input Layer
+    bottom_tr = TrainParam(learning_rate=0.001,
+                           momentum_type=NESTEROV,
+                           momentum=0.5,
+                           weight_decay=0.0001,
+                           sparsity_constraint=True,
+                           sparsity_target=0.1,
+                           sparsity_decay=0.9,
+                           sparsity_cost=0.1,
+                           dropout=True,
+                           dropout_rate=0.5,
+                           epochs=10)
+
+    rest_tr = TrainParam(learning_rate=0.0001,
+                         momentum_type=NESTEROV,
+                         momentum=0.5,
+                         weight_decay=0.0001,
+                         dropout=True,
+                         dropout_rate=0.8,
+                         epochs=10,
+                         batch_size=10)
+
+    h_n = 250
+    bottom_logger = ProgressLogger(img_shape=(shape, shape))
+    bottom_rbm = RBMConfig(v_n=shape ** 2,
+                           h_n=h_n,
+                           progress_logger=bottom_logger,
+                           train_params=bottom_tr)
+    rest_logger = ProgressLogger()
+    rest_rbm = RBMConfig(v_n=250,
+                         h_n=250,
+                         progress_logger=rest_logger,
+                         train_params=rest_tr)
+
+    config.left_dbn.rbm_configs = [bottom_rbm]  # , rest_rbm]
+    config.right_dbn.rbm_configs = [bottom_rbm]  # , rest_rbm]
+    config.left_dbn.topology = [shape ** 2, h_n]  # , 250]
+    config.right_dbn.topology = [shape ** 2, h_n]  # , 250]
+
+    top_tr = TrainParam(learning_rate=0.00001,
+                        momentum_type=NESTEROV,
+                        momentum=0.9,
+                        weight_decay=0.0001,
+                        sparsity_constraint=True,
+                        sparsity_target=0.1,
+                        sparsity_decay=0.9,
+                        sparsity_cost=0.1,
+                        dropout=False,
+                        dropout_rate=0.5,
+                        batch_size=10,
+                        epochs=10
+                        )
+
+    config.top_rbm.train_params = top_tr
+    config.n_association = 500
+    config.reuse_dbn = False
+    adbn = associative_dbn.AssociativeDBN(config=config, data_manager=data_manager)
+    print '... initialised associative DBN'
+    return adbn
+
+
 def associate_data2dataDBN(cache=False):
     print "Testing Associative DBN which tries to learn even-oddness of numbers"
     # project set-up
@@ -290,5 +448,6 @@ def associate_data2dataDBN(cache=False):
 
 if __name__ == '__main__':
     # associate_data2label()
-    associate_data2data(True, True)
+    # associate_data2data(True, True)
+    associate_data2dataADBN(True, True)
     # associate_data2dataDBN(False)
