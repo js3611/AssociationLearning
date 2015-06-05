@@ -242,7 +242,7 @@ def associate_data2dataADBN(cache=False, train_further=True):
     print "Testing Associative RBM which tries to learn even-oddness of numbers"
     f = open('adbnlog.txt', 'a')
     # project set-up
-    data_manager = store.StorageManager('AssDBN_digits_new_dropout', log=False)
+    data_manager = store.StorageManager('AssDBN_digits_Long', log=False)
     shape = 28
     train_n = 10000
     test_n = 1000
@@ -296,16 +296,17 @@ def associate_data2dataADBN(cache=False, train_further=True):
         for sc in [True, False]:
             for lr in [0.001, 0.0001, 0.00005, 0.00001]:
                 for n in [100, 250, 500]:
-                    adbn = get_brain_model_AssociativeDBN(28, data_manager=data_manager)
-                    adbn.config.top_rbm.train_params.learning_rate=lr
-                    adbn.config.top_rbm.train_params.sparsity_constraint=sc
-                    adbn.config.top_rbm.train_params.dropout=dropout
-                    adbn.config.n_association = n
+                    config = get_brain_model_AssociativeDBNConfig(28, data_manager=data_manager)
+                    config.top_rbm.train_params.learning_rate=lr
+                    config.top_rbm.train_params.sparsity_constraint=sc
+                    config.top_rbm.train_params.dropout=dropout
+                    config.n_association = n
+                    adbn = associative_dbn.AssociativeDBN(config=config, data_manager=data_manager)
                     brain_c = adbn
                     f.write(str(brain_c.association_layer) + "\n")
 
                     errors = []
-                    for i in xrange(0, 10):
+                    for i in xrange(0, 1):
                         f.write("Epoch %d \n" % (i * 10))
 
                         brain_c.train(tr_x, tr_x01,
@@ -326,22 +327,13 @@ def associate_data2dataADBN(cache=False, train_further=True):
                         #
                         # clf = SimpleClassifier('logistic', te_x.get_value(), te_y.eval())
 
-                        for j in [3, 5, 10]:
-                            f.write("Associate Step %d\n" %j)
-                            recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}1'.format(shape), y_type='sample_active_h')
-                            error = clf.get_score(recon_x, te_y.eval())
-                            print "sample_active_h %f" % error
-                            f.write("sample_active_h %f\n" % error)
+                        for j in [5, 10]:
 
-                            recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}2'.format(shape), y_type='active_h')
+                            recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}1'.format(shape), y_type='active_h')
                             error = clf.get_score(recon_x, te_y.eval())
                             f.write("active_h %f\n" % error)
 
-                            recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}3'.format(shape), y_type='noisy_active_h')
-                            error = clf.get_score(recon_x, te_y.eval())
-                            f.write("noisy_active_h %f\n" % error)
-
-                            recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}4'.format(shape), y_type='v_noisy_active_h')
+                            recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}2'.format(shape), y_type='v_noisy_active_h')
                             error = clf.get_score(recon_x, te_y.eval())
                             f.write("v_noisy_active_h %f\n" % error)
 
@@ -356,7 +348,7 @@ def associate_data2dataADBN(cache=False, train_further=True):
     f.close()
 
 
-def get_brain_model_AssociativeDBN(shape, data_manager):
+def get_brain_model_AssociativeDBNConfig(shape, data_manager):
     # initialise AssociativeDBN
     config = associative_dbn.DefaultADBNConfig()
 
@@ -436,9 +428,7 @@ def get_brain_model_AssociativeDBN(shape, data_manager):
     config.top_rbm.train_params = top_tr
     config.n_association = 300
     config.reuse_dbn = False
-    adbn = associative_dbn.AssociativeDBN(config=config, data_manager=data_manager)
-    print '... initialised associative DBN'
-    return adbn
+    return config
 
 
 def get_adbns(data_manager):
@@ -450,7 +440,7 @@ def get_adbns(data_manager):
         for sc in [True, False]:
             for lr in [0.001, 0.0001, 0.00005, 0.00001]:
                 for n in [100, 250, 500]:
-                    adbn = get_brain_model_AssociativeDBN(28, data_manager=data_manager)
+                    adbn = get_brain_model_AssociativeDBNConfig(28, data_manager=data_manager)
                     adbn.config.top_rbm.train_params.learning_rate=lr
                     adbn.config.top_rbm.train_params.sparsity_constraint=sc
                     adbn.config.top_rbm.train_params.dropout=dropout

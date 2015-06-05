@@ -50,10 +50,8 @@ class TrainParam(object):
 
 
     def __str__(self):
-        return "batch" + str(self.batch_size) + \
-               "_lr" + str(self.learning_rate) + \
-               "_" + self.momentum_type + str(self.momentum) + \
-               "_wd" + str(self.weight_decay) + \
+        return "batch{}_lr{}_{}{}_wd{}".format(self.batch_size, self.learning_rate, self.momentum_type, self.momentum,
+                                               self.weight_decay) + \
                ("_sparsity"
                 + "_t" + str(self.sparsity_target)
                 + "_c" + str(self.sparsity_cost) +
@@ -75,7 +73,6 @@ class RBMConfig(object):
                  h_unit=rbm_units.RBMUnit,
                  train_params=TrainParam(),
                  progress_logger=None):
-
         self.cd_type = cd_type
         self.cd_steps = cd_steps
         self.associative = associative

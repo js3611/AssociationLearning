@@ -4,7 +4,7 @@ import time
 
 import numpy as np
 import datastorage as store
-import mnist_loader as m_loader
+import m_loader as m_loader
 import kanade_loader as k_loader
 
 import theano
@@ -67,11 +67,11 @@ class DefaultADBNConfig(object):
         self.opt_top = True
 
         if self.opt_top:
-            top_rbm_config = RBMConfig(tr, progress_logger=ProgressLogger())
+            top_rbm_config = RBMConfig(train_params=tr, progress_logger=ProgressLogger())
             top_rbm_config.associative = False
         else:
             # Top AssociativeRBM
-            top_rbm_config = RBMConfig(tr, progress_logger=AssociationProgressLogger())
+            top_rbm_config = RBMConfig(train_params=tr, progress_logger=AssociationProgressLogger())
             top_rbm_config.associative = True
 
         # Set configurations
@@ -104,6 +104,7 @@ class AssociativeDBN(object):
         self.data_manager = data_manager
         self.dbn_left = DBN(config.left_dbn)
         self.dbn_right = DBN(config.right_dbn) if not config.reuse_dbn else self.dbn_left
+        print '... initialising association layer'
         self.association_layer = RBM(config=config.top_rbm)
 
     def train(self, x1, x2, cache=False, train_further=False, optimise=False, opt_top=False):
@@ -210,7 +211,6 @@ class AssociativeDBN(object):
             top_shape = top_out.shape[0]
             right_top_rbm = right.rbm_layers[-1]
             shape = (top_shape, right_top_rbm.h_n)
-            print shape
             y_base = np.zeros(shape).astype(t_float_x)
             p = right_top_rbm.active_probability_h.get_value(borrow=True)
 
@@ -242,8 +242,6 @@ class AssociativeDBN(object):
                                                         n=1,
                                                         p=p).astype(t_float_x)
 
-            print top_out.shape
-            print y_base.shape
             y = theano.shared(y_base, name='assoc_y')
             associate_x = top.mean_field_inference_opt(assoc_in, y=y, sample=True, k=associate_steps)
         else:
