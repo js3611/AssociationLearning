@@ -291,7 +291,7 @@ class DBN(object):
         layer_input = T.matrix('x')
         chain_next = layer_input
         for i in xrange(start, end):
-            rbm = self.rbm_layers[i]
+            rbm = self.rbm_layers[i] if not self.untied else self.inference_layers[i]
             h, hp, hs = rbm.sample_h_given_v(chain_next)
             chain_next = hs
             # layer_input = vp
@@ -314,7 +314,7 @@ class DBN(object):
         layer_input = T.matrix('x')
         chain_next = layer_input
         for i in reversed(xrange(end, start)):
-            rbm = self.rbm_layers[i]
+            rbm = self.rbm_layers[i] if not self.untied else self.generative_layers[i]
             v, vp, vs = rbm.sample_v_given_h(chain_next)
             chain_next = vs
             # layer_input = vp
@@ -373,18 +373,18 @@ class DBN(object):
 
         return reconstructions[-1]
 
-    def sample(self, n=1, k=10, rand_type='normal'):
+    def sample(self, n=1, k=10, rand_type='noisy_mean'):
 
         top_layer = self.rbm_layers[-1]
 
-        if self.n_layers > 1:
+        if self.n_layers > 1 and rand_type in ['mean','noisy_mean']:
             print 'sampling according to active_probability of layer below'
             pen = self.rbm_layers[-2]
             active_h = pen.active_probability_h.get_value(borrow=True)
-            x = top_layer.sample(n, k, rand_type='binomial', p=active_h)
+            x = top_layer.sample(n, k, rand_type=rand_type, p=active_h)
         else:
             # Sample between top two layers
-            x = top_layer.sample(n, k, rand_type='binomial', p=0.05)
+            x = top_layer.sample(n, k, rand_type=rand_type, p=0.5)
 
         # prop down the output to visible unit if it is not RBM
         if self.n_layers > 1:
@@ -397,14 +397,22 @@ class DBN(object):
     def untie_weights(self):
         # Untie all the weights except for the top layer
 
+        i = 0
         layers = self.rbm_layers
         for rbm in layers[:-1]:
             W = rbm.W.get_value(borrow=False)
             h_bias = rbm.h_bias.get_value(borrow=False)
             v_bias = rbm.v_bias.get_value(borrow=False)
-            self.inference_layers.append(RBM(config=rbm.config, W=W, h_bias=h_bias, v_bias=v_bias))
-            self.generative_layers.append(
-                RBM(config=rbm.config, W=copy.deepcopy(W), h_bias=copy.deepcopy(h_bias), v_bias=copy.deepcopy(v_bias)))
+
+            W1 = theano.shared(W, name=('inference_W_%d' % i))
+            v1 = theano.shared(v_bias, name=('inference_vbias_%d'%i))
+            h1 = theano.shared(h_bias, name=('inference_hbias_%d'%i))
+            W2 = theano.shared(copy.deepcopy(W), name=('generative_W_%d' %i))
+            v2 = theano.shared(copy.deepcopy(v_bias), name=('generative_vbias_%d' % i))
+            h2 = theano.shared(copy.deepcopy(h_bias), name=('generative_hbias_%d' %i))
+            self.inference_layers.append(RBM(config=rbm.config, W=W1, h_bias=h1, v_bias=v1))
+            self.generative_layers.append(RBM(config=rbm.config, W=W2, h_bias=h2, v_bias=v2))
+            i += 1
 
     def wake_phase(self, data):
         # PERFORM A BOTTOM-UP PASS TO GET WAKE/POSITIVE PHASE
@@ -435,7 +443,7 @@ class DBN(object):
 
         return sleep_probs, sleep_states
 
-    def get_fine_tune_updates(self, data, r=0.01):
+    def get_fine_tune_updates(self, data, batch_size):
         '''
         Fine tunes DBN. Inference weights and Generative weights will be untied
         :param x:
@@ -448,13 +456,15 @@ class DBN(object):
 
         # CONTRASTIVE DIVERGENCE AT TOP LAYER
         pen_prob, pen_state = wake_probs[-1], wake_states[-1]
-        [updates, chain_end, _, _, _, _, _, _] = top_rbm.negative_statistics(pen_state)
+        [updates, chain_end, _, _, _, _, _, _,_] = top_rbm.negative_statistics(pen_state)
 
         cost = T.mean(top_rbm.free_energy(pen_state)) - T.mean(top_rbm.free_energy(chain_end))
         grads = T.grad(cost, top_rbm.params, consider_constant=[chain_end])
 
+        lr = top_rbm.train_parameters.learning_rate
         for (p, g) in zip(top_rbm.params, grads):
-            updates[p] = p + r * g
+            #TODO
+            updates[p] = p - lr * g
 
         # SLEEP PHASE: [hid_prob, vis_prob], [pen_state, hid_state, vis_state] ...
         sleep_probs, sleep_states = self.sleep_phase(chain_end)
@@ -463,12 +473,14 @@ class DBN(object):
         psleep_states = []  # [hid_prob, pen_prob, ...]
         pwake_states = []  # [vis_prob, hid_prob, ... ]
 
-        rev_sleep_in = [sleep_probs[-1]] + [sleep_states[:-1].reverse()]
+        s = sleep_states[:-1]
+        s.reverse()
+        rev_sleep_in = [sleep_probs[-1]] + s
         for rbm, sleep_in in zip(self.inference_layers, rev_sleep_in):
             _, p = rbm.prop_up(sleep_in)
             psleep_states.append(p)
 
-        for rbm, wake_in in zip(self.generative_layers.reverse(), wake_states):
+        for rbm, wake_in in zip(reversed(self.generative_layers), wake_states):
             _, p = rbm.prop_down(wake_in)
             pwake_states.append(p)
 
@@ -476,44 +488,51 @@ class DBN(object):
         # UPDATES TO GENERATIVE PARAMETERS
         for i in xrange(0, len(self.generative_layers)):
             rbm = self.generative_layers[i]
+            r = rbm.train_parameters.learning_rate
             wake_state = wake_states[i]
             pwake_state = pwake_states[i]
             statistics_diff = wake_state - pwake_state
-            updates[rbm.W] = rbm.W + r * T.dot(wake_states[i + 1], statistics_diff)
-            updates[rbm.v_bias] = rbm.v_bias + r * (statistics_diff)
+            updates[rbm.W] = rbm.W + r * T.dot(wake_states[i + 1].T, statistics_diff).T / batch_size
+            updates[rbm.v_bias] = rbm.v_bias + r * T.mean((statistics_diff),axis=0)
 
         sleep_states = rev_sleep_in  # [vis_prob, hid_state, pen_state, ...]
 
         for i in xrange(0, len(self.inference_layers)):
             rbm = self.inference_layers[i]
+            r = rbm.train_parameters.learning_rate
             sleep_state = sleep_states[i + 1]
             psleep_state = psleep_states[i]
             statistics_diff = sleep_state - psleep_state
-            updates[rbm.W] = rbm.W + r * T.dot(sleep_states[i], statistics_diff)
-            updates[rbm.h_bias] = rbm.h_bias + r * (statistics_diff)
+            updates[rbm.W] = rbm.W + r * T.dot(sleep_states[i].T, statistics_diff) / batch_size
+            updates[rbm.h_bias] = rbm.h_bias + r * T.mean((statistics_diff), axis=0)
 
         return updates
 
     def fine_tune(self, data):
+        print 'fine tuning ...'
 
         if not self.untied:
             self.untie_weights()
             self.untied = True
 
-        batch_size = 1
+        epochs = 10
+        batch_size = 10
         mini_batches = data.get_value(borrow=True).shape[0] / batch_size
 
-        i = T.scalar()
-        x = T.matrix('x')
-        updates = self.get_fine_tune_updates(x)
-        fine_tune = theano.function([i], [], updates=updates, givens={
-            x: data[i * batch_size: (i + 1) * batch_size]
-        })
+        for epoch in xrange(epochs):
+            print 'Epoch %d' % epoch
 
-        start_time = time.clock()
-        for mini_batche_i in mini_batches:
-            fine_tune(mini_batche_i)
-        end_time = time.clock()
+            i = T.iscalar()
+            x = T.matrix('x')
+            updates = self.get_fine_tune_updates(x, batch_size)
+            fine_tune = theano.function([i], [], updates=updates, givens={
+                x: data[i * batch_size: (i + 1) * batch_size]
+            })
+
+            start_time = time.clock()
+            for mini_batche_i in xrange(mini_batches):
+                fine_tune(mini_batche_i)
+            end_time = time.clock()
 
         print ('Fine tuning took %f minutes' % ((end_time - start_time)/60))
 

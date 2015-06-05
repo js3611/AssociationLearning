@@ -28,10 +28,10 @@ from utils import save_images
 
 theano.config.optimizer = 'None'
 
-def test_DBN_classifier(finetune_lr=0.1, pretraining_epochs=100,
-             pretrain_lr=0.01, k=1, training_epochs=1000,
-             dataset='mnist.pkl.gz', batch_size=10, output_folder='zero_learner'):
 
+def test_DBN_classifier(finetune_lr=0.1, pretraining_epochs=100,
+                        pretrain_lr=0.01, k=1, training_epochs=1000,
+                        dataset='mnist.pkl.gz', batch_size=10, output_folder='zero_learner'):
     # Load data
     datasets = m_loader.load_digits(dataset)
     train_set_x, train_set_y = datasets[0]
@@ -76,7 +76,7 @@ def test_DBN_classifier(finetune_lr=0.1, pretraining_epochs=100,
             print 'Pre-training layer %i, epoch %d, cost ' % (i, epoch),
             print np.mean(c)
 
-            #insert raster_image here
+            # insert raster_image here
             plotting_start = time.clock()
             dim_arr = [28, 30, 30]
             image = Image.fromarray(
@@ -113,15 +113,15 @@ def test_DBN_classifier(finetune_lr=0.1, pretraining_epochs=100,
     print '... finetuning the model'
     # early-stopping parameters
     patience = 4 * n_train_batches  # look as this many examples regardless
-    patience_increase = 2.    # wait this much longer when a new best is
-                              # found
+    patience_increase = 2.  # wait this much longer when a new best is
+    # found
     improvement_threshold = 0.995  # a relative improvement of this much is
-                                   # considered significant
+    # considered significant
     validation_frequency = min(n_train_batches, patience / 2)
-                                  # go through this many
-                                  # minibatches before checking the network
-                                  # on the validation set; in this case we
-                                  # check every epoch
+    # go through this many
+    # minibatches before checking the network
+    # on the validation set; in this case we
+    # check every epoch
 
     best_validation_loss = np.inf
     test_score = 0.
@@ -154,10 +154,10 @@ def test_DBN_classifier(finetune_lr=0.1, pretraining_epochs=100,
                 # if we got the best validation score until now
                 if this_validation_loss < best_validation_loss:
 
-                    #improve patience if loss improvement is good enough
+                    # improve patience if loss improvement is good enough
                     if (
-                        this_validation_loss < best_validation_loss *
-                        improvement_threshold
+                                this_validation_loss < best_validation_loss *
+                                improvement_threshold
                     ):
                         patience = max(patience, iter * patience_increase)
 
@@ -192,8 +192,7 @@ def test_DBN_classifier(finetune_lr=0.1, pretraining_epochs=100,
 
 
 def test_generative_dbn():
-
-    manager = store.StorageManager('fine_tune')
+    manager = store.StorageManager('fine_tune1')
     shape = 28
     train_x = get_data(shape)
 
@@ -215,17 +214,16 @@ def test_generative_dbn():
 
 
     # Sample from top layer to generate data
-    sample_n = 100
-    sampled = dbn.sample(sample_n, 1)
-
+    sample_n = 1000
+    sampled = dbn.sample(sample_n, k=100, rand_type='noisy_mean')
     k_loader.save_faces(sampled, tile=(sample_n / 10, 10), img_name="sampled.png", img_shape=(shape, shape))
+    dbn.reconstruct(train_x, k=1, plot_every=1, plot_n=100, img_name='dbn_recon')
 
-    dbn.fine_tune(train_x)
-
-    sample_n = 100
-    sampled = dbn.sample(sample_n, 1)
-
-    k_loader.save_faces(sampled, tile=(sample_n / 10, 10), img_name="sampled_fine_tuned.png", img_shape=(shape, shape))
+    for i in xrange(0,10):
+        dbn.fine_tune(train_x)
+        sampled = dbn.sample(sample_n, k=100, rand_type='noisy_mean')
+        k_loader.save_faces(sampled, tile=(sample_n / 10, 10), img_name=("sampled_fine_tuned%d.png" % i), img_shape=(shape, shape))
+        dbn.reconstruct(train_x, k=1, plot_every=1, plot_n=100, img_name=('dbn_recon_fine_tune%d' % i))
 
 
 
@@ -237,28 +235,28 @@ def test_generative_dbn():
 def get_data(shape):
     dataset_name = 'sharp_equi{}_{}'.format(shape, shape)
     # Load data
-    train, valid, test = m_loader.load_digits(n=[500, 100, 100], digits=[0, 1, 2, 3, 4, 5])
+    train, valid, test = m_loader.load_digits(n=[10000, 10, 100])
     # train, valid, test = k_loader.load_kanade(set_name=dataset_name, pre={'scale': True})
     train_x, train_y = train
     return train_x
 
 
 def get_dbn_model(manager, shape):
-
     # Layer 1
-    tr = TrainParam(learning_rate=0.0001,
+    tr = TrainParam(learning_rate=0.001,
                     momentum_type=NESTEROV,
-                    momentum=0.9,
+                    momentum=0.5,
                     weight_decay=0.0001,
-                    sparsity_constraint=True,
+                    sparsity_constraint=False,
+                    sparsity_target=0.1,
                     sparsity_decay=0.9,
-                    sparsity_cost=100,
-                    sparsity_target=0.01,
-                    batch_size=10,
-                    epochs=10)
+                    sparsity_cost=0.1,
+                    dropout=True,
+                    dropout_rate=0.5,
+                    epochs=20)
+
     first_progress_logger = ProgressLogger(img_shape=(shape, shape))
-    first_rbm_config = RBMConfig(train_params=tr,
-                                 progress_logger=first_progress_logger)
+    first_rbm_config = RBMConfig(train_params=tr, progress_logger=first_progress_logger)
     # first_rbm_config.v_unit = rbm_units.GaussianVisibleUnit
 
 
@@ -268,21 +266,22 @@ def get_dbn_model(manager, shape):
 
 
     # Layer Top
-    top_tr = TrainParam(learning_rate=0.001,
+    top_tr = TrainParam(learning_rate=0.0001,
                         momentum_type=NESTEROV,
-                        momentum=0.5,
-                        weight_decay=0.0001,
-                        sparsity_constraint=True,
-                        sparsity_target=0.01,
-                        sparsity_cost=1,
+                        momentum=0,
+                        weight_decay=0,
+                        sparsity_constraint=False,
+                        sparsity_target=0.1,
+                        sparsity_cost=0.1,
                         sparsity_decay=0.9,
                         batch_size=10,
                         epochs=10)
+
     rbm_config = RBMConfig(train_params=top_tr, progress_logger=rest_progress_logger)
 
 
     # DBN Config
-    topology = [shape ** 2, 100, 10]
+    topology = [shape ** 2, 250, 100]
     rbm_configs = [first_rbm_config, rbm_config, rbm_config]
     config = DBNConfig(topology=topology,
                        training_parameters=tr,
@@ -294,9 +293,8 @@ def get_dbn_model(manager, shape):
 
 
 if __name__ == '__main__':
-#     test_DBN(finetune_lr=0.1, pretraining_epochs=30,
-#              pretrain_lr=0.01, k=1, training_epochs=100,
-#              dataset='mnist.pkl.gz', batch_size=20)
+    #     test_DBN(finetune_lr=0.1, pretraining_epochs=30,
+    #              pretrain_lr=0.01, k=1, training_epochs=100,
+    #              dataset='mnist.pkl.gz', batch_size=20)
 
     test_generative_dbn()
-

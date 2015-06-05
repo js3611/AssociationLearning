@@ -157,13 +157,13 @@ class RBM(object):
         :return:
         '''
         if type(self.v_unit) is RBMUnit:
-            print 'Readjusting the initial visible bias (for stochastic binary unit)'
+            print '... Readjusting the initial visible bias (for stochastic binary unit)'
             p = theano.function([], T.mean(train_data, axis=0))()
             self.v_bias.set_value(np.log2(p / (1 - p)))
 
     def set_initial_hidden_bias(self):
         if self.train_parameters.sparsity_constraint:
-            print 'Setting initial bias for Stochastic Binary Hidden Unit'
+            print '... Sparsity: setting initial bias for Stochastic Binary Hidden Unit'
             t = self.train_parameters.sparsity_target
             bias = np.log(t / (1 - t))
             self.h_bias.set_value(np.tile(bias, self.h_n).astype(t_float_x))
@@ -871,12 +871,16 @@ class RBM(object):
         print "... saved RBM object to " + os.getcwd() + "/" + str(self)
 
     def sample(self, n=1, k=1, p=0.01, rand_type='uniform'):
-        assert rand_type in ['binomial', 'uniform', 'normal']
+        assert rand_type in ['binomial', 'uniform', 'normal', 'mean','noisy_mean']
 
         # Generate random "v"
         if rand_type == 'binomial':
             data = self.np_rand.binomial(size=(n, self.v_n), n=1, p=p).astype(t_float_x)
-        else:
+        elif rand_type == 'mean':
+            data = np.tile(p, (n, 1))
+        elif rand_type == 'noisy_mean':
+            data = np.tile(p, (n, 1)) + self.np_rand.normal(0, 0.2, size=(n, self.v_n)).astype(t_float_x)
+        else: # rand_type == 'uniform':
             data = self.np_rand.uniform(size=(n, self.v_n), low=0, high=1).astype(t_float_x)
 
         return self.reconstruct(data, k)
