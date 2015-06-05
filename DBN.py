@@ -57,7 +57,7 @@ class DBN(object):
 
         self.sigmoid_layers = []
         self.rbm_layers = []
-        self.fine_tuned = False
+        self.untied = False
         self.inference_layers = []
         self.generative_layers = []
         self.params = []
@@ -107,7 +107,6 @@ class DBN(object):
             self.sigmoid_layers.append(sigmoid_layer)
             self.params.extend(sigmoid_layer.params)
 
-
             rbm_config = rbm_configs[i]
             rbm_config.v_n = topology[i]
             rbm_config.h_n = topology[i + 1]
@@ -143,7 +142,7 @@ class DBN(object):
 
         pretrain_fns = []
         for rbm in self.rbm_layers:
-            #            cost, updates = rbm.get_cost_updates(learning_rate, persistent=None, k=k)
+            # cost, updates = rbm.get_cost_updates(learning_rate, persistent=None, k=k)
             cost, updates = rbm.get_cost_updates(learning_rate, k=k)
 
             # input gets propagated through layer weights W i.e. W2(W1x+b1)+b2 etc
@@ -163,7 +162,7 @@ class DBN(object):
         if type(cache) is not list:
             cache = np.repeat(cache, self.n_layers)
         if type(train_further) is not list:
-            train_further= np.repeat(train_further, self.n_layers)
+            train_further = np.repeat(train_further, self.n_layers)
 
         layer_input = train_data
         for i in xrange(len(self.rbm_layers)):
@@ -335,7 +334,7 @@ class DBN(object):
 
         orig = x
         if self.n_layers > 1:
-            top_x = self.bottom_up_pass(x, 0, self.n_layers-1)
+            top_x = self.bottom_up_pass(x, 0, self.n_layers - 1)
         else:
             top_x = x
         # get top layer rbm
@@ -346,7 +345,7 @@ class DBN(object):
                                                dtype=theano.config.floatX),
                                     name='reconstruct_root')
 
-         # Gibbs sampling
+        # Gibbs sampling
         k_batch = k / plot_every
         (res, updates) = theano.scan(rbm.gibbs_vhv,
                                      outputs_info=[None, None, None,
@@ -361,7 +360,7 @@ class DBN(object):
             result = gibbs_sampling()
             [_, _, _, _, reconstruction_chain, _] = result
             if self.n_layers > 1:
-                recon = self.top_down_pass(reconstruction_chain[-1], self.n_layers-1)
+                recon = self.top_down_pass(reconstruction_chain[-1], self.n_layers - 1)
             else:
                 recon = reconstruction_chain[-1]
             reconstructions.append(recon)
@@ -404,7 +403,8 @@ class DBN(object):
             h_bias = rbm.h_bias.get_value(borrow=False)
             v_bias = rbm.v_bias.get_value(borrow=False)
             self.inference_layers.append(RBM(config=rbm.config, W=W, h_bias=h_bias, v_bias=v_bias))
-            self.generative_layers.append(RBM(config=rbm.config, W=copy.deepcopy(W), h_bias=copy.deepcopy(h_bias), v_bias=copy.deepcopy(v_bias)))
+            self.generative_layers.append(
+                RBM(config=rbm.config, W=copy.deepcopy(W), h_bias=copy.deepcopy(h_bias), v_bias=copy.deepcopy(v_bias)))
 
     def wake_phase(self, data):
         # PERFORM A BOTTOM-UP PASS TO GET WAKE/POSITIVE PHASE
@@ -435,7 +435,7 @@ class DBN(object):
 
         return sleep_probs, sleep_states
 
-    def fine_tune(self, data, r=0.01):
+    def get_fine_tune_updates(self, data, r=0.01):
         '''
         Fine tunes DBN. Inference weights and Generative weights will be untied
         :param x:
@@ -443,155 +443,172 @@ class DBN(object):
         '''
         top_rbm = self.rbm_layers[-1]
 
-        # WAKE PHRASE
-        self.untie_weights()
+        # WAKE-PHASE [hid_prob, pen_prob, ...], [hid_state, pen-state,...]
         wake_probs, wake_states = self.wake_phase(data)
 
         # CONTRASTIVE DIVERGENCE AT TOP LAYER
         pen_prob, pen_state = wake_probs[-1], wake_states[-1]
-        [updates,
-            chain_end,
-            v_total_inputs,
-            v_p_activations,
-            v_samples,
-            h_total_inputs,
-            h_p_activations,
-            h_samples,
-            h_sample] = top_rbm.negative_statistics(pen_state)
+        [updates, chain_end, _, _, _, _, _, _] = top_rbm.negative_statistics(pen_state)
 
-        cost = T.mean(self.free_energy(pen_state)) - T.mean(self.free_energy(chain_end))
+        cost = T.mean(top_rbm.free_energy(pen_state)) - T.mean(top_rbm.free_energy(chain_end))
         grads = T.grad(cost, top_rbm.params, consider_constant=[chain_end])
 
         for (p, g) in zip(top_rbm.params, grads):
-            updates[p] = p - r * g
+            updates[p] = p + r * g
 
-        # SLEEP PHASE
+        # SLEEP PHASE: [hid_prob, vis_prob], [pen_state, hid_state, vis_state] ...
         sleep_probs, sleep_states = self.sleep_phase(chain_end)
 
         # Prediction
-        psleepstates = []
-        pwakestates = []
+        psleep_states = []  # [hid_prob, pen_prob, ...]
+        pwake_states = []  # [vis_prob, hid_prob, ... ]
 
-        rev_sleep_in= [sleep_probs[-1]] + [sleep_states[:-1].reverse()]
-
+        rev_sleep_in = [sleep_probs[-1]] + [sleep_states[:-1].reverse()]
         for rbm, sleep_in in zip(self.inference_layers, rev_sleep_in):
             _, p = rbm.prop_up(sleep_in)
-            psleepstates.append(p)
+            psleep_states.append(p)
 
-        rev_wake_in = wake_states.reverse()
-        for rbm, wake_in in zip(self.generative_layers, rev_wake_in):
-            _, p =rbm.prop_down(wake_in)
-            pwakestates.append(p)
+        for rbm, wake_in in zip(self.generative_layers.reverse(), wake_states):
+            _, p = rbm.prop_down(wake_in)
+            pwake_states.append(p)
 
-
-    
-        for rbm in self.inference_layers:
-            updates[rbm.W] =
-            updates[rbm.h_bias] =
-
-        for rbm in self.generative_layers:
-            updates[rbm.W] = rbm.W + r *
-            updates[rbm.v_bias] = rbm.v_bias + r * ()
-
-
-        # PREDICTIONS
-        psleephidstates = logistic(sleepvisprobs*vishid + hidrecbiases);
-        psleeppenstates = logistic(sleephidstates*hidpen + penrecbiases);
-
-        phidprobs = logistic(wakepenstates*penhid + hidgenbiases);
-        pvisprobs = logistic(wakehidstates*hidvis + visgenbiases);
-
-
-         # UPDATES TO GENERATIVE PARAMETERS
-        hidvis = hidvis + r*wakehidstates?*(data-pvisprobs);
-        visgenbiases = visgenbiases + r*(data - pvisprobs);
-        penhid = penhid + r*wakepenstates?*(wakehidstates-phidprobs);
-        hidgenbiases = hidgenbiases + r*(wakehidstates - phidprobs);
-
-        # UPDATES TO TOP LEVEL ASSOCIATIVE MEMORY PARAMETERS
-        pentop = pentop + r*(pospentopstatistics - negpentopstatistics);
-        pengenbiases = pengenbiases + r*(wakepenstates - negpenstates);
-        topbiases = topbiases + r*(waketopstates - negtopstates);
-
-        #UPDATES TO RECOGNITION/INFERENCE APPROXIMATION PARAMETERS
-        hidpen = hidpen + r*(sleephidstates?*(sleeppenstates - psleeppenstates));
-        penrecbiases = penrecbiases + r*(sleeppenstates-psleeppenstates);
-
-        vishid = vishid + r*(sleepvisprobs?*(sleephidstatesp - sleephidstates));
-        hidrecbiases = hidrecbiases + r*(sleephidstates-psleephidstates);
-
-
-
-        # UP-DOWN ALGORITHM
-        #
-        # the data and all biases are row vectors.
-        # the generative model is: lab <--> top <--> pen --> hid --> vis
-        # the number of units in layer foo is numfoo
-        # weight matrices have names fromlayer tolayer
-        # "rec" is for recognition biases and "gen" is for generative
-        # biases.
-        # for simplicity, the same learning rate, r, is used everywhere.
-
-
-        # PERFORM A BOTTOM-UP PASS TO GET WAKE/POSITIVE PHASE
-        # PROBABILITIES AND SAMPLE STATES
-        wakehidprobs = logistic(data*vishid + hidrecbiases);
-        wakehidstates = wakehidprobs > rand(1, numhid);
-        wakepenprobs = logistic(wakehidstates*hidpen + penrecbiases);
-        wakepenstates = wakepenprobs > rand(1, numpen);
-        waketopprobs = logistic(wakepenstates*pentop + targets*labtop +topbiases);
-        waketopstates = waketopprobs > rand(1, numtop);
-
-        self.wake_phase(data)
-
-        # POSITIVE PHASE STATISTICS FOR CONTRASTIVE DIVERGENCE
-        pospentopstatistics = wakepenstates? * waketopstates;
-
-        # PERFORM numCDiters GIBBS SAMPLING ITERATIONS USING THE TOP LEVEL
-        # UNDIRECTED ASSOCIATIVE MEMORY
-        negtopstates = waketopstates; # to initialize loop
-        for iter=1:numCDiters
-            negpenprobs = logistic(negtopstates*pentop? + pengenbiases);
-            negpenstates = negpenprobs > rand(1, numpen);
-            negtopprobs = logistic(negpenstates*pentop+topbiases);
-            negtopstates = negtopprobs > rand(1, numtop);
-
-        # NEGATIVE PHASE STATISTICS FOR CONTRASTIVE DIVERGENCE
-        negpentopstatistics = negpenstates?*negtopstates;
-        neglabtopstatistics = neglabprobs?*negtopstates;
-
-
-        # STARTING FROM THE END OF THE GIBBS SAMPLING RUN, PERFORM A
-        # TOP-DOWN GENERATIVE PASS TO GET SLEEP/NEGATIVE PHASE
-        # PROBABILITIES AND SAMPLE STATES
-        sleeppenstates = negpenstates;
-        sleephidprobs = logistic(sleeppenstates*penhid + hidgenbiases);
-        sleephidstates = sleephidprobs > rand(1, numhid);
-        sleepvisprobs = logistic(sleephidstates*hidvis + visgenbiases);
-
-
-        # PREDICTIONS
-        psleeppenstates = logistic(sleephidstates*hidpen + penrecbiases);
-        psleephidstates = logistic(sleepvisprobs*vishid + hidrecbiases);
-
-        pvisprobs = logistic(wakehidstates*hidvis + visgenbiases);
-        phidprobs = logistic(wakepenstates*penhid + hidgenbiases);
-
-
+        wake_states = [data] + wake_states
         # UPDATES TO GENERATIVE PARAMETERS
-        hidvis = hidvis + r*wakehidstates?*(data-pvisprobs);
-        visgenbiases = visgenbiases + r*(data - pvisprobs);
-        penhid = penhid + r*wakepenstates?*(wakehidstates-phidprobs);
-        hidgenbiases = hidgenbiases + r*(wakehidstates - phidprobs);
+        for i in xrange(0, len(self.generative_layers)):
+            rbm = self.generative_layers[i]
+            wake_state = wake_states[i]
+            pwake_state = pwake_states[i]
+            statistics_diff = wake_state - pwake_state
+            updates[rbm.W] = rbm.W + r * T.dot(wake_states[i + 1], statistics_diff)
+            updates[rbm.v_bias] = rbm.v_bias + r * (statistics_diff)
 
-        # UPDATES TO TOP LEVEL ASSOCIATIVE MEMORY PARAMETERS
-        pentop = pentop + r*(pospentopstatistics - negpentopstatistics);
-        pengenbiases = pengenbiases + r*(wakepenstates - negpenstates);
-        topbiases = topbiases + r*(waketopstates - negtopstates);
+        sleep_states = rev_sleep_in  # [vis_prob, hid_state, pen_state, ...]
 
-        #UPDATES TO RECOGNITION/INFERENCE APPROXIMATION PARAMETERS
-        hidpen = hidpen + r*(sleephidstates?*(sleeppenstates - psleeppenstates));
-        penrecbiases = penrecbiases + r*(sleeppenstates-psleeppenstates);
+        for i in xrange(0, len(self.inference_layers)):
+            rbm = self.inference_layers[i]
+            sleep_state = sleep_states[i + 1]
+            psleep_state = psleep_states[i]
+            statistics_diff = sleep_state - psleep_state
+            updates[rbm.W] = rbm.W + r * T.dot(sleep_states[i], statistics_diff)
+            updates[rbm.h_bias] = rbm.h_bias + r * (statistics_diff)
 
-        vishid = vishid + r*(sleepvisprobs?*(sleephidstatesp - sleephidstates));
-        hidrecbiases = hidrecbiases + r*(sleephidstates-psleephidstates);
+        return updates
+
+    def fine_tune(self, data):
+
+        if not self.untied:
+            self.untie_weights()
+            self.untied = True
+
+        batch_size = 1
+        mini_batches = data.get_value(borrow=True).shape[0] / batch_size
+
+        i = T.scalar()
+        x = T.matrix('x')
+        updates = self.get_fine_tune_updates(x)
+        fine_tune = theano.function([i], [], updates=updates, givens={
+            x: data[i * batch_size: (i + 1) * batch_size]
+        })
+
+        start_time = time.clock()
+        for mini_batche_i in mini_batches:
+            fine_tune(mini_batche_i)
+        end_time = time.clock()
+
+        print ('Fine tuning took %f minutes' % ((end_time - start_time)/60))
+
+
+
+        # # UPDATES TO GENERATIVE PARAMETERS
+        # hidvis = hidvis + r*wakehidstates?*(data-pvisprobs);
+        # visgenbiases = visgenbiases + r*(data - pvisprobs);
+        # penhid = penhid + r*wakepenstates?*(wakehidstates-phidprobs);
+        # hidgenbiases = hidgenbiases + r*(wakehidstates - phidprobs);
+        #
+        # # UPDATES TO TOP LEVEL ASSOCIATIVE MEMORY PARAMETERS
+        # pentop = pentop + r*(pospentopstatistics - negpentopstatistics);
+        # pengenbiases = pengenbiases + r*(wakepenstates - negpenstates);
+        # topbiases = topbiases + r*(waketopstates - negtopstates);
+        #
+        # #UPDATES TO RECOGNITION/INFERENCE APPROXIMATION PARAMETERS
+        # hidpen = hidpen + r*(sleephidstates?*(sleeppenstates - psleeppenstates));
+        # penrecbiases = penrecbiases + r*(sleeppenstates-psleeppenstates);
+        #
+        # vishid = vishid + r*(sleepvisprobs?*(sleephidstatesp - sleephidstates));
+        # hidrecbiases = hidrecbiases + r*(sleephidstates-psleephidstates);
+        #
+        #
+        #
+        # # UP-DOWN ALGORITHM
+        # #
+        # # the data and all biases are row vectors.
+        # # the generative model is: lab <--> top <--> pen --> hid --> vis
+        # # the number of units in layer foo is numfoo
+        # # weight matrices have names fromlayer tolayer
+        # # "rec" is for recognition biases and "gen" is for generative
+        # # biases.
+        # # for simplicity, the same learning rate, r, is used everywhere.
+        #
+        #
+        # # PERFORM A BOTTOM-UP PASS TO GET WAKE/POSITIVE PHASE
+        # # PROBABILITIES AND SAMPLE STATES
+        # wakehidprobs = logistic(data*vishid + hidrecbiases);
+        # wakehidstates = wakehidprobs > rand(1, numhid);
+        # wakepenprobs = logistic(wakehidstates*hidpen + penrecbiases);
+        # wakepenstates = wakepenprobs > rand(1, numpen);
+        # waketopprobs = logistic(wakepenstates*pentop + targets*labtop +topbiases);
+        # waketopstates = waketopprobs > rand(1, numtop);
+        #
+        # self.wake_phase(data)
+        #
+        # # POSITIVE PHASE STATISTICS FOR CONTRASTIVE DIVERGENCE
+        # pospentopstatistics = wakepenstates? * waketopstates;
+        #
+        # # PERFORM numCDiters GIBBS SAMPLING ITERATIONS USING THE TOP LEVEL
+        # # UNDIRECTED ASSOCIATIVE MEMORY
+        # negtopstates = waketopstates; # to initialize loop
+        # for iter=1:numCDiters
+        #     negpenprobs = logistic(negtopstates*pentop? + pengenbiases);
+        #     negpenstates = negpenprobs > rand(1, numpen);
+        #     negtopprobs = logistic(negpenstates*pentop+topbiases);
+        #     negtopstates = negtopprobs > rand(1, numtop);
+        #
+        # # NEGATIVE PHASE STATISTICS FOR CONTRASTIVE DIVERGENCE
+        # negpentopstatistics = negpenstates?*negtopstates;
+        # neglabtopstatistics = neglabprobs?*negtopstates;
+        #
+        #
+        # # STARTING FROM THE END OF THE GIBBS SAMPLING RUN, PERFORM A
+        # # TOP-DOWN GENERATIVE PASS TO GET SLEEP/NEGATIVE PHASE
+        # # PROBABILITIES AND SAMPLE STATES
+        # sleeppenstates = negpenstates;
+        # sleephidprobs = logistic(sleeppenstates*penhid + hidgenbiases);
+        # sleephidstates = sleephidprobs > rand(1, numhid);
+        # sleepvisprobs = logistic(sleephidstates*hidvis + visgenbiases);
+        #
+        #
+        # # PREDICTIONS
+        # psleeppenstates = logistic(sleephidstates*hidpen + penrecbiases);
+        # psleephidstates = logistic(sleepvisprobs*vishid + hidrecbiases);
+        #
+        # pvisprobs = logistic(wakehidstates*hidvis + visgenbiases);
+        # phidprobs = logistic(wakepenstates*penhid + hidgenbiases);
+        #
+        #
+        # # UPDATES TO GENERATIVE PARAMETERS
+        # hidvis = hidvis + r*wakehidstates?*(data-pvisprobs);
+        # visgenbiases = visgenbiases + r*(data - pvisprobs);
+        # penhid = penhid + r*wakepenstates?*(wakehidstates-phidprobs);
+        # hidgenbiases = hidgenbiases + r*(wakehidstates - phidprobs);
+        #
+        # # UPDATES TO TOP LEVEL ASSOCIATIVE MEMORY PARAMETERS
+        # pentop = pentop + r*(pospentopstatistics - negpentopstatistics);
+        # pengenbiases = pengenbiases + r*(wakepenstates - negpenstates);
+        # topbiases = topbiases + r*(waketopstates - negtopstates);
+        #
+        # #UPDATES TO RECOGNITION/INFERENCE APPROXIMATION PARAMETERS
+        # hidpen = hidpen + r*(sleephidstates?*(sleeppenstates - psleeppenstates));
+        # penrecbiases = penrecbiases + r*(sleeppenstates-psleeppenstates);
+        #
+        # vishid = vishid + r*(sleepvisprobs?*(sleephidstatesp - sleephidstates));
+        # hidrecbiases = hidrecbiases + r*(sleephidstates-psleephidstates);

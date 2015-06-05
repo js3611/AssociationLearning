@@ -193,8 +193,8 @@ def test_DBN_classifier(finetune_lr=0.1, pretraining_epochs=100,
 
 def test_generative_dbn():
 
-    manager = store.StorageManager('generative_sparse_dbn_test')
-    shape = 25
+    manager = store.StorageManager('fine_tune')
+    shape = 28
     train_x = get_data(shape)
 
     # Initialise RBM parameters
@@ -218,7 +218,16 @@ def test_generative_dbn():
     sample_n = 100
     sampled = dbn.sample(sample_n, 1)
 
-    k_loader.save_faces(sampled, tile=(sample_n / 10, 10), img_name="sampled1.png", img_shape=(shape, shape))
+    k_loader.save_faces(sampled, tile=(sample_n / 10, 10), img_name="sampled.png", img_shape=(shape, shape))
+
+    dbn.fine_tune(train_x)
+
+    sample_n = 100
+    sampled = dbn.sample(sample_n, 1)
+
+    k_loader.save_faces(sampled, tile=(sample_n / 10, 10), img_name="sampled_fine_tuned.png", img_shape=(shape, shape))
+
+
 
 
     # end-snippet-2
@@ -228,13 +237,15 @@ def test_generative_dbn():
 def get_data(shape):
     dataset_name = 'sharp_equi{}_{}'.format(shape, shape)
     # Load data
-    # train, valid, test = m_loader.load_digits(n=[500, 100, 100], digits=[0, 1, 2, 3, 4, 5])
-    train, valid, test = k_loader.load_kanade(set_name=dataset_name, pre={'scale': True})
+    train, valid, test = m_loader.load_digits(n=[500, 100, 100], digits=[0, 1, 2, 3, 4, 5])
+    # train, valid, test = k_loader.load_kanade(set_name=dataset_name, pre={'scale': True})
     train_x, train_y = train
     return train_x
 
 
 def get_dbn_model(manager, shape):
+
+    # Layer 1
     tr = TrainParam(learning_rate=0.0001,
                     momentum_type=NESTEROV,
                     momentum=0.9,
@@ -245,7 +256,18 @@ def get_dbn_model(manager, shape):
                     sparsity_target=0.01,
                     batch_size=10,
                     epochs=10)
+    first_progress_logger = ProgressLogger(img_shape=(shape, shape))
+    first_rbm_config = RBMConfig(train_params=tr,
+                                 progress_logger=first_progress_logger)
+    # first_rbm_config.v_unit = rbm_units.GaussianVisibleUnit
 
+
+    # Layer Mid
+    # --
+    rest_progress_logger = ProgressLogger()
+
+
+    # Layer Top
     top_tr = TrainParam(learning_rate=0.001,
                         momentum_type=NESTEROV,
                         momentum=0.5,
@@ -255,19 +277,12 @@ def get_dbn_model(manager, shape):
                         sparsity_cost=1,
                         sparsity_decay=0.9,
                         batch_size=10,
-                        epochs=100)
-    # Layer 1
-    # Layer 2
-    # Layer 3
-    topology = [shape ** 2, 250, 200]
-    # batch_size = 10
-    first_progress_logger = ProgressLogger(img_shape=(shape, shape))
-    rest_progress_logger = ProgressLogger()
-    first_rbm_config = RBMConfig(train_params=tr,
-                                 progress_logger=first_progress_logger)
-    first_rbm_config.v_unit = rbm_units.GaussianVisibleUnit
-    rbm_config = RBMConfig(train_params=top_tr,
-                           progress_logger=rest_progress_logger)
+                        epochs=10)
+    rbm_config = RBMConfig(train_params=top_tr, progress_logger=rest_progress_logger)
+
+
+    # DBN Config
+    topology = [shape ** 2, 100, 10]
     rbm_configs = [first_rbm_config, rbm_config, rbm_config]
     config = DBNConfig(topology=topology,
                        training_parameters=tr,
