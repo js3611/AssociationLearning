@@ -207,44 +207,45 @@ class AssociativeDBN(object):
                 # TODO
                 print 'GAUSSIAN INPUT IS NOT SUPPORTED'
 
-            y_base = np.zeros(top_out.shape).astype(t_float_x)
-
+            top_shape = top_out.shape[0]
             right_top_rbm = right.rbm_layers[-1]
+            shape = (top_shape, right_top_rbm.h_n)
+            print shape
+            y_base = np.zeros(shape).astype(t_float_x)
+            p = right_top_rbm.active_probability_h.get_value(borrow=True)
+
             if y_type == 'sample_active_h' or type(y) is None:
                 print 'initialise reconstruction by active_h'
 
-                p = right_top_rbm.active_probability_h.get_value(borrow=True)
                 # import matplotlib.pyplot as plt
                 # plt.plot(p)
                 # plt.show()
 
-                y_base = right_top_rbm.np_rand.binomial(size=top_out.shape,
-                                                                 n=1,
-                                                                 p=p).astype(t_float_x)
+                y_base = right_top_rbm.np_rand.binomial(size=shape,
+                                                        n=1,
+                                                        p=p).astype(t_float_x)
 
             if y_type == 'active_h':
-                p = right_top_rbm.active_probability_h.get_value(borrow=True)
-                y_base = np.tile(p, (top_out.shape[0],1)).astype(t_float_x)
+                y_base = np.tile(p, (shape[0], 1)).astype(t_float_x)
 
             if y_type == 'v_noisy_active_h':
-                p = right_top_rbm.active_probability_h.get_value(borrow=True)
-                y_base = right_top_rbm.np_rand.normal(loc=0, scale=0.2, size = top_out.shape) + np.tile(p,(top_out.shape[0],1))
+                y_base = right_top_rbm.np_rand.normal(loc=0, scale=0.2, size=shape) + np.tile(p, (shape[0], 1))
                 y_base = y_base.astype(t_float_x)
 
             if y_type == 'noisy_active_h':
-                p = right_top_rbm.active_probability_h.get_value(borrow=True)
-                y_base = right_top_rbm.np_rand.normal(loc=0, scale=0.1, size = top_out.shape) + np.tile(p,(top_out.shape[0],1))
+                y_base = right_top_rbm.np_rand.normal(loc=0, scale=0.1, size=shape) + np.tile(p, (shape[0], 1))
                 y_base = y_base.astype(t_float_x)
 
             if 'binomial' in y_type:
                 p = float(y_type.strip('binomial'))
-                y_base = right_top_rbm.np_rand.binomial(size=top_out.shape,
-                                                                 n=1,
-                                                                 p=p).astype(t_float_x)
+                y_base = right_top_rbm.np_rand.binomial(size=shape,
+                                                        n=1,
+                                                        p=p).astype(t_float_x)
 
-
+            print top_out.shape
+            print y_base.shape
             y = theano.shared(y_base, name='assoc_y')
-            associate_x = top.mean_field_inference_opt(assoc_in, y, sample=True, k=associate_steps)
+            associate_x = top.mean_field_inference_opt(assoc_in, y=y, sample=True, k=associate_steps)
         else:
             associate_x = top.mean_field_inference(assoc_in, sample=True, k=associate_steps)
         # associate_x = top.reconstruct_association(assoc_in, k=associate_steps)

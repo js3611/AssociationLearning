@@ -1039,7 +1039,7 @@ class RBM(object):
         else:
             return m[-1]
 
-    def mean_field_inference_opt(self, x, y=None, sample=False, k=100, img_name='mean_field_inference'):
+    def mean_field_inference_opt(self, x, y=None, ylen=-1, sample=False, k=100, img_name='mean_field_inference'):
         '''
         As an optimisation, we can concatenate two images and feed it as a single image to train the network.
         In this way theano performs matrix optimisation so its much faster.
@@ -1049,13 +1049,15 @@ class RBM(object):
 
         plot_n = 100
         plot_every = k if k <= 10 else 10
+        ylen = self.v_n / 2 if type(y) is None and ylen == -1 else self.v_n - len(y.get_value()[0]) if type(y) is not None else ylen
+        print ylen
 
         # Initialise parameters
         if not utils.isSharedType(x):
             x = theano.shared(x, allow_downcast=True)
         data_size = x.get_value().shape[0]
         if type(y) is None:
-            y = self.rand.binomial(size=(data_size, self.v_n / 2), n=1, p=0, dtype=t_float_x)
+            y = self.rand.binomial(size=(data_size, ylen), n=1, p=0, dtype=t_float_x)
 
         # get initial values of tau (Concatenate x and y)
         z = T.concatenate([x, y], axis=1)
@@ -1065,7 +1067,7 @@ class RBM(object):
         # mean field func
         def mean_field(tau1, fixed):
             _, mu2 = self.prop_down(tau1)
-            mu2 = T.concatenate([fixed, mu2[:, (self.v_n / 2):]], axis=1)
+            mu2 = T.concatenate([fixed, mu2[:, (ylen):]], axis=1)
             _, tau2 = self.prop_up(mu2)
             return mu2, tau2  # , {ctr: ctr+1}, theano.scan_module.until(ctr < 50)
 
@@ -1084,16 +1086,16 @@ class RBM(object):
         for i in xrange(k_batch):
             result = mean_field_opt()
             [reconstruction_chain, _] = result
-            reconstructions.append(reconstruction_chain[-1][:, (self.v_n / 2):])
+            reconstructions.append(reconstruction_chain[-1][:, (ylen):])
 
         if self.track_progress:
             self.track_progress.visualise_reconstructions(x.get_value(borrow=True), reconstructions, plot_n,
                                                           img_name=img_name, opt=True)
 
         if sample and type(self.v_unit) is RBMUnit:
-            return self.np_rand.binomial(n=1, p=reconstruction_chain[-1][:, (self.v_n / 2):])
+            return self.np_rand.binomial(n=1, p=reconstruction_chain[-1][:, (ylen):])
         else:
-            return reconstruction_chain[-1][:, (self.v_n / 2):]
+            return reconstruction_chain[-1][:, (ylen):]
 
 
 class AssociativeRBM(RBM):
