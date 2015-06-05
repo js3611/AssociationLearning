@@ -292,49 +292,58 @@ def associate_data2dataADBN(cache=False, train_further=True):
     #
     # print error
 
-    for brain_c in brains:
-        f.write(str(brain_c.association_layer) + "\n")
+    for dropout in [True, False]:
+        for sc in [True, False]:
+            for lr in [0.001, 0.0001, 0.00005, 0.00001]:
+                for n in [100, 250, 500]:
+                    adbn = get_brain_model_AssociativeDBN(28, data_manager=data_manager)
+                    adbn.config.top_rbm.train_params.learning_rate=lr
+                    adbn.config.top_rbm.train_params.sparsity_constraint=sc
+                    adbn.config.top_rbm.train_params.dropout=dropout
+                    adbn.config.n_association = n
+                    brain_c = adbn
+                    f.write(str(brain_c.association_layer) + "\n")
 
-        errors = []
-        for i in xrange(0, 10):
-            f.write("Epoch %d \n" % (i * 10))
+                    errors = []
+                    for i in xrange(0, 10):
+                        f.write("Epoch %d \n" % (i * 10))
 
-            brain_c.train(tr_x, tr_x01,
-                          cache=[[True, True, True], [True, True, True], False],
-                          train_further=[[False, True, True], [False, True, True], True])
+                        brain_c.train(tr_x, tr_x01,
+                                      cache=[[True, True, True], [True, True, True], False],
+                                      train_further=[[False, True, True], [False, True, True], True])
 
-            if i == 0:
-                # Reconstruction
-                recon_right = brain_c.dbn_left.reconstruct(tr_x, k=10, plot_every=1, plot_n=100,
-                                                             img_name='adbn_left_recon_{}'.format(shape))
-                recon_left = brain_c.dbn_right.reconstruct(tr_x01, k=10, plot_every=1, plot_n=100,
-                                                             img_name='adbn_right_recon_{}'.format(shape))
+                        if i == 0:
+                            # Reconstruction
+                            recon_right = brain_c.dbn_left.reconstruct(tr_x, k=10, plot_every=1, plot_n=100,
+                                                                         img_name='adbn_left_recon_{}'.format(shape))
+                            recon_left = brain_c.dbn_right.reconstruct(tr_x01, k=10, plot_every=1, plot_n=100,
+                                                                         img_name='adbn_right_recon_{}'.format(shape))
 
-            # Plot hidden activity
-            # plot_hidden_activity(brain_c, tr_x, tr_x01)
+                        # Plot hidden activity
+                        # plot_hidden_activity(brain_c, tr_x, tr_x01)
 
-            # recon_x = brain_c.recall(te_x, associate_steps=5, recall_steps=0, img_name='adbn_child_recon_{}'.format(shape))
-            #
-            # clf = SimpleClassifier('logistic', te_x.get_value(), te_y.eval())
+                        # recon_x = brain_c.recall(te_x, associate_steps=5, recall_steps=0, img_name='adbn_child_recon_{}'.format(shape))
+                        #
+                        # clf = SimpleClassifier('logistic', te_x.get_value(), te_y.eval())
 
-            for j in [3, 5, 10]:
-                f.write("Associate Step %d\n" %j)
-                recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}1'.format(shape), y_type='sample_active_h')
-                error = clf.get_score(recon_x, te_y.eval())
-                print "sample_active_h %f" % error
-                f.write("sample_active_h %f\n" % error)
+                        for j in [3, 5, 10]:
+                            f.write("Associate Step %d\n" %j)
+                            recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}1'.format(shape), y_type='sample_active_h')
+                            error = clf.get_score(recon_x, te_y.eval())
+                            print "sample_active_h %f" % error
+                            f.write("sample_active_h %f\n" % error)
 
-                recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}2'.format(shape), y_type='active_h')
-                error = clf.get_score(recon_x, te_y.eval())
-                f.write("active_h %f\n" % error)
+                            recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}2'.format(shape), y_type='active_h')
+                            error = clf.get_score(recon_x, te_y.eval())
+                            f.write("active_h %f\n" % error)
 
-                recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}3'.format(shape), y_type='noisy_active_h')
-                error = clf.get_score(recon_x, te_y.eval())
-                f.write("noisy_active_h %f\n" % error)
+                            recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}3'.format(shape), y_type='noisy_active_h')
+                            error = clf.get_score(recon_x, te_y.eval())
+                            f.write("noisy_active_h %f\n" % error)
 
-                recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}4'.format(shape), y_type='v_noisy_active_h')
-                error = clf.get_score(recon_x, te_y.eval())
-                f.write("v_noisy_active_h %f\n" % error)
+                            recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}4'.format(shape), y_type='v_noisy_active_h')
+                            error = clf.get_score(recon_x, te_y.eval())
+                            f.write("v_noisy_active_h %f\n" % error)
 
             # error = clf.get_score(recon_x, te_y.eval())
             # print error
