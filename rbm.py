@@ -356,6 +356,12 @@ class RBM(object):
                 h_samples]
 
     def contrastive_divergence(self, x, k=1):
+        '''
+        :param x:
+        :param k:
+        :return: chain_end is the last v visible
+        '''
+
         h_total_input, h_p_activation, h_sample = self.sample_h_given_v(x)
         chain_start = h_sample
         (
