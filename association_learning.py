@@ -306,7 +306,7 @@ def associate_data2dataADBN(cache=False, train_further=True):
                     f.write(str(brain_c.association_layer) + "\n")
 
                     errors = []
-                    for i in xrange(0, 1):
+                    for i in xrange(0, 5):
                         f.write("Epoch %d \n" % (i * 10))
 
                         brain_c.train(tr_x, tr_x01,
