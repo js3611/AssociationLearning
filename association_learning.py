@@ -258,8 +258,8 @@ def associate_data2dataADBN(cache=False, train_further=True):
     ones = m_loader.load_digits(n=[test_n, 0, 0], digits=[1])[0][0]
     zeroes = m_loader.load_digits(n=[test_n, 0, 0], digits=[0])[0][0]
 
-    brain_c = get_brain_model_AssociativeDBN(shape, data_manager)
-    brains = get_adbns(data_manager)
+    # brain_c = get_brain_model_AssociativeDBN(shape, data_manager)
+    # brains = get_adbns(data_manager)
     # brain_c.train(tr_x, tr_x01,
     #               cache=[[True, True, True], [True, True, True], True],
     #               train_further=[[True, True, True], [True, True, True], False])
