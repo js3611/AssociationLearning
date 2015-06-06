@@ -277,9 +277,55 @@ class AssociativeDBN(object):
 
         return res
 
-    def fine_tune(self):
-        # TODO
-        pass
+    def fine_tune_cd(self, wake_state):
+        # CONTRASTIVE DIVERGENCE AT TOP LAYER
+        rbm = self.association_layer
+        pen_state = wake_state
+        [updates, chain_end, _, _, _, _, _, _, _] = rbm.negative_statistics(pen_state)
+        cost = T.mean(rbm.free_energy(pen_state)) - T.mean(rbm.free_energy(chain_end))
+        grads = T.grad(cost, rbm.params, consider_constant=[chain_end])
+        lr = rbm.train_parameters.learning_rate
+        for (p, g) in zip(rbm.params, grads):
+            # TODO all the special updates like momentum
+            updates[p] = p - lr * g
+        return updates
+
+    def get_fine_tune_cost(self, xs, ys, batch_size=10):
+
+        # WAKE-PHASE [hid_prob, pen_prob, ...], [hid_state, pen-state,...]
+        wake_probs_l, wake_states_l = self.dbn_left.wake_phase(xs)
+        wake_probs_r, wake_states_r = self.dbn_right.wake_phase(ys)
+
+        # TOP LAYER CD
+        wake_state = T.concatenate([wake_states_l[-1], wake_states_r[-1]], axis=0)
+        chain_end, updates = self.fine_tune_cd(wake_state)
+        left_end = self.dbn_left.topology[-1]
+        chain_end_l, chain_end_r = chain_end[:, :left_end], chain_end[:, left_end:]
+
+        # SLEEP PHASE: [hid_prob, vis_prob], [pen_state, hid_state, vis_state] ...
+        sleep_probs_l, sleep_states_l = self.dbn_left.sleep_phase(chain_end_l)
+        sleep_probs_r, sleep_states_r = self.dbn_rightsleep_phase(chain_end_r)
+
+        # Prediction
+        psleep_states_l, pwake_states_l, sleep_states_l, wake_states_l = self.dbn_left.get_predictions(xs,
+                                                                                                       sleep_probs_l,
+                                                                                                       sleep_states_l,
+                                                                                                       wake_states_l)
+        psleep_states_r, pwake_states_r, sleep_states_r, wake_states_r = self.dbn_right.get_predictions(ys,
+                                                                                                        sleep_probs_r,
+                                                                                                        sleep_states_r,
+                                                                                                        wake_states_r)
+
+        # UPDATES TO GENERATIVE PARAMETERS
+        updates = self.dbn_left.update_generative_weights(batch_size, pwake_states_l, wake_states_l, updates)
+        updates = self.dbn_right.update_generative_weights(batch_size, pwake_states_r, wake_states_r, updates)
+
+        # UPDATES TO INFERENCE PARAMETERS
+        updates = self.dbn_left.update_inference_weights(batch_size, psleep_states_l, sleep_states_l, updates)
+        updates = self.dbn_right.update_inference_weights(batch_size, psleep_states_r, sleep_states_r, updates)
+
+        return updates
+
 
 
 def test_associative_dbn(i=0):

@@ -377,7 +377,7 @@ class DBN(object):
 
         top_layer = self.rbm_layers[-1]
 
-        if self.n_layers > 1 and rand_type in ['mean','noisy_mean']:
+        if self.n_layers > 1 and rand_type in ['mean', 'noisy_mean']:
             print 'sampling according to active_probability of layer below'
             pen = self.rbm_layers[-2]
             active_h = pen.active_probability_h.get_value(borrow=True)
@@ -394,25 +394,51 @@ class DBN(object):
 
         return sampled
 
-    def untie_weights(self):
+    def untie_weights(self, include_top=False):
         # Untie all the weights except for the top layer
-
         i = 0
-        layers = self.rbm_layers
-        for rbm in layers[:-1]:
+        layers = self.rbm_layers if include_top else self.rbm_layers[:-1]
+        for rbm in layers:
             W = rbm.W.get_value(borrow=False)
             h_bias = rbm.h_bias.get_value(borrow=False)
             v_bias = rbm.v_bias.get_value(borrow=False)
-
             W1 = theano.shared(W, name=('inference_W_%d' % i))
-            v1 = theano.shared(v_bias, name=('inference_vbias_%d'%i))
-            h1 = theano.shared(h_bias, name=('inference_hbias_%d'%i))
-            W2 = theano.shared(copy.deepcopy(W), name=('generative_W_%d' %i))
+            v1 = theano.shared(v_bias, name=('inference_vbias_%d' % i))
+            h1 = theano.shared(h_bias, name=('inference_hbias_%d' % i))
+            W2 = theano.shared(copy.deepcopy(W), name=('generative_W_%d' % i))
             v2 = theano.shared(copy.deepcopy(v_bias), name=('generative_vbias_%d' % i))
-            h2 = theano.shared(copy.deepcopy(h_bias), name=('generative_hbias_%d' %i))
+            h2 = theano.shared(copy.deepcopy(h_bias), name=('generative_hbias_%d' % i))
             self.inference_layers.append(RBM(config=rbm.config, W=W1, h_bias=h1, v_bias=v1))
             self.generative_layers.append(RBM(config=rbm.config, W=W2, h_bias=h2, v_bias=v2))
             i += 1
+
+    def save_untied_weights(self, name):
+        manager = self.data_manager
+        # make directory
+        for t in ['generative', 'inference']:
+            for i in xrange(len(self.generative_layers)):
+                rbm = self.generative_layers[i] if t == 'generative' else self.inference_layers[i]
+                manager.persist(rbm.W.get_value(borrow=False), name=('%s_W' % rbm), out_dir=('%s_weights/%d' % t, i))
+                manager.persist(rbm.v_bias.get_value(borrow=False), name=('%s_vbias' % rbm),
+                                out_dir=('%s_weights/%d' % t, i))
+                manager.persist(rbm.h_bias.get_value(borrow=False), name=('%s_hbias' % rbm),
+                                out_dir=('%s_weights/%d' % t, i))
+
+    def retrieve_untied_weights(self):
+        manager = self.data_manager
+        if self.untied:
+            self.untie_weights()
+        # make directory
+        for t in ['generative', 'inference']:
+            for i in xrange(len(self.generative_layers)):
+                rbm = self.generative_layers[i] if t == 'generative' else self.inference_layers[i]
+                W = manager.retrieve(('%s_W' % rbm), out_dir=('%s_weights/%d' % t, i))
+                v_bias = manager.retrieve(('%s_vbias' % rbm), out_dir=('%s_weights/%d' % t, i))
+                h_bias = manager.retrieve(('%s_hbias' % rbm), out_dir=('%s_weights/%d' % t, i))
+                rbm.W.set_value(rbm.get_initial_weight(W, W.shape[0], W.shape[1], '%s_W_%d'))
+                rbm.v_bias.set_value(rbm.get_initial_bias(v_bias, len(v_bias), ('%s_vbias_%d' % t, i)))
+                rbm.h_bias.set_value(rbm.get_initial_weight(h_bias, len(h_bias), ('%s_hbias_%d' % t, i)))
+
 
     def wake_phase(self, data):
         # PERFORM A BOTTOM-UP PASS TO GET WAKE/POSITIVE PHASE
@@ -443,48 +469,37 @@ class DBN(object):
 
         return sleep_probs, sleep_states
 
-    def get_fine_tune_updates(self, data, batch_size):
-        '''
-        Fine tunes DBN. Inference weights and Generative weights will be untied
-        :param x:
-        :return:
-        '''
-        top_rbm = self.rbm_layers[-1]
-
-        # WAKE-PHASE [hid_prob, pen_prob, ...], [hid_state, pen-state,...]
-        wake_probs, wake_states = self.wake_phase(data)
-
+    def fine_tune_cd(self, wake_state):
         # CONTRASTIVE DIVERGENCE AT TOP LAYER
-        pen_prob, pen_state = wake_probs[-1], wake_states[-1]
-        [updates, chain_end, _, _, _, _, _, _,_] = top_rbm.negative_statistics(pen_state)
-
+        top_rbm = self.rbm_layers[-1]
+        pen_state = wake_state
+        [updates, chain_end, _, _, _, _, _, _, _] = top_rbm.negative_statistics(pen_state)
         cost = T.mean(top_rbm.free_energy(pen_state)) - T.mean(top_rbm.free_energy(chain_end))
         grads = T.grad(cost, top_rbm.params, consider_constant=[chain_end])
-
         lr = top_rbm.train_parameters.learning_rate
         for (p, g) in zip(top_rbm.params, grads):
-            #TODO
+            # TODO all the special updates like momentum
             updates[p] = p - lr * g
 
-        # SLEEP PHASE: [hid_prob, vis_prob], [pen_state, hid_state, vis_state] ...
-        sleep_probs, sleep_states = self.sleep_phase(chain_end)
+        return chain_end, updates
 
-        # Prediction
+    def get_predictions(self, data, sleep_probs, sleep_states, wake_states):
         psleep_states = []  # [hid_prob, pen_prob, ...]
         pwake_states = []  # [vis_prob, hid_prob, ... ]
-
         s = sleep_states[:-1]
         s.reverse()
         rev_sleep_in = [sleep_probs[-1]] + s
         for rbm, sleep_in in zip(self.inference_layers, rev_sleep_in):
             _, p = rbm.prop_up(sleep_in)
             psleep_states.append(p)
-
         for rbm, wake_in in zip(reversed(self.generative_layers), wake_states):
             _, p = rbm.prop_down(wake_in)
             pwake_states.append(p)
+        wake_states = [data] + wake_states  # [data, hid_state, pen_state, ...]
+        sleep_states = rev_sleep_in  # [vis_prob, hid_state, pen_state, ...]
+        return psleep_states, pwake_states, sleep_states, wake_states
 
-        wake_states = [data] + wake_states
+    def update_generative_weights(self, batch_size, pwake_states, wake_states, updates):
         # UPDATES TO GENERATIVE PARAMETERS
         for i in xrange(0, len(self.generative_layers)):
             rbm = self.generative_layers[i]
@@ -493,10 +508,11 @@ class DBN(object):
             pwake_state = pwake_states[i]
             statistics_diff = wake_state - pwake_state
             updates[rbm.W] = rbm.W + r * T.dot(wake_states[i + 1].T, statistics_diff).T / batch_size
-            updates[rbm.v_bias] = rbm.v_bias + r * T.mean((statistics_diff),axis=0)
+            updates[rbm.v_bias] = rbm.v_bias + r * T.mean((statistics_diff), axis=0)
 
-        sleep_states = rev_sleep_in  # [vis_prob, hid_state, pen_state, ...]
+        return updates
 
+    def update_inference_weights(self, batch_size, psleep_states, sleep_states, updates):
         for i in xrange(0, len(self.inference_layers)):
             rbm = self.inference_layers[i]
             r = rbm.train_parameters.learning_rate
@@ -505,6 +521,34 @@ class DBN(object):
             statistics_diff = sleep_state - psleep_state
             updates[rbm.W] = rbm.W + r * T.dot(sleep_states[i].T, statistics_diff) / batch_size
             updates[rbm.h_bias] = rbm.h_bias + r * T.mean((statistics_diff), axis=0)
+
+        return updates
+
+    def get_fine_tune_updates(self, data, batch_size):
+        '''
+        Fine tunes DBN. Inference weights and Generative weights will be untied
+        :param x:
+        :return:
+        '''
+
+        # WAKE-PHASE [hid_prob, pen_prob, ...], [hid_state, pen-state,...]
+        wake_probs, wake_states = self.wake_phase(data)
+
+        # TOP LAYER CD
+        chain_end, updates = self.fine_tune_cd(wake_states[-1])
+
+        # SLEEP PHASE: [hid_prob, vis_prob], [pen_state, hid_state, vis_state] ...
+        sleep_probs, sleep_states = self.sleep_phase(chain_end)
+
+        # Prediction
+        psleep_states, pwake_states, sleep_states, wake_states = self.get_predictions(data, sleep_probs, sleep_states,
+                                                                                      wake_states)
+
+        # UPDATES TO GENERATIVE PARAMETERS
+        updates = self.update_generative_weights(batch_size, pwake_states, wake_states, updates)
+
+        # UPDATES TO INFERENCE PARAMETERS
+        updates = self.update_inference_weights(batch_size, psleep_states, sleep_states, updates)
 
         return updates
 
@@ -534,7 +578,7 @@ class DBN(object):
                 fine_tune(mini_batche_i)
             end_time = time.clock()
 
-        print ('Fine tuning took %f minutes' % ((end_time - start_time)/60))
+        print ('Fine tuning took %f minutes' % ((end_time - start_time) / 60))
 
 
 
@@ -587,7 +631,7 @@ class DBN(object):
         # # UNDIRECTED ASSOCIATIVE MEMORY
         # negtopstates = waketopstates; # to initialize loop
         # for iter=1:numCDiters
-        #     negpenprobs = logistic(negtopstates*pentop? + pengenbiases);
+        # negpenprobs = logistic(negtopstates*pentop? + pengenbiases);
         #     negpenstates = negpenprobs > rand(1, numpen);
         #     negtopprobs = logistic(negpenstates*pentop+topbiases);
         #     negtopstates = negtopprobs > rand(1, numtop);

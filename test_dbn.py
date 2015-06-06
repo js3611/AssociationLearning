@@ -192,7 +192,7 @@ def test_DBN_classifier(finetune_lr=0.1, pretraining_epochs=100,
 
 
 def test_generative_dbn():
-    manager = store.StorageManager('fine_tune1')
+    manager = store.StorageManager('fine_tune2')
     shape = 28
     train_x = get_data(shape)
 
@@ -235,7 +235,7 @@ def test_generative_dbn():
 def get_data(shape):
     dataset_name = 'sharp_equi{}_{}'.format(shape, shape)
     # Load data
-    train, valid, test = m_loader.load_digits(n=[10000, 10, 100])
+    train, valid, test = m_loader.load_digits(n=[1000, 10, 100])
     # train, valid, test = k_loader.load_kanade(set_name=dataset_name, pre={'scale': True})
     train_x, train_y = train
     return train_x
@@ -253,7 +253,7 @@ def get_dbn_model(manager, shape):
                     sparsity_cost=0.1,
                     dropout=True,
                     dropout_rate=0.5,
-                    epochs=20)
+                    epochs=10)
 
     first_progress_logger = ProgressLogger(img_shape=(shape, shape))
     first_rbm_config = RBMConfig(train_params=tr, progress_logger=first_progress_logger)
