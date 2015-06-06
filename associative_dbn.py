@@ -326,7 +326,34 @@ class AssociativeDBN(object):
 
         return updates
 
+    def fine_tune(self, data_r, data_l):
 
+        if self.dbn_right.untied:
+            self.dbn_right.untie_weights(include_top=True)
+            self.dbn_left.untie_weights(include_top=True)
+
+        epochs = 10
+        batch_size = 10
+        mini_batches = data_r.get_value(borrow=True).shape[0] / batch_size
+
+        for epoch in xrange(epochs):
+            print 'Epoch %d' % epoch
+
+            i = T.iscalar()
+            x = T.matrix('x')
+            y = T.matrix('y')
+            updates = self.get_fine_tune_updates(x, y, batch_size)
+            fine_tune = theano.function([i], [], updates=updates, givens={
+                x: data_r[i * batch_size: (i + 1) * batch_size],
+                y: data_l[i * batch_size: (i + 1) * batch_size]
+            })
+
+            start_time = time.clock()
+            for mini_batche_i in xrange(mini_batches):
+                fine_tune(mini_batche_i)
+            end_time = time.clock()
+
+        print ('Fine tuning took %f minutes' % ((end_time - start_time) / 60))
 
 def test_associative_dbn(i=0):
     print "Testing Associative DBN which tries to learn even-odd of numbers"

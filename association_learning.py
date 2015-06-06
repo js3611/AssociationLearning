@@ -478,7 +478,7 @@ def get_brain_model_JointDBNConfig(shape, data_manager):
                          dropout=False,
                          dropout_rate=0.8,
                          epochs=10,
-                         batch_size=20)
+                         batch_size=5)
 
     top_h_n = 100
     top_rbm = RBMConfig(v_n=h_n,
@@ -597,12 +597,12 @@ def associate_data2dataDBN(cache=False):
 def associate_data2dataJDBN(cache=False, train_further=False):
     print "Testing Associative RBM which tries to learn even-oddness of numbers"
     # project set-up
-    data_manager = store.StorageManager('JDBN_under', log=False)
+    data_manager = store.StorageManager('JDBN_u', log=False)
     shape = 28
-    train_n = 50000
+    train_n = 10000
     test_n = 1000
     # Load mnist hand digits, class label is already set to binary
-    dataset = m_loader.load_digits(n=[train_n, 100, test_n],
+    dataset = m_loader.load_digits(n=[train_n, 0, test_n],
                                    digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
                                    pre={'binary_label': True})
 
@@ -613,26 +613,62 @@ def associate_data2dataJDBN(cache=False, train_further=False):
     ones = m_loader.load_digits(n=[test_n, 0, 0], digits=[1])[0][0]
     zeroes = m_loader.load_digits(n=[test_n, 0, 0], digits=[0])[0][0]
     tr_X = theano.shared(np.concatenate([tr_x.get_value(), tr_x01.get_value()], axis=1))
-
-    config = get_brain_model_JointDBNConfig(shape, data_manager)
-    brain_c = DBN.DBN(config=config)
-    brain_c.pretrain(tr_X, cache=[True, True], train_further=[False, True])
-
-    initial_y = np.random.binomial(n=1, p=0.0, size=te_x.get_value(True).shape)
+    initial_y = np.random.binomial(n=1, p=0.0, size=te_x.get_value(True).shape).astype(t_float_x)
+    initial_y_uni = np.random.uniform(low=0, high=1,size=te_x.get_value(True).shape).astype(t_float_x)
+    initial_y_bi001 = np.random.binomial(n=1, p=0.01, size=te_x.get_value(True).shape).astype(t_float_x)
+    initial_y_bi01 = np.random.binomial(n=1, p=0.1, size=te_x.get_value(True).shape).astype(t_float_x)
     te_X = theano.shared(np.concatenate([te_x.get_value(), initial_y], axis=1))
+    te_X2 = theano.shared(np.concatenate([te_x.get_value(), initial_y_uni], axis=1))
+    te_X3 = theano.shared(np.concatenate([te_x.get_value(), initial_y_bi01], axis=1))
+    te_X4 = theano.shared(np.concatenate([te_x.get_value(), initial_y_bi001], axis=1))
     clf = SimpleClassifier('logistic', te_x01.get_value(), te_y.eval())
 
-    recon_x = brain_c.reconstruct(te_X, k=1, plot_n=100, img_name='dbn_recon')
-    recon = recon_x[:, 784:]
-    error = clf.get_score(recon, te_y.eval())
-    print error
+    configs = []
 
-    for i in xrange(0, 10):
-        brain_c.fine_tune(tr_X)
-        recon_x = brain_c.reconstruct(te_X, k=1, plot_n=100, img_name='dbn_recon_fine_tune%d' %i)
-        recon = recon_x[:, 784:]
-        error = clf.get_score(recon, te_y.eval())
-        print error
+    for h_n in [100, 250, 500]:
+        config1 = get_brain_model_JointDBNConfig(shape, data_manager)
+        config1.topology = [784*2, h_n, h_n]
+        config1.rbm_configs[0].h_n = h_n
+        config1.rbm_configs[1].v_n = h_n
+        config1.rbm_configs[1].h_n = h_n
+        configs.append(config1)
+
+    for h_n in [100, 250, 500]:
+        config1 = get_brain_model_JointDBNConfig(shape, data_manager)
+        config1.topology = [784*2, h_n, h_n * 2]
+        config1.rbm_configs[0].h_n = h_n
+        config1.rbm_configs[1].v_n = h_n
+        config1.rbm_configs[1].h_n = h_n * 2
+        configs.append(config1)
+
+    for h_n in [100, 250, 500]:
+        config1 = get_brain_model_JointDBNConfig(shape, data_manager)
+        config1.topology = [784*2, h_n * 2, h_n ]
+        config1.rbm_configs[0].h_n = h_n * 2
+        config1.rbm_configs[1].v_n = h_n * 2
+        config1.rbm_configs[1].h_n = h_n
+        configs.append(config1)
+
+    for a in xrange(10):
+        for config in configs:
+            brain_c = DBN.DBN(config=config)
+            brain_c.pretrain(tr_X, cache=[True, True], train_further=[True, True])
+
+            recon_x = brain_c.reconstruct(te_X, k=1, plot_n=100, img_name='{}_{}_recon'.format(a,config.topology))
+            recon = recon_x[:, 784:]
+            error = clf.get_score(recon, te_y.eval())
+            print error
+
+            for i in xrange(0, 5):
+                brain_c.fine_tune(tr_X)
+                recon_x = brain_c.reconstruct(te_X, k=1, plot_n=100, img_name=('{}_{}_recon_fine_tune{}'.format(a,config.topology, i)))
+                recon = recon_x[:, 784:]
+                error = clf.get_score(recon, te_y.eval())
+                print error
+                recon_x = brain_c.reconstruct(te_X4, k=1, plot_n=100, img_name=('{}_{}_recon_fine_tune_2_{}'.format(a,config.topology, i)))
+                recon = recon_x[:, 784:]
+                error = clf.get_score(recon, te_y.eval())
+                print error
 
 
 if __name__ == '__main__':

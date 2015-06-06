@@ -559,7 +559,7 @@ class DBN(object):
             self.untie_weights()
             self.untied = True
 
-        epochs = 10
+        epochs = 5
         batch_size = 10
         mini_batches = data.get_value(borrow=True).shape[0] / batch_size
 
