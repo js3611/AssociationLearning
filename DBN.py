@@ -396,6 +396,7 @@ class DBN(object):
 
     def untie_weights(self, include_top=False):
         # Untie all the weights except for the top layer
+        self.untied = True
         i = 0
         layers = self.rbm_layers if include_top else self.rbm_layers[:-1]
         for rbm in layers:

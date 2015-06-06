@@ -107,13 +107,9 @@ class AssociativeDBN(object):
         print '... initialising association layer'
         self.association_layer = RBM(config=config.top_rbm)
 
-    def train(self, x1, x2, cache=False, train_further=False, optimise=False, opt_top=False):
-        cache_left = False
-        cache_right = False
-        cache_top = False
-        train_further_left = False
-        train_further_right = False
-        train_further_top = False
+    def train(self, x1, x2, cache=False, train_further=False, optimise=False):
+        cache_left = cache_right = cache_top = cache if type(cache) is bool else False
+        train_further_left = train_further_right = train_further_top = train_further if type(train_further) is bool else False
         if type(cache) is list:
             cache_left = cache[0]
             cache_right = cache[1]
@@ -288,23 +284,23 @@ class AssociativeDBN(object):
         for (p, g) in zip(rbm.params, grads):
             # TODO all the special updates like momentum
             updates[p] = p - lr * g
-        return updates
+        return chain_end, updates
 
-    def get_fine_tune_cost(self, xs, ys, batch_size=10):
+    def get_fine_tune_updates(self, xs, ys, batch_size=10):
 
         # WAKE-PHASE [hid_prob, pen_prob, ...], [hid_state, pen-state,...]
         wake_probs_l, wake_states_l = self.dbn_left.wake_phase(xs)
         wake_probs_r, wake_states_r = self.dbn_right.wake_phase(ys)
 
         # TOP LAYER CD
-        wake_state = T.concatenate([wake_states_l[-1], wake_states_r[-1]], axis=0)
+        wake_state = T.concatenate([wake_states_l[-1], wake_states_r[-1]], axis=1)
         chain_end, updates = self.fine_tune_cd(wake_state)
         left_end = self.dbn_left.topology[-1]
         chain_end_l, chain_end_r = chain_end[:, :left_end], chain_end[:, left_end:]
 
         # SLEEP PHASE: [hid_prob, vis_prob], [pen_state, hid_state, vis_state] ...
         sleep_probs_l, sleep_states_l = self.dbn_left.sleep_phase(chain_end_l)
-        sleep_probs_r, sleep_states_r = self.dbn_rightsleep_phase(chain_end_r)
+        sleep_probs_r, sleep_states_r = self.dbn_right.sleep_phase(chain_end_r)
 
         # Prediction
         psleep_states_l, pwake_states_l, sleep_states_l, wake_states_l = self.dbn_left.get_predictions(xs,
@@ -326,14 +322,12 @@ class AssociativeDBN(object):
 
         return updates
 
-    def fine_tune(self, data_r, data_l):
+    def fine_tune(self, data_r, data_l, epochs=10, batch_size=10):
 
-        if self.dbn_right.untied:
+        if not self.dbn_right.untied:
             self.dbn_right.untie_weights(include_top=True)
             self.dbn_left.untie_weights(include_top=True)
 
-        epochs = 10
-        batch_size = 10
         mini_batches = data_r.get_value(borrow=True).shape[0] / batch_size
 
         for epoch in xrange(epochs):
@@ -359,10 +353,13 @@ def test_associative_dbn(i=0):
     print "Testing Associative DBN which tries to learn even-odd of numbers"
 
     # load dataset
-    train, valid, test = m_loader.load_digits(n=[10000, 100, 100], pre={'binary_label': True})
+    train_n = 1000
+    test_n = 1000
+    train, valid, test = m_loader.load_digits(n=[train_n, 100, test_n], pre={'binary_label': True})
     train_x, train_y = train
     test_x, test_y = test
     train_x01 = m_loader.sample_image(train_y)
+    clf = SimpleClassifier('logistic', train_x01, train_y)
 
     # project set up
     project_name = 'AssociationDBNTest/{}'.format(i)
@@ -374,9 +371,10 @@ def test_associative_dbn(i=0):
     config.reuse_dbn = False
     config.left_dbn.rbm_configs[0].progress_logger = ProgressLogger(img_shape=(28, 28))
     config.right_dbn.rbm_configs[0].progress_logger = ProgressLogger(img_shape=(28, 28))
-    config.left_dbn.topology = [784, 500]
-    config.right_dbn.topology = [784, 500]
-    config.n_association = 300
+    config.right_dbn.rbm_configs[0].train_params.epochs = 50
+    config.left_dbn.topology = [784, 100]
+    config.right_dbn.topology = [784, 50]
+    config.n_association = 100
     associative_dbn = AssociativeDBN(config=config, data_manager=data_manager)
 
     # Plot sample
@@ -384,25 +382,59 @@ def test_associative_dbn(i=0):
     save_images(train_x01.get_value(borrow=True)[1:100], 'n_ass.png', (10, 10))
 
     # Train RBM - learn joint distribution
-    associative_dbn.train(train_x, train_x01, cache=True)
+    associative_dbn.train(train_x, train_x01, cache=True, train_further=False)
     print "... trained associative DBN"
 
     # Reconstruct images
-    reconstructed_y = associative_dbn.recall(test_x, associate_steps=1, recall_steps=10)
+    reconstructed_y = associative_dbn.recall(test_x,
+                                             associate_steps=10,
+                                             recall_steps=0,
+                                             y_type='active_h')
+    reconstructed_y0 = associative_dbn.recall(test_x,
+                                             associate_steps=10,
+                                             recall_steps=0,
+                                             y_type='zero')
     print "... reconstructed images"
 
-    # Create Dataset to feed into logistic regression
-    # Test set: reconstructed y's become the input. Get the corresponding x's and y's
-    dataset01 = m_loader.load_digits(n=[1000, 100, 100], digits=[0, 1])
-    dataset01[2] = (theano.shared(reconstructed_y), test_y)
-
     # Classify the reconstructions
-    clf = SimpleClassifier('logistic', dataset01[0][0], dataset01[0][1])
     score_orig = clf.get_score(reconstructed_y, test_y.eval())
     out_msg = '{} (orig, retrain):{}'.format(associative_dbn, score_orig)
     print out_msg
 
+    # Classify the reconstructions
+    score_orig = clf.get_score(reconstructed_y0, test_y.eval())
+    out_msg = '{} (orig, retrain):{}'.format(associative_dbn, score_orig)
+    print out_msg
+
+    for j in xrange(10):
+        # Fine tune them
+        associative_dbn.fine_tune(train_x, train_x01, 1, 1)
+
+        # Reconstruct images
+        reconstructed_y = associative_dbn.recall(test_x,
+                                                 associate_steps=10,
+                                                 recall_steps=0,
+                                                 y_type='active_h',
+                                                 img_name='active_h_{}'.format(j))
+
+        reconstructed_y0 = associative_dbn.recall(test_x,
+                                                 associate_steps=10,
+                                                 recall_steps=0,
+                                                 y_type='zero',
+                                                 img_name='zero_{}'.format(j))
+        print "... reconstructed images"
+
+        # Classify the reconstructions
+        score_orig = clf.get_score(reconstructed_y, test_y.eval())
+        out_msg = '{} (orig, retrain):{}'.format(associative_dbn, score_orig)
+        print out_msg
+
+        # Classify the reconstructions
+        score_orig = clf.get_score(reconstructed_y0, test_y.eval())
+        out_msg = '{} (orig, retrain):{}'.format(associative_dbn, score_orig)
+        print out_msg
+
+
 
 if __name__ == '__main__':
-    pass
-    # test_associative_dbn()
+    test_associative_dbn()

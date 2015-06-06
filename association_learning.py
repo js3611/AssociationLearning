@@ -387,7 +387,7 @@ def get_brain_model_AssociativeDBNConfig(shape, data_manager):
                          batch_size=20)
 
     h_n = 300
-    h_n_r = 100
+    h_n_r = 50
     bottom_logger = ProgressLogger(img_shape=(shape, shape))
     bottom_rbm = RBMConfig(v_n=shape ** 2,
                            h_n=h_n,
@@ -445,7 +445,7 @@ def get_brain_model_JointDBNConfig(shape, data_manager):
                            sparsity_cost=0.1,
                            dropout=True,
                            dropout_rate=0.5,
-                           epochs=5)
+                           epochs=2)
 
     h_n = 300
     bottom_logger = ProgressLogger(img_shape=(shape * 2, shape))
@@ -494,20 +494,24 @@ def get_brain_model_JointDBNConfig(shape, data_manager):
 def get_adbns(data_manager):
 
 
-    adbns = []
+    adbns_configs = []
 
-    for dropout in [True, False]:
-        for sc in [True, False]:
-            for lr in [0.001, 0.0001, 0.00005, 0.00001]:
-                for n in [100, 250, 500]:
-                    adbn = get_brain_model_AssociativeDBNConfig(28, data_manager=data_manager)
-                    adbn.config.top_rbm.train_params.learning_rate=lr
-                    adbn.config.top_rbm.train_params.sparsity_constraint=sc
-                    adbn.config.top_rbm.train_params.dropout=dropout
-                    adbn.config.n_association = n
-                    adbns.append(adbn)
+    # for dropout in [True, False]:
+    #     for sc in [True, False]:
+    #         for lr in [0.001, 0.0001, 0.00005, 0.00001]:
 
-    return adbns
+    for n in [100, 250, 500]:
+        for left_n in [100, 250, 500]:
+            config = get_brain_model_AssociativeDBNConfig(28, data_manager=data_manager)
+            config.left_dbn.topology[0] = left_n
+            config.left_dbn.rbm_configs[0].h_n = left_n
+            # config.top_rbm.train_params.learning_rate=lr
+            # config.top_rbm.train_params.sparsity_constraint=sc
+            # config.top_rbm.train_params.dropout=dropout
+            config.n_association = n
+            adbns_configs.append(config)
+
+    return adbns_configs
 
 
 def associate_data2dataDBN(cache=False):
@@ -596,8 +600,10 @@ def associate_data2dataDBN(cache=False):
 
 def associate_data2dataJDBN(cache=False, train_further=False):
     print "Testing Associative RBM which tries to learn even-oddness of numbers"
+    f = open('errors.txt', 'w')
     # project set-up
-    data_manager = store.StorageManager('JDBN_u', log=False)
+    proj_name = 'JDBN_digits'
+    data_manager = store.StorageManager(proj_name, log=False)
     shape = 28
     train_n = 10000
     test_n = 1000
@@ -651,13 +657,15 @@ def associate_data2dataJDBN(cache=False, train_further=False):
 
     for a in xrange(10):
         for config in configs:
+            f.write('{}:{}:'.format(a, config.topology))
             brain_c = DBN.DBN(config=config)
             brain_c.pretrain(tr_X, cache=[True, True], train_further=[True, True])
 
-            recon_x = brain_c.reconstruct(te_X, k=1, plot_n=100, img_name='{}_{}_recon'.format(a,config.topology))
+            recon_x = brain_c.reconstruct(te_X, k=1, plot_n=100, img_name='{}_{}_recon'.format(a, config.topology))
             recon = recon_x[:, 784:]
             error = clf.get_score(recon, te_y.eval())
             print error
+            f.write('{}, '.format(error))
 
             for i in xrange(0, 5):
                 brain_c.fine_tune(tr_X)
@@ -665,16 +673,72 @@ def associate_data2dataJDBN(cache=False, train_further=False):
                 recon = recon_x[:, 784:]
                 error = clf.get_score(recon, te_y.eval())
                 print error
+                f.write('{}, '.format(error))
                 recon_x = brain_c.reconstruct(te_X4, k=1, plot_n=100, img_name=('{}_{}_recon_fine_tune_2_{}'.format(a,config.topology, i)))
                 recon = recon_x[:, 784:]
                 error = clf.get_score(recon, te_y.eval())
                 print error
+                f.write('{}, '.format(error))
+            f.write('\n')
+    f.close()
+
+
+def associate_data2dataADBN_Finetune(cache=False, train_further=False):
+    print "Testing Associative RBM which tries to learn even-oddness of numbers"
+    f = open('adbn_errors.txt', 'w')
+    # project set-up
+    proj_name = 'ADBN_digits'
+    data_manager = store.StorageManager(proj_name, log=True)
+    shape = 28
+    train_n = 100
+    test_n = 1000
+    # Load mnist hand digits, class label is already set to binary
+    dataset = m_loader.load_digits(n=[train_n, 0, test_n],
+                                   digits=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+                                   pre={'binary_label': True})
+
+    tr_x, tr_y = dataset[0]
+    te_x, te_y = dataset[2]
+    tr_x01 = m_loader.sample_image(tr_y)
+    te_x01 = m_loader.sample_image(te_y)
+    clf = SimpleClassifier('logistic', te_x01.get_value(), te_y.eval())
+
+    configs = get_adbns(data_manager)
+
+    for a in xrange(10):
+        for config in configs:
+            t = 'l{}_r{}_t{}'.format(config.left_dbn.topology, config.right_dbn.topology, config.n_association)
+            f.write('{}:{}:'.format(a, t))
+            brain_c = associative_dbn.AssociativeDBN(config=config, data_manager=data_manager)
+            brain_c.train(tr_x, tr_x01, cache=True, train_further=True)
+
+            recon = brain_c.recall(tr_x,
+                                     associate_steps=10,
+                                     recall_steps=0,
+                                     img_name='{}_{}_recon'.format(a, t))
+
+            error = clf.get_score(recon, tr_y.eval())
+            print error
+            f.write('{}, '.format(error))
+
+            for i in xrange(0, 1):
+                brain_c.fine_tune(tr_x, tr_x01)
+                recon = brain_c.recall(tr_x,
+                                     associate_steps=10,
+                                     recall_steps=0,
+                                     img_name='{}_{}_recon_finetune{}'.format(a, t, i))
+                error = clf.get_score(recon, tr_y.eval())
+                print error
+                f.write('{}, '.format(error))
+            f.write('\n')
+    f.close()
 
 
 if __name__ == '__main__':
     # associate_data2label()
     # associate_data2data(True, True)
     # associate_data2dataADBN(True, True)
-    associate_data2dataJDBN(True, False)
+    associate_data2dataADBN_Finetune(True, True)
+    # associate_data2dataJDBN(True, False)
     # associate_data2dataDBN(False)
 

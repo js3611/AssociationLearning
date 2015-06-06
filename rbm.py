@@ -1060,7 +1060,6 @@ class RBM(object):
         plot_n = 100
         plot_every = k if k <= 10 else 10
         ylen = self.v_n / 2 if type(y) is None and ylen == -1 else self.v_n - len(y.get_value()[0]) if type(y) is not None else ylen
-        print ylen
 
         # Initialise parameters
         if not utils.isSharedType(x):
