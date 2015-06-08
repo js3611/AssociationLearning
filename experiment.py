@@ -196,7 +196,7 @@ def experiment_adbn(project_name, mapping, shape):
             for y_type in y_types:
                 errors[y_type] = {}
                 for emo in xrange(len(kanade_loader.emotion_dict)):
-                    errors[y_type][emo] = [proportion[i]]
+                    errors[y_type][emo] = [proportion[emo]]
 
             for j in xrange(10):
                 brain_c.fine_tune(tr_x, p_tr_x, epochs=1)
