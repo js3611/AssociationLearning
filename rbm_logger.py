@@ -31,7 +31,7 @@ class ProgressLogger(object):
         def visualise_weight(self, rbm, image_name):
             plotting_start = time.clock()  # Measure plotting time
 
-            if rbm.v_n in [784, 625, 1250, 784*2, 2500, 5000]:
+            if rbm.v_n in [784, 625, 1250, 784*2, 2500, 5000] and (self.img_shape[0] * self.img_shape[1] == rbm.v_n):
                 tile_shape = (rbm.h_n / 10 + 1, 10)
 
                 image = Image.fromarray(
