@@ -151,7 +151,7 @@ def experiment_adbn(project_name, mapping, shape):
     # Get dataset
     dataset = kanade_loader.load_kanade(set_name=dataset_name,
                                         emotions=mapping.keys(),
-                                        pre=preprocesssing, n=100)
+                                        pre=preprocesssing)
     tr, vl, te = dataset
     tr_x, tr_y = tr
     te_x, te_y = te
@@ -478,7 +478,7 @@ if __name__ == '__main__':
                          'sadness': {'happy': 0.3, 'anger': 0.5, 'sadness': 0.2},
                          })
 
-    experiment_adbn('ExperimentADBN', mapping=secure_mapping, shape=25)
+    experiment_adbn('ExperimentADBN_avoi', mapping=avoidant_mapping, shape=25)
 
     # plot_result('data/remote/Experiment7.txt', secure_mapping, architectures=['DBN', 'ADBN'])
     # plot_result('data/remote/Experiment7_50.txt', secure_mapping, architectures=['DBN', 'ADBN'])
