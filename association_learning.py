@@ -348,7 +348,7 @@ def associate_data2dataADBN(cache=False, train_further=True):
     f.close()
 
 
-def get_brain_model_AssociativeDBNConfig(shape, data_manager):
+def get_brain_model_AssociativeDBNConfig(shape):
     # initialise AssociativeDBN
     config = associative_dbn.DefaultADBNConfig()
 
@@ -362,7 +362,7 @@ def get_brain_model_AssociativeDBNConfig(shape, data_manager):
                            sparsity_decay=0.9,
                            sparsity_cost=0.1,
                            dropout=True,
-                           dropout_rate=0.8,
+                           dropout_rate=0.5,
                            epochs=10)
 
     bottom_tr_r = TrainParam(learning_rate=0.001,
@@ -491,7 +491,7 @@ def get_brain_model_JointDBNConfig(shape, data_manager):
     return config
 
 
-def get_adbns(data_manager):
+def get_adbns():
 
 
     adbns_configs = []
@@ -500,10 +500,10 @@ def get_adbns(data_manager):
     #     for sc in [True, False]:
     #         for lr in [0.001, 0.0001, 0.00005, 0.00001]:
 
-    for n in [100, 250, 500]:
+    for n in [100, 250, 500, 1000]:
         for left_n in [100, 250, 500]:
-            config = get_brain_model_AssociativeDBNConfig(28, data_manager=data_manager)
-            config.left_dbn.topology[0] = left_n
+            config = get_brain_model_AssociativeDBNConfig(28)
+            config.left_dbn.topology[1] = left_n
             config.left_dbn.rbm_configs[0].h_n = left_n
             # config.top_rbm.train_params.learning_rate=lr
             # config.top_rbm.train_params.sparsity_constraint=sc
@@ -690,7 +690,7 @@ def associate_data2dataADBN_Finetune(cache=False, train_further=False):
     proj_name = 'ADBN_digits'
     data_manager = store.StorageManager(proj_name, log=True)
     shape = 28
-    train_n = 100
+    train_n = 10000
     test_n = 1000
     # Load mnist hand digits, class label is already set to binary
     dataset = m_loader.load_digits(n=[train_n, 0, test_n],
@@ -703,33 +703,35 @@ def associate_data2dataADBN_Finetune(cache=False, train_further=False):
     te_x01 = m_loader.sample_image(te_y)
     clf = SimpleClassifier('logistic', te_x01.get_value(), te_y.eval())
 
-    configs = get_adbns(data_manager)
+    configs = get_adbns()
 
     for a in xrange(10):
-        for config in configs:
+        for n, config in enumerate(configs):
             t = 'l{}_r{}_t{}'.format(config.left_dbn.topology, config.right_dbn.topology, config.n_association)
             f.write('{}:{}:'.format(a, t))
-            brain_c = associative_dbn.AssociativeDBN(config=config, data_manager=data_manager)
+            brain_c = associative_dbn.AssociativeDBN(config=config, data_manager=store.StorageManager('{}/{}'.format(proj_name,n),log=False))
             brain_c.train(tr_x, tr_x01, cache=True, train_further=True)
 
             recon = brain_c.recall(tr_x,
                                      associate_steps=10,
                                      recall_steps=0,
-                                     img_name='{}_{}_recon'.format(a, t))
+                                     img_name='{}_{}'.format(a, t))
 
             error = clf.get_score(recon, tr_y.eval())
             print error
             f.write('{}, '.format(error))
 
-            for i in xrange(0, 1):
-                brain_c.fine_tune(tr_x, tr_x01)
-                recon = brain_c.recall(tr_x,
-                                     associate_steps=10,
-                                     recall_steps=0,
-                                     img_name='{}_{}_recon_finetune{}'.format(a, t, i))
-                error = clf.get_score(recon, tr_y.eval())
-                print error
-                f.write('{}, '.format(error))
+            for i in xrange(0, 10):
+                brain_c.fine_tune(tr_x, tr_x01, epochs=1)
+                for y_type in ['active_h', 'v_noisy_active_h', 'zero']:
+                    recon = brain_c.recall(tr_x,
+                                         associate_steps=10,
+                                         recall_steps=0,
+                                         img_name='{}_{}_{}_{}'.format(a, t, y_type, i),
+                                         y_type=y_type)
+                    error = clf.get_score(recon, tr_y.eval())
+                    print error
+                    f.write('{}, '.format(error))
             f.write('\n')
     f.close()
 
