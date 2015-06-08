@@ -125,7 +125,7 @@ def visualise_reconstructions(orig, reconstructions, img_shape, plot_n=None, img
 
                 # Generate image by plotting the sample from the chain
                 for i in xrange(1, k+1):
-                    print ' ... plotting sample ', i
+                    # print ' ... plotting sample ', i
                     idx = (nrow+1) * i
                     image_data[idx:(idx+nrow), :] = utils.tile_raster_images(
                         X=(reconstructions[i-1]),

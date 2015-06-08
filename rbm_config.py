@@ -64,7 +64,6 @@ class RBMConfig(object):
                  cd_type=CLASSICAL,
                  cd_steps=1,
                  associative=False,
-                 dropout=False,
                  v_n=10,
                  v_unit=rbm_units.RBMUnit,
                  v2_n=10,
@@ -76,7 +75,6 @@ class RBMConfig(object):
         self.cd_type = cd_type
         self.cd_steps = cd_steps
         self.associative = associative
-        self.dropout = dropout
 
         self.v_n = v_n
         self.v_unit = v_unit
@@ -90,4 +88,5 @@ class RBMConfig(object):
         self.train_params = train_params
         self.progress_logger = progress_logger
 
-
+    def __str__(self):
+        return '{}{}_{}{}_{}{}'.format(self.cd_type, self.cd_steps, self.v_unit, self.v_n, self.h_unit, self.h_n)

@@ -20,7 +20,7 @@ data_dir = "/".join([root_dir, DATA_DIR])
 class StorageManager(object):
     def __init__(self, project_root='.', log=True):
         self.project_root = project_root
-        self.log = True
+        self.log = log
         self.started = os.getcwd()
         if log:
             print '... data manager created. project_root: {}'.format(project_root)
@@ -28,19 +28,22 @@ class StorageManager(object):
 
     def move_to(self, out_dir):
         move_to('/'.join([self.project_root, out_dir]))
-        print '... moved to {}'.format(os.getcwd())
+        if self.log:
+            print '... moved to {}'.format(os.getcwd())
 
 
     def move_to_project_root(self):
         move_to(self.project_root)
-        print '... moved to {}'.format(os.getcwd())
+        if self.log:
+            print '... moved to {}'.format(os.getcwd())
 
     def persist(self, obj, name=None, out_dir=None):
         cur = os.getcwd()
         if out_dir:
             self.move_to(out_dir)
         store_object(obj, name)
-        print '... saved {} to {}'.format(name, os.getcwd())
+        if self.log:
+            print '... saved {} to {}'.format(name, os.getcwd())
         os.chdir(cur)
 
     def retrieve(self, name, out_dir=None):

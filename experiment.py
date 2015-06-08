@@ -17,6 +17,31 @@ import kanade_loader
 import matplotlib.pyplot as plt
 
 
+def evaluate(p_tr_y, recon, recon_p_tr_x):
+    # Train classifier on reconstruction
+    clf = SimpleClassifier('logistic', recon_p_tr_x, p_tr_y.eval())
+    # Output number of classes
+    res = clf.classify(recon).T
+    r = np.histogram(res, bins=np.arange(1, 9))
+    labels = map(lambda x: kanade_loader.emotion_rev_dict[int(x)], r[1][:-1])
+    # labels = map(lambda x: kanade_loader.emotion_rev_dict[int(x)], r[0])
+    proportion = r[0] * 1. / sum(r[0])
+    return labels, proportion
+
+
+def write_evaluation(f, labels, proportion):
+    txt = 'Learnt Child Configuration:'
+    print txt
+    f.write(txt)
+    f.write('\n')
+    for i, l in enumerate(labels):
+        fill_space = (max(map(lambda x: len(x), labels)) - len(l))
+        txt = '{}{}:\t %.3f'.format(l, ' ' * fill_space) % proportion[i]
+        print txt
+        f.write(txt)
+        f.write('\n')
+
+
 def experimentChild(project_name, mapping, shape, model):
     # Project set up
     data_manager = StorageManager(project_name, log=True)
@@ -83,10 +108,9 @@ def experimentChild(project_name, mapping, shape, model):
         recon_pair = brain_c.reconstruct(tr_x, k=1, plot_n=100, img_name='rbm_pair_recon_{}'.format(shape))
         recon_p_tr_x = recon_pair[:, (shape ** 2):]
 
-
     elif model == 'dbn':
         brain_c = get_brain_model_DBN(shape, data_manager)
-        brain_c.pretrain(tr_x, cache=[True, True, True], train_further= [True, True, True])
+        brain_c.pretrain(tr_x, cache=[True, True, True], train_further=[True, True, True])
 
         recon_pair = brain_c.reconstruct(tr_x, k=1, plot_n=100, img_name='dbn_pair_recon_{}'.format(shape))
         recon_p_tr_x = recon_pair[:, (shape ** 2):]
@@ -95,7 +119,8 @@ def experimentChild(project_name, mapping, shape, model):
         recon = recon_pair[:, (shape ** 2):]
 
     elif model == 'adbn':
-        brain_c = get_brain_model_AssociativeDBN(shape, data_manager)
+        config = get_brain_model_AssociativeDBN(shape)
+        brain_c = associative_dbn.AssociativeDBN(config)
         brain_c.train(h_tr_x, p_tr_x,
                       cache=[[True, True, True], [True, True, True], True],
                       train_further=[[True, True, True], [True, True, True], True])
@@ -105,25 +130,103 @@ def experimentChild(project_name, mapping, shape, model):
                                                      img_name='adbn_right_recon_{}'.format(shape))
         recon = brain_c.recall(h_te_x, associate_steps=5, recall_steps=0, img_name='adbn_child_recon_{}'.format(shape))
 
-    # Train classifier on reconstruction
-    clf = SimpleClassifier('logistic', recon_p_tr_x, p_tr_y.eval())
-
-    # Output number of classes
-    res = clf.classify(recon).T
-    r = np.histogram(res, bins=np.arange(1, 9))
-    labels = map(lambda x: kanade_loader.emotion_rev_dict[int(x)], r[1][:-1])
-    # labels = map(lambda x: kanade_loader.emotion_rev_dict[int(x)], r[0])
-    proportion = r[0] * 1. / sum(r[0])
-    txt = 'Learnt Child Configuration:'
-    print txt
-    f.write(txt)
+    labels, proportion = evaluate(p_tr_y, recon, recon_p_tr_x)
+    write_evaluation(f, labels, proportion)
     f.write('\n')
-    for i, l in enumerate(labels):
-        fill_space = (max(map(lambda x: len(x), labels)) - len(l))
-        txt = '{}{}:\t %.3f'.format(l, ' ' * fill_space) % proportion[i]
-        print txt
-        f.write(txt)
-        f.write('\n')
+    f.close()
+    data_manager.finish()
+
+
+def experiment_adbn(project_name, mapping, shape):
+    # Project set up
+    data_manager = StorageManager(project_name, log=True)
+    f = open(project_name + '.txt', mode='a')
+    f.write(project_name)
+    f.write('%d' % shape)
+    f.write('\n')
+
+    dataset_name = 'sharp_equi{}_{}'.format(shape, shape)
+    preprocesssing = {'scale': True}
+
+    # Get dataset
+    dataset = kanade_loader.load_kanade(set_name=dataset_name,
+                                        emotions=mapping.keys(),
+                                        pre=preprocesssing, n=100)
+    tr, vl, te = dataset
+    tr_x, tr_y = tr
+    te_x, te_y = te
+
+    # Sample Parent emotion
+    p_tr_x, p_tr_y = kanade_loader.sample_image2(tr_y,
+                                                 mapping=mapping,
+                                                 pre=preprocesssing,
+                                                 set_name=dataset_name)
+
+    configs = []
+    for h_n in [100, 250, 500, 1000]:
+        for n_association in [100, 250, 500, 1000]:
+            config = get_brain_model_AssociativeDBN(shape, h_n=h_n, h_n2=h_n, n_association=n_association)
+            # config.n_association = n_association
+            # config.left_dbn.topology = [shape ** 2, h_n, h_n]
+            # config.left_dbn.rbm_configs[0].h_n = h_n
+            # config.left_dbn.rbm_configs[1].v_n = h_n
+            # config.left_dbn.rbm_configs[1].h_n = h_n
+            configs.append(config)
+
+    for epoch in xrange(20):
+        for i, config in enumerate(configs):
+            brain_c = associative_dbn.AssociativeDBN(config,
+                                                     data_manager=StorageManager('{}/{}'.format(project_name, i),
+                                                                                 log=False))
+            brain_c.train(tr_x, p_tr_x,
+                          cache=[[True, True, True], [True, True, True], True],
+                          train_further=[[True, True, True], [True, True, True], True])
+
+            # Reconstruction
+            recon_p_tr_x = brain_c.dbn_right.reconstruct(p_tr_x, k=10, plot_every=1, plot_n=100,
+                                                         img_name='{}_right_{}'.format(epoch, shape))
+            recon = brain_c.recall(te_x, associate_steps=5, recall_steps=0,
+                                   img_name='adbn_child_recon_{}'.format(shape))
+
+            labels, proportion = evaluate(p_tr_y, recon, recon_p_tr_x)
+            # write_evaluation(f, labels, proportion)
+
+            errors = {}
+            y_types = ['active_h', 'v_noisy_active_h', 'zero', 'binomial0.1']
+            for y_type in y_types:
+                errors[y_type] = {}
+                for emo in xrange(len(kanade_loader.emotion_dict)):
+                    errors[y_type][emo] = [proportion[i]]
+
+            for j in xrange(10):
+                brain_c.fine_tune(tr_x, p_tr_x, epochs=1)
+                recon_p_tr_x = brain_c.dbn_right.reconstruct(p_tr_x, k=10, plot_every=1, plot_n=100,
+                                                             img_name='{}_right_ft{}_{}'.format(epoch, j, shape))
+
+                for y_type in y_types:
+                    # Reconstruction
+
+                    recon = brain_c.recall(te_x,
+                                           associate_steps=5, recall_steps=0,
+                                           img_name='{}_{}_ft{}_{}'.format(y_type, epoch, j, shape),
+                                           y_type=y_type)
+
+                    labels, proportion = evaluate(p_tr_y, recon, recon_p_tr_x)
+
+                    for i, l in enumerate(labels):
+                        errors[y_type][i].append(proportion[i])
+
+            print errors
+            f.write('{}\n'.format(brain_c))
+            for y_type in y_types:
+                f.write('{}\n'.format(y_type))
+                for emo in errors[y_type]:
+                    f.write('{}:'.format(kanade_loader.emotion_rev_dict[emo+1]))
+                    for v in errors[y_type][emo]:
+                        f.write('%.2f,' % v)
+                    f.write('\n')
+            f.write('\n')
+
     f.write('\n')
     f.close()
     data_manager.finish()
@@ -156,7 +259,7 @@ def get_brain_model_RBM(shape):
     return brain_c
 
 
-def get_brain_model_AssociativeDBN(shape, data_manager):
+def get_brain_model_AssociativeDBN(shape, h_n=14, h_n2=15, n_association=100):
     # initialise AssociativeDBN
     config = associative_dbn.DefaultADBNConfig()
 
@@ -167,54 +270,77 @@ def get_brain_model_AssociativeDBN(shape, data_manager):
                            weight_decay=0.0001,
                            sparsity_constraint=True,
                            sparsity_decay=0.9,
-                           sparsity_cost=100,
-                           sparsity_target=0.01,
+                           sparsity_cost=0.01,
+                           sparsity_target=0.1,
+                           dropout=True,
+                           dropout_rate=0.5,
                            batch_size=10,
-                           epochs=10)
+                           epochs=5)
 
-    rest_tr = TrainParam(learning_rate=0.001,
-                         momentum_type=CLASSICAL,
-                         momentum=0.5,
-                         weight_decay=0.0001,
-                         epochs=10,
-                         batch_size=10)
-
-    h_n = 250
     bottom_logger = ProgressLogger(img_shape=(shape, shape))
     bottom_rbm = RBMConfig(v_unit=rbm_units.GaussianVisibleUnit,
                            v_n=shape ** 2,
                            h_n=h_n,
                            progress_logger=bottom_logger,
                            train_params=bottom_tr)
+    h_n_r = 250
+    bottom_rbm_r = RBMConfig(v_unit=rbm_units.GaussianVisibleUnit,
+                             v_n=shape ** 2,
+                             h_n=h_n_r,
+                             progress_logger=bottom_logger,
+                             train_params=bottom_tr)
+
+    # Layer 2
+    rest_tr = TrainParam(learning_rate=0.0001,
+                         momentum_type=CLASSICAL,
+                         momentum=0.5,
+                         weight_decay=0.0001,
+                         sparsity_constraint=True,
+                         sparsity_target=0.1,
+                         sparsity_cost=0.1,
+                         sparsity_decay=0.9,
+                         dropout=True,
+                         dropout_rate=0.5,
+                         batch_size=10,
+                         epochs=5)
+
     rest_logger = ProgressLogger()
-    rest_rbm = RBMConfig(v_n=250,
-                         h_n=250,
+    rest_rbm = RBMConfig(v_n=h_n,
+                         h_n=h_n2,
                          progress_logger=rest_logger,
                          train_params=rest_tr)
 
-    config.left_dbn.rbm_configs = [bottom_rbm, rest_rbm]
-    config.right_dbn.rbm_configs = [bottom_rbm, rest_rbm]
-    config.left_dbn.topology = [shape ** 2, h_n, 250]
-    config.right_dbn.topology = [shape ** 2, h_n, 250]
+    h_n_r2 = 250
+    rest_rbm_r = RBMConfig(v_n=h_n,
+                           h_n=h_n_r2,
+                           progress_logger=rest_logger,
+                           train_params=rest_tr)
 
-    top_tr = TrainParam(learning_rate=0.001,
+
+    # DBN Configs
+    config.left_dbn.rbm_configs = [bottom_rbm, rest_rbm]
+    config.right_dbn.rbm_configs = [bottom_rbm_r, rest_rbm_r]
+    config.left_dbn.topology = [shape ** 2, h_n, h_n2]
+    config.right_dbn.topology = [shape ** 2, h_n_r, h_n_r2]
+    config.reuse_dbn = False
+
+    # Association Layer
+    top_tr = TrainParam(learning_rate=0.0001,
                         momentum_type=NESTEROV,
                         momentum=0.5,
                         weight_decay=0.0001,
-                        sparsity_constraint=True,
-                        sparsity_target=0.01,
+                        sparsity_constraint=False,
+                        sparsity_target=0.1,
                         sparsity_decay=0.9,
-                        sparsity_cost=1,
+                        sparsity_cost=0.01,
                         batch_size=10,
-                        epochs=10
-                        )
+                        epochs=10)
 
     config.top_rbm.train_params = top_tr
-    config.n_association = 1000
-    config.reuse_dbn = False
-    adbn = associative_dbn.AssociativeDBN(config=config, data_manager=data_manager)
+    config.n_association = n_association
+
     print '... initialised associative DBN'
-    return adbn
+    return config
 
 
 def get_brain_model_DBN(shape, data_manager):
@@ -352,12 +478,14 @@ if __name__ == '__main__':
                          'sadness': {'happy': 0.3, 'anger': 0.5, 'sadness': 0.2},
                          })
 
-    plot_result('data/remote/Experiment7.txt', secure_mapping, architectures=['DBN','ADBN'])
-    plot_result('data/remote/Experiment7_50.txt', secure_mapping, architectures=['DBN','ADBN'])
-    plot_result('data/remote/Experiment8.txt', ambivalent_mapping, architectures=['DBN','ADBN'])
-    plot_result('data/remote/Experiment8_50.txt', ambivalent_mapping, architectures=['DBN','ADBN'])
-    plot_result('data/remote/Experiment9.txt', avoidant_mapping, architectures=['DBN','ADBN'])
-    plot_result('data/remote/Experiment9_50.txt', avoidant_mapping, architectures=['DBN','ADBN'])
+    experiment_adbn('ExperimentADBN', mapping=secure_mapping, shape=25)
+
+    # plot_result('data/remote/Experiment7.txt', secure_mapping, architectures=['DBN', 'ADBN'])
+    # plot_result('data/remote/Experiment7_50.txt', secure_mapping, architectures=['DBN', 'ADBN'])
+    # plot_result('data/remote/Experiment8.txt', ambivalent_mapping, architectures=['DBN', 'ADBN'])
+    # plot_result('data/remote/Experiment8_50.txt', ambivalent_mapping, architectures=['DBN', 'ADBN'])
+    # plot_result('data/remote/Experiment9.txt', avoidant_mapping, architectures=['DBN', 'ADBN'])
+    # plot_result('data/remote/Experiment9_50.txt', avoidant_mapping, architectures=['DBN', 'ADBN'])
 
     def experiment_child(proj_name, mapping, shape):
         attempt = 10
@@ -368,55 +496,11 @@ if __name__ == '__main__':
             experimentChild(proj_name, mapping, shape, 'adbn')
             # experimentChild('Experiment4', mapping, 25, 'adbn')
 
-    # experiment_child('Experiment7', secure_mapping, 25)
-    # experiment_child('Experiment7_50', secure_mapping, 50)
-    # experiment_child('Experiment8', ambivalent_mapping, 25)
-    # experiment_child('Experiment8_50', ambivalent_mapping, 50)
-    # experiment_child('Experiment9', avoidant_mapping, 25)
-    # experiment_child('Experiment9_50', avoidant_mapping, 50)
+            # experiment_child('Experiment7', secure_mapping, 25)
+            # experiment_child('Experiment7_50', secure_mapping, 50)
+            # experiment_child('Experiment8', ambivalent_mapping, 25)
+            # experiment_child('Experiment8_50', ambivalent_mapping, 50)
+            # experiment_child('Experiment9', avoidant_mapping, 25)
+            # experiment_child('Experiment9_50', avoidant_mapping, 50)
 
-    # plot_result('data/Experiment4_50/Experiment4_50.txt', mapping)
-
-    attempt = 0
-    #
-    for i in xrange(0, attempt):
-        # experimentChild('Experiment5', mapping, 25, 'rbm')
-        experimentChild('Experiment8', ambivalent_mapping, 25, 'dbn')
-        experimentChild('Experiment8', ambivalent_mapping, 25, 'adbn')
-        # experimentChild('Experiment5', mapping, 25, 'adbn')
-
-    #
-    # plot_result('data/Experiment2/Experiment2.txt', mapping)
-    # plot_result('data/Experiment2_50/Experiment2_50.txt',mapping)
-    # plot_result('data/remote/Kanade/Experiment2/Experiment2.txt', mapping)
-    # plot_result('data/remote/Kanade/Experiment2_50/Experiment2_50.txt', mapping)
-
-
-
-    for i in xrange(0, attempt):
-        # experimentChild('Experiment6', mapping, 25, 'rbm')
-        experimentChild('Experiment9', avoidant_mapping, 25, 'dbn')
-        experimentChild('Experiment9', avoidant_mapping, 25, 'adbn')
-        # experimentChild('Experiment6', mapping, 25, 'adbn')
-
-    for i in xrange(0, attempt):
-        # experimentChild('Experiment4_50', mapping, 50, 'rbm')
-        experimentChild('Experiment7_50', secure_mapping, 50, 'dbn')
-        experimentChild('Experiment7_50', secure_mapping, 50, 'adbn')
-        # experimentChild('Experiment4_50', mapping, 50, 'adbn')
-
-    for i in xrange(0, attempt):
-        # experimentChild('Experiment5_50', mapping, 50, 'rbm')
-        experimentChild('Experiment8_50', ambivalent_mapping, 50, 'adbn')
-        # experimentChild('Experiment5_50', mapping, 50, 'adbn')
-
-    for i in xrange(0, attempt):
-        # experimentChild('Experiment6_50', mapping, 50, 'rbm')
-        experimentChild('Experiment9_50', avoidant_mapping, 50, 'dbn')
-        # experimentChild('Experiment6_50', mapping, 50, 'adbn')
-
-        # plot_result('data/Experiment3/Experiment3.txt',mapping)
-        # plot_result('data/Experiment3_50/Experiment3_50.txt',mapping)
-        # plot_result('data/remote/Kanade/Experiment6/Experiment6.txt', mapping)
-        # plot_result('data/remote/Kanade/Experiment3/Experiment3.txt', mapping)
 

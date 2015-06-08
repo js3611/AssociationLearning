@@ -107,6 +107,9 @@ class AssociativeDBN(object):
         print '... initialising association layer'
         self.association_layer = RBM(config=config.top_rbm)
 
+    def __str__(self):
+        return 'l{}_r{}_t{}'.format(self.dbn_left, self.dbn_right, self.association_layer.h_n)
+
     def train(self, x1, x2, cache=False, train_further=False, optimise=False):
         cache_left = cache_right = cache_top = cache if type(cache) is bool else False
         train_further_left = train_further_right = train_further_top = train_further if type(train_further) is bool else False
@@ -183,7 +186,8 @@ class AssociativeDBN(object):
         :return:
         '''
         self.data_manager.move_to('reconstruct')
-        print '... moved to {}'.format(os.getcwd())
+        if self.data_manager.log:
+            print '... moved to {}'.format(os.getcwd())
 
         left = self.dbn_left
         top = self.association_layer
@@ -325,8 +329,8 @@ class AssociativeDBN(object):
     def fine_tune(self, data_r, data_l, epochs=10, batch_size=10):
 
         if not self.dbn_right.untied:
-            self.dbn_right.untie_weights(include_top=True)
             self.dbn_left.untie_weights(include_top=True)
+            self.dbn_right.untie_weights(include_top=True)
 
         mini_batches = data_r.get_value(borrow=True).shape[0] / batch_size
 

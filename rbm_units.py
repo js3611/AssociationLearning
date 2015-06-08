@@ -26,12 +26,20 @@ class RBMUnit(object):
     def energy(self, v, v_bias):
         return - T.dot(v, v_bias)
 
+    def __str__(self):
+        return 'SB'
+
+    def __repr__(self):
+        return "SB"
 
 class BinaryUnit(RBMUnit):
 
     def activate(self, x):
         p_activate = log_sig(x)
         return p_activate
+
+    def __str__(self):
+        return 'B'
 
 
 class GaussianVisibleUnit(RBMUnit):
@@ -51,6 +59,8 @@ class GaussianVisibleUnit(RBMUnit):
         # return (x - T.mean(x, axis=0)) / T.std(x, axis=0)  # normalise
         return x
 
+    def __str__(self):
+        return 'G'
 
 
 class ReLUnit(RBMUnit):
@@ -69,6 +79,10 @@ class ReLUnit(RBMUnit):
     def activate(self, x):
         return T.maximum(0, x)
 
+    def __str__(self):
+        return 'R'
+
+
 class NReLUnit(ReLUnit):
     ''' Noisy Rectified Linear Unit
 
@@ -78,3 +92,6 @@ class NReLUnit(ReLUnit):
     def activate(self, x):
         return T.maximum(0, x + self.rand.normal(size=x.shape, avg=0., std=1., dtype=theano.config.floatX))
         # T.std(x, axis=0)
+
+    def __str__(self):
+        return 'NR'

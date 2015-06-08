@@ -76,10 +76,10 @@ class DBN(object):
         if not theano_rng:
             theano_rng = RandomStreams(numpy_rng.randint(2 ** 30))
 
-        if not (type(tr) is list):
+        if type(tr) is not list:
             tr = [tr for i in xrange(self.n_layers)]
 
-        if not (type(rbm_configs) is list):
+        if type(rbm_configs) is not list:
             rbm_configs = [rbm_configs for i in xrange(self.n_layers)]
 
 
@@ -111,7 +111,6 @@ class DBN(object):
             rbm_config.v_n = topology[i]
             rbm_config.h_n = topology[i + 1]
             # rbm_config.training_parameters = tr[i]  # Ensure it has parameters
-
             rbm_layer = RBM(rbm_config, W=sigmoid_layer.W, h_bias=sigmoid_layer.b)
             self.rbm_layers.append(rbm_layer)
 
@@ -128,8 +127,8 @@ class DBN(object):
         self.errors = self.logLayer.errors(self.y)
 
     def __str__(self):
-        return 'dbn_l' + str(self.n_layers) + \
-               '_' + '_'.join([str(i) for i in self.topology])
+        return 'dbn_' + str(self.n_layers) + \
+               'lys_' + '_'.join([str(i) for i in self.topology])
 
     def pretraining_functions(self, train_set_x, batch_size, k):
         # index to a [mini]batch
@@ -397,9 +396,8 @@ class DBN(object):
     def untie_weights(self, include_top=False):
         # Untie all the weights except for the top layer
         self.untied = True
-        i = 0
         layers = self.rbm_layers if include_top else self.rbm_layers[:-1]
-        for rbm in layers:
+        for i, rbm in enumerate(layers):
             W = rbm.W.get_value(borrow=False)
             h_bias = rbm.h_bias.get_value(borrow=False)
             v_bias = rbm.v_bias.get_value(borrow=False)
@@ -411,7 +409,6 @@ class DBN(object):
             h2 = theano.shared(copy.deepcopy(h_bias), name=('generative_hbias_%d' % i))
             self.inference_layers.append(RBM(config=rbm.config, W=W1, h_bias=h1, v_bias=v1))
             self.generative_layers.append(RBM(config=rbm.config, W=W2, h_bias=h2, v_bias=v2))
-            i += 1
 
     def save_untied_weights(self, name):
         manager = self.data_manager
@@ -463,7 +460,7 @@ class DBN(object):
         layers = self.generative_layers
         sleep_probs = []
         sleep_states = [pen_in]
-        for rbm in layers:
+        for rbm in reversed(layers):
             _, sleep_p, sleep_s = rbm.sample_v_given_h(sleep_states[-1])
             sleep_probs.append(sleep_p)
             sleep_states.append(sleep_s)
@@ -489,27 +486,29 @@ class DBN(object):
         pwake_states = []  # [vis_prob, hid_prob, ... ]
         s = sleep_states[:-1]
         s.reverse()
-        rev_sleep_in = [sleep_probs[-1]] + s
+        rev_sleep_in = [sleep_probs[-1]] + s # [sl_v_prob, sl_hid_state, sl_pen_state]
         for rbm, sleep_in in zip(self.inference_layers, rev_sleep_in):
             _, p = rbm.prop_up(sleep_in)
             psleep_states.append(p)
-        for rbm, wake_in in zip(reversed(self.generative_layers), wake_states):
+        for rbm, wake_in in zip(reversed(self.generative_layers), reversed(wake_states)):
             _, p = rbm.prop_down(wake_in)
             pwake_states.append(p)
+        # wake_states.reverse()
+        pwake_states.reverse()
         wake_states = [data] + wake_states  # [data, hid_state, pen_state, ...]
         sleep_states = rev_sleep_in  # [vis_prob, hid_state, pen_state, ...]
         return psleep_states, pwake_states, sleep_states, wake_states
 
     def update_generative_weights(self, batch_size, pwake_states, wake_states, updates):
         # UPDATES TO GENERATIVE PARAMETERS
-        for i in xrange(0, len(self.generative_layers)):
+        for i in xrange(len(self.generative_layers)):
             rbm = self.generative_layers[i]
             r = rbm.train_parameters.learning_rate
             wake_state = wake_states[i]
             pwake_state = pwake_states[i]
             statistics_diff = wake_state - pwake_state
             updates[rbm.W] = rbm.W + r * T.dot(wake_states[i + 1].T, statistics_diff).T / batch_size
-            updates[rbm.v_bias] = rbm.v_bias + r * T.mean((statistics_diff), axis=0)
+            updates[rbm.v_bias] = rbm.v_bias + r * T.mean(statistics_diff, axis=0)
 
         return updates
 
@@ -528,8 +527,6 @@ class DBN(object):
     def get_fine_tune_updates(self, data, batch_size):
         '''
         Fine tunes DBN. Inference weights and Generative weights will be untied
-        :param x:
-        :return:
         '''
 
         # WAKE-PHASE [hid_prob, pen_prob, ...], [hid_state, pen-state,...]
@@ -558,7 +555,6 @@ class DBN(object):
 
         if not self.untied:
             self.untie_weights()
-            self.untied = True
 
         epochs = 5
         batch_size = 10
