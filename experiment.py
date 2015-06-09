@@ -12,9 +12,8 @@ from rbm_units import *
 import DBN
 import associative_dbn
 from datastorage import StorageManager
-from scipy.stats import itemfreq
 import kanade_loader
-import matplotlib.pyplot as plt
+import sys
 
 
 def evaluate(p_tr_y, recon, recon_p_tr_x):
@@ -404,61 +403,6 @@ def get_brain_model_DBN(shape, data_manager):
     return dbn
 
 
-def plot_result(file_name, mapping, architectures=['RBN', 'DBN', 'ADBN']):
-    f = open(file_name, 'r')
-    emotions = set(kanade_loader.emotion_dict.keys())
-    graphs = {'anger': [], 'happy': [], 'sadness': []}
-
-    for line in f.readlines():
-        splitted = ''.join(line.split()).split(':')
-        if splitted[0] in graphs.keys():
-            lab, val = splitted[0], splitted[1]
-            graphs[lab].append(val)
-
-    print map(len, graphs.values())
-    print graphs
-    f.close()
-
-    # RBM
-    anger = graphs['anger']
-    happy = graphs['happy']
-    sadness = graphs['sadness']
-    child_reaction = mapping['sadness']
-    plt.figure(1)
-    len_arc = len(architectures)
-    attempts = np.min(map(len, graphs.values())) / len_arc
-    print attempts
-
-    for i in xrange(0, len_arc):
-        plt.subplot(100 + len_arc * 10 + i + 1)
-        plt.title(architectures[i])
-
-        plt.plot(np.arange(0, attempts), np.repeat(child_reaction['anger'], attempts), 'r--')
-        plt.plot(np.arange(0, attempts), np.repeat(child_reaction['sadness'], attempts), 'b--')
-        plt.plot(np.arange(0, attempts), np.repeat(child_reaction['happy'], attempts), 'g--')
-
-        plt.plot(np.arange(0, attempts), anger[i::len_arc], 'r', )
-        plt.plot(np.arange(0, attempts), sadness[i::len_arc], 'b')
-        plt.plot(np.arange(0, attempts), happy[i::len_arc], 'g')
-        plt.legend()
-
-    # plt.title(architectures[0])
-    #
-    # plt.plot(np.arange(0, attempts), np.repeat(child_reaction['anger'], attempts), 'r--')
-    # plt.plot(np.arange(0, attempts), np.repeat(child_reaction['sadness'], attempts), 'b--')
-    # plt.plot(np.arange(0, attempts), np.repeat(child_reaction['happy'], attempts), 'g--')
-    #
-    # plt.plot(np.arange(0, attempts), anger, 'r', label='anger')
-    # plt.plot(np.arange(0, attempts), sadness, 'b', label='sadness')
-    # plt.plot(np.arange(0, attempts), happy, 'g', label='happy')
-    # plt.legend()
-
-    plt.savefig('.'.join([file_name.split('.')[0], 'png']))
-    plt.close()
-
-# plt.show()
-
-
 if __name__ == '__main__':
 
     print 'Experiment 1: Interaction between happy/sad children and Secure Parent'
@@ -478,14 +422,18 @@ if __name__ == '__main__':
                          'sadness': {'happy': 0.3, 'anger': 0.5, 'sadness': 0.2},
                          })
 
-    experiment_adbn('ExperimentADBN_avoi', mapping=avoidant_mapping, shape=25)
+    if sys.argv > 1:
+        code = int(sys.argv[1])
+        if code == 2:
+            print 'Ambivalent'
+            experiment_adbn('ExperimentADBN_ambi', mapping=ambivalent_mapping, shape=25)
+        elif code == 3:
+            print 'Avoidant'
+            experiment_adbn('ExperimentADBN_avoi', mapping=avoidant_mapping, shape=25)
+        else:
+            print 'Secure'
+            experiment_adbn('ExperimentADBN', mapping=secure_mapping, shape=25)
 
-    # plot_result('data/remote/Experiment7.txt', secure_mapping, architectures=['DBN', 'ADBN'])
-    # plot_result('data/remote/Experiment7_50.txt', secure_mapping, architectures=['DBN', 'ADBN'])
-    # plot_result('data/remote/Experiment8.txt', ambivalent_mapping, architectures=['DBN', 'ADBN'])
-    # plot_result('data/remote/Experiment8_50.txt', ambivalent_mapping, architectures=['DBN', 'ADBN'])
-    # plot_result('data/remote/Experiment9.txt', avoidant_mapping, architectures=['DBN', 'ADBN'])
-    # plot_result('data/remote/Experiment9_50.txt', avoidant_mapping, architectures=['DBN', 'ADBN'])
 
     def experiment_child(proj_name, mapping, shape):
         attempt = 10
