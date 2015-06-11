@@ -78,8 +78,8 @@ def associate_data2label(cache=False):
 def associate_data2data(cache=False, train_further=True):
     print "Testing Associative RBM which tries to learn even-oddness of numbers"
     # project set-up
-    data_manager = store.StorageManager('EvenOdd', log=True)
-    train_n = 1000
+    data_manager = store.StorageManager('EvenOddP', log=True)
+    train_n = 10000
     test_n = 1000
     # Load mnist hand digits, class label is already set to binary
     dataset = m_loader.load_digits(n=[train_n, 100, test_n],
@@ -130,8 +130,8 @@ def associate_data2data(cache=False, train_further=True):
 
     # Hinton way
     # 10 classes that are equi-probable: p(x) = 0.1
-    n_hidden = min(1000, int((- np.log2(0.1)) * train_n / 10))
-    # n_hidden = 100
+    # n_hidden = min(1000, int((- np.log2(0.1)) * train_n / 10))
+    n_hidden = 332
     print "number of hidden nodes: %d" % n_hidden
 
     config = RBMConfig(v_n=n_visible,
@@ -151,7 +151,7 @@ def associate_data2data(cache=False, train_further=True):
         print "... loaded precomputed rbm"
 
     errors = []
-    for i in xrange(0, 5):
+    for i in xrange(0, 10):
         # Train RBM
         if not loaded or train_further:
             rbm.train(tr_concat_x)
@@ -160,13 +160,13 @@ def associate_data2data(cache=False, train_further=True):
         data_manager.persist(rbm)
 
         # Reconstruct using RBM
-        y = rbm.np_rand.binomial(1, 0.0, size=(test_n, 784)).astype(t_float_x)
+        y = theano.shared(rbm.np_rand.binomial(1, 0.0, size=(test_n, 784)).astype(t_float_x))
 
         recon_x = rbm.mean_field_inference_opt(te_x,
                                                y,
                                                # te_x01,
                                                sample=False,
-                                               k=10,
+                                               k=5,
                                                img_name="te_recon_%d" % i)
 
 
@@ -195,9 +195,7 @@ def associate_data2data(cache=False, train_further=True):
 
         clf = SimpleClassifier('logistic', te_x.get_value(), te_y.eval())
         orig = te_y.eval()
-        pred = clf.classify(recon_x)
-
-        error = np.sum(orig != pred) * 1. / len(orig)
+        error = clf.get_score(recon_x, orig)
         print error
         errors.append(error)
 
@@ -738,9 +736,9 @@ def associate_data2dataADBN_Finetune(cache=False, train_further=False):
 
 if __name__ == '__main__':
     # associate_data2label()
-    # associate_data2data(True, True)
+    associate_data2data(True, True)
     # associate_data2dataADBN(True, True)
-    associate_data2dataADBN_Finetune(True, True)
+    # associate_data2dataADBN_Finetune(True, True)
     # associate_data2dataJDBN(True, False)
     # associate_data2dataDBN(False)
 
