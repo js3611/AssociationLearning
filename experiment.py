@@ -150,7 +150,9 @@ def experiment_adbn(project_name, mapping, shape):
     # Get dataset
     dataset = kanade_loader.load_kanade(set_name=dataset_name,
                                         emotions=mapping.keys(),
-                                        pre=preprocesssing)
+                                        pre=preprocesssing,
+                                        # n=100
+                                        )
     tr, vl, te = dataset
     tr_x, tr_y = tr
     te_x, te_y = te
@@ -162,9 +164,12 @@ def experiment_adbn(project_name, mapping, shape):
                                                  set_name=dataset_name)
 
     configs = []
-    for h_n in [100, 250, 500, 1000]:
-        for n_association in [100, 250, 500, 1000]:
-            config = get_brain_model_AssociativeDBN(shape, h_n=h_n, h_n2=h_n, n_association=n_association)
+    for lr1 in [0.001, 0.0005, 0.0001, 0.005]:
+        for n_association in [100, 250, 500]:
+            config = get_brain_model_AssociativeDBN(shape, n_association=n_association)
+            config.left_dbn.rbm_configs[1].train_params.learning_rate = lr1
+            config.right_dbn.rbm_configs[1].train_params.learning_rate = lr1
+            config.top_rbm.train_params.learning_rate = lr1
             # config.n_association = n_association
             # config.left_dbn.topology = [shape ** 2, h_n, h_n]
             # config.left_dbn.rbm_configs[0].h_n = h_n
@@ -172,7 +177,7 @@ def experiment_adbn(project_name, mapping, shape):
             # config.left_dbn.rbm_configs[1].h_n = h_n
             configs.append(config)
 
-    for epoch in xrange(20):
+    for epoch in xrange(10):
         for i, config in enumerate(configs):
             brain_c = associative_dbn.AssociativeDBN(config,
                                                      data_manager=StorageManager('{}/{}'.format(project_name, i),
@@ -197,7 +202,7 @@ def experiment_adbn(project_name, mapping, shape):
                 for emo in xrange(len(kanade_loader.emotion_dict)):
                     errors[y_type][emo] = [proportion[emo]]
 
-            for j in xrange(10):
+            for j in xrange(3):
                 brain_c.fine_tune(tr_x, p_tr_x, epochs=1)
                 recon_p_tr_x = brain_c.dbn_right.reconstruct(p_tr_x, k=10, plot_every=1, plot_n=100,
                                                              img_name='{}_right_ft{}_{}'.format(epoch, j, shape))
@@ -258,7 +263,7 @@ def get_brain_model_RBM(shape):
     return brain_c
 
 
-def get_brain_model_AssociativeDBN(shape, h_n=14, h_n2=15, n_association=100):
+def get_brain_model_AssociativeDBN(shape, h_n=250, h_n2=250, n_association=100):
     # initialise AssociativeDBN
     config = associative_dbn.DefaultADBNConfig()
 
@@ -309,7 +314,7 @@ def get_brain_model_AssociativeDBN(shape, h_n=14, h_n2=15, n_association=100):
                          progress_logger=rest_logger,
                          train_params=rest_tr)
 
-    h_n_r2 = 250
+    h_n_r2 = 100
     rest_rbm_r = RBMConfig(v_n=h_n,
                            h_n=h_n_r2,
                            progress_logger=rest_logger,
@@ -328,12 +333,14 @@ def get_brain_model_AssociativeDBN(shape, h_n=14, h_n2=15, n_association=100):
                         momentum_type=NESTEROV,
                         momentum=0.5,
                         weight_decay=0.0001,
-                        sparsity_constraint=False,
+                        sparsity_constraint=True,
                         sparsity_target=0.1,
                         sparsity_decay=0.9,
                         sparsity_cost=0.01,
+                        dropout=True,
+                        dropout_rate=0.5,
                         batch_size=10,
-                        epochs=10)
+                        epochs=5)
 
     config.top_rbm.train_params = top_tr
     config.n_association = n_association
@@ -422,17 +429,19 @@ if __name__ == '__main__':
                          'sadness': {'happy': 0.3, 'anger': 0.5, 'sadness': 0.2},
                          })
 
-    if sys.argv > 1:
+    if len(sys.argv) > 1:
         code = int(sys.argv[1])
         if code == 2:
             print 'Ambivalent'
-            experiment_adbn('ExperimentADBN_ambi', mapping=ambivalent_mapping, shape=25)
+            experiment_adbn('ExperimentADBN2_ambi', mapping=ambivalent_mapping, shape=25)
         elif code == 3:
             print 'Avoidant'
-            experiment_adbn('ExperimentADBN_avoi', mapping=avoidant_mapping, shape=25)
+            experiment_adbn('ExperimentADBN2_avoi', mapping=avoidant_mapping, shape=25)
         else:
             print 'Secure'
-            experiment_adbn('ExperimentADBN', mapping=secure_mapping, shape=25)
+            experiment_adbn('ExperimentADBN2', mapping=secure_mapping, shape=25)
+    else:
+        experiment_adbn('ExperimentADBN2', mapping=secure_mapping, shape=25)
 
 
     def experiment_child(proj_name, mapping, shape):
