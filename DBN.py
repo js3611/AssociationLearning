@@ -550,14 +550,12 @@ class DBN(object):
 
         return updates
 
-    def fine_tune(self, data):
+    def fine_tune(self, data, epochs=5, batch_size=10):
         print 'fine tuning ...'
 
         if not self.untied:
             self.untie_weights()
 
-        epochs = 5
-        batch_size = 10
         mini_batches = data.get_value(borrow=True).shape[0] / batch_size
 
         for epoch in xrange(epochs):
