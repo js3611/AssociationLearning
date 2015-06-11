@@ -53,7 +53,6 @@ def experimentChild(project_name, mapping, shape, model):
     f.write('\n')
 
     dataset_name = 'sharp_equi{}_{}'.format(shape, shape)
-
     preprocesssing = {'scale': True}
 
     # Get dataset
@@ -131,6 +130,107 @@ def experimentChild(project_name, mapping, shape, model):
 
     labels, proportion = evaluate(p_tr_y, recon, recon_p_tr_x)
     write_evaluation(f, labels, proportion)
+    f.write('\n')
+    f.close()
+    data_manager.finish()
+
+
+def experiment_dbn(project_name, mapping, shape):
+    # Project set up
+    data_manager = StorageManager(project_name, log=True)
+    f = open(project_name + '.txt', mode='a')
+    f.write(project_name)
+    f.write('%d' % shape)
+    f.write('\n')
+
+    dataset_name = 'sharp_equi{}_{}'.format(shape, shape)
+    preprocesssing = {'scale': True}
+
+    # Get dataset
+    happy_set = kanade_loader.load_kanade(set_name=dataset_name,
+                                          emotions=mapping.keys(),
+                                          pre=preprocesssing,
+                                          n=100
+                                          )
+
+    h_tr, h_vl, h_te = happy_set
+    h_tr_x, h_tr_y = h_tr
+    h_vl_x, h_vl_y = h_vl
+    h_te_x, h_te_y = h_te
+
+    # Sample Parent emotion
+    p_tr_x, p_tr_y = kanade_loader.sample_image2(h_tr_y,
+                                                 mapping=mapping,
+                                                 pre=preprocesssing,
+                                                 set_name=dataset_name)
+
+    concat1 = theano.function([], T.concatenate([h_tr_x, p_tr_x], axis=1))()
+    tr_x = theano.shared(concat1, name='tr_x')
+
+    # initial_y = np.zeros(h_te_x.get_value(True).shape)
+    initial_y = np.random.normal(0, 1, h_te_x.get_value(True).shape)
+    initial_y = theano.shared(initial_y, name='initial_y')
+    te_x = theano.shared(theano.function([], T.concatenate([h_te_x, initial_y], axis=1))().astype(t_float_x))
+
+    configs = []
+    jj = 0
+    for lr1 in [0.0001]:#, 0.001, 0.01]:
+        for h_n1 in [500]:
+            for h_n2 in [100, 250, 500]:
+                for h_n3 in [100, 250, 500]:
+                    config = get_brain_model_DBN(shape, data_manager=StorageManager('{}/{}'.format(project_name, jj), log=False))
+                    config.rbm_configs[0].h_n = h_n1
+                    config.rbm_configs[1].v_n = h_n1
+                    config.rbm_configs[1].h_n = h_n2
+                    config.rbm_configs[2].v_n = h_n2
+                    config.rbm_configs[2].h_n = h_n3
+                    config.topology = [25 * 25 * 2, h_n1, h_n2, h_n3]
+                    config.rbm_configs[1].train_params.learning_rate = lr1
+                    config.rbm_configs[2].train_params.learning_rate = lr1
+                    configs.append(config)
+                    jj += 1
+
+
+    for epoch in xrange(10):
+        for i, config in enumerate(configs):
+            brain_c = DBN.DBN(config)
+            brain_c.pretrain(tr_x, cache=[True, True, True], train_further=[True, True, True])
+
+            recon_pair = brain_c.reconstruct(tr_x, k=1, plot_n=100, img_name='{}_{}_recon_{}'.format(i, epoch, shape))
+            recon_p_tr_x = recon_pair[:, (shape ** 2):]
+
+            recon_pair = brain_c.reconstruct(te_x, k=1, plot_n=100, img_name='{}_{}_single_recon_{}'.format(i, epoch, shape))
+            recon = recon_pair[:, (shape ** 2):]
+
+
+            labels, proportion = evaluate(p_tr_y, recon, recon_p_tr_x)
+            # write_evaluation(f, labels, proportion)
+
+            errors = {}
+            for emo in xrange(len(kanade_loader.emotion_dict)):
+                errors[emo] = [proportion[emo]]
+
+            for j in xrange(3):
+                brain_c.fine_tune(tr_x, epochs=1)
+                recon_pair = brain_c.reconstruct(tr_x, k=1, plot_n=100, img_name='{}_{}_recon_ft_{}'.format(i, epoch, shape))
+                recon_p_tr_x = recon_pair[:, (shape ** 2):]
+
+                recon_pair = brain_c.reconstruct(te_x, k=1, plot_n=100, img_name='{}_{}_single_recon_ft_{}'.format(i, epoch, shape))
+                recon = recon_pair[:, (shape ** 2):]
+                labels, proportion = evaluate(p_tr_y, recon, recon_p_tr_x)
+
+                for k, l in enumerate(labels):
+                    errors[k].append(proportion[k])
+
+            print errors
+            f.write('{}, {}\n'.format(i, brain_c))
+            for emo in errors:
+                f.write('{}:'.format(kanade_loader.emotion_rev_dict[emo + 1]))
+                for v in errors[emo]:
+                    f.write('%.2f,' % v)
+                f.write('\n')
+            f.write('\n')
+
     f.write('\n')
     f.close()
     data_manager.finish()
@@ -225,7 +325,7 @@ def experiment_adbn(project_name, mapping, shape):
             for y_type in y_types:
                 f.write('{}\n'.format(y_type))
                 for emo in errors[y_type]:
-                    f.write('{}:'.format(kanade_loader.emotion_rev_dict[emo+1]))
+                    f.write('{}:'.format(kanade_loader.emotion_rev_dict[emo + 1]))
                     for v in errors[y_type][emo]:
                         f.write('%.2f,' % v)
                     f.write('\n')
@@ -359,15 +459,19 @@ def get_brain_model_DBN(shape, data_manager):
                          sparsity_decay=0.9,
                          sparsity_cost=10,
                          sparsity_target=0.01,
+                         dropout=True,
+                         dropout_rate=0.5,
                          batch_size=10,
-                         epochs=10)
+                         epochs=5)
 
     rest_tr = TrainParam(learning_rate=0.001,
                          momentum_type=CLASSICAL,
                          momentum=0.5,
                          weight_decay=0.0001,
-                         epochs=10,
-                         batch_size=10)
+                         batch_size=10,
+                         epochs=5,
+                         dropout=True,
+                         dropout_rate=0.5)
 
     top_tr = TrainParam(learning_rate=0.001,
                         momentum_type=NESTEROV,
@@ -378,7 +482,9 @@ def get_brain_model_DBN(shape, data_manager):
                         sparsity_decay=0.9,
                         sparsity_cost=1,
                         batch_size=10,
-                        epochs=10
+                        epochs=5,
+                        dropout=True,
+                        dropout_rate=0.5
                         )
 
     # Layer 1
@@ -404,10 +510,7 @@ def get_brain_model_DBN(shape, data_manager):
                            rbm_configs=rbm_configs,
                            data_manager=data_manager)
 
-    # construct the Deep Belief Network
-    dbn = DBN.DBN(config)
-    print '... initialised DBN'
-    return dbn
+    return config
 
 
 if __name__ == '__main__':
@@ -441,7 +544,9 @@ if __name__ == '__main__':
             print 'Secure'
             experiment_adbn('ExperimentADBN2', mapping=secure_mapping, shape=25)
     else:
-        experiment_adbn('ExperimentADBN2', mapping=secure_mapping, shape=25)
+        experiment_dbn('ExperimentDBN', mapping=secure_mapping, shape=25)
+        # experiment_adbn('ExperimentDBN2_ambi', mapping=ambivalent_mapping, shape=25)
+        # experiment_adbn('ExperimentDBN2_avoi', mapping=avoidant_mapping, shape=25)
 
 
     def experiment_child(proj_name, mapping, shape):
