@@ -173,6 +173,12 @@ def tile_raster_images(X, img_shape, tile_shape, tile_spacing=(0, 0),
         return out_array
 
 
+def get_class_vector(c, n_classes):
+    v = numpy.zeros(10)
+    v[c] = 1
+    return v
+
+
 def isSharedType(x_in):
     type_s = str(type(x_in))
     return any(map(lambda x: x in type_s, ['Tensor', 'cuda', 'Shared']))
