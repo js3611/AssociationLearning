@@ -264,18 +264,19 @@ def experiment_adbn(project_name, mapping, shape):
                                                  set_name=dataset_name)
 
     configs = []
-    for lr1 in [0.001, 0.0005, 0.0001, 0.005]:
-        for n_association in [100, 250, 500]:
-            config = get_brain_model_AssociativeDBN(shape, n_association=n_association)
-            config.left_dbn.rbm_configs[1].train_params.learning_rate = lr1
-            config.right_dbn.rbm_configs[1].train_params.learning_rate = lr1
-            config.top_rbm.train_params.learning_rate = lr1
-            # config.n_association = n_association
-            # config.left_dbn.topology = [shape ** 2, h_n, h_n]
-            # config.left_dbn.rbm_configs[0].h_n = h_n
-            # config.left_dbn.rbm_configs[1].v_n = h_n
-            # config.left_dbn.rbm_configs[1].h_n = h_n
-            configs.append(config)
+    for lr1 in [0.01]:
+        for dropout in [True, False]:
+            for h_n, n_association in zip([500, 250], [500, 250]):
+                config = get_brain_model_AssociativeDBN(shape, h_n=h_n, n_association=n_association,dropout=dropout)
+                # config.left_dbn.rbm_configs[1].train_params.learning_rate = lr1
+                # config.right_dbn.rbm_configs[1].train_params.learning_rate = lr1
+                config.top_rbm.train_params.learning_rate = lr1
+                # config.n_association = n_association
+                # config.left_dbn.topology = [shape ** 2, h_n, h_n]
+                # config.left_dbn.rbm_configs[0].h_n = h_n
+                # config.left_dbn.rbm_configs[1].v_n = h_n
+                # config.left_dbn.rbm_configs[1].h_n = h_n
+                configs.append(config)
 
     for epoch in xrange(10):
         for i, config in enumerate(configs):
@@ -363,7 +364,7 @@ def get_brain_model_RBM(shape):
     return brain_c
 
 
-def get_brain_model_AssociativeDBN(shape, h_n=250, h_n2=250, n_association=100):
+def get_brain_model_AssociativeDBN(shape, h_n=250, h_n2=250, n_association=100,dropout=True):
     # initialise AssociativeDBN
     config = associative_dbn.DefaultADBNConfig()
 
@@ -376,7 +377,7 @@ def get_brain_model_AssociativeDBN(shape, h_n=250, h_n2=250, n_association=100):
                            sparsity_decay=0.9,
                            sparsity_cost=0.01,
                            sparsity_target=0.1,
-                           dropout=True,
+                           dropout=dropout,
                            dropout_rate=0.5,
                            batch_size=10,
                            epochs=5)
@@ -403,7 +404,7 @@ def get_brain_model_AssociativeDBN(shape, h_n=250, h_n2=250, n_association=100):
                          sparsity_target=0.1,
                          sparsity_cost=0.1,
                          sparsity_decay=0.9,
-                         dropout=True,
+                         dropout=dropout,
                          dropout_rate=0.5,
                          batch_size=10,
                          epochs=5)
@@ -422,10 +423,14 @@ def get_brain_model_AssociativeDBN(shape, h_n=250, h_n2=250, n_association=100):
 
 
     # DBN Configs
-    config.left_dbn.rbm_configs = [bottom_rbm, rest_rbm]
-    config.right_dbn.rbm_configs = [bottom_rbm_r, rest_rbm_r]
-    config.left_dbn.topology = [shape ** 2, h_n, h_n2]
-    config.right_dbn.topology = [shape ** 2, h_n_r, h_n_r2]
+    config.left_dbn.rbm_configs = [bottom_rbm]
+    config.right_dbn.rbm_configs = [bottom_rbm_r]
+    config.left_dbn.topology = [shape ** 2, h_n]
+    config.right_dbn.topology = [shape ** 2, h_n_r]
+    # config.left_dbn.rbm_configs = [bottom_rbm, rest_rbm]
+    # config.right_dbn.rbm_configs = [bottom_rbm_r, rest_rbm_r]
+    # config.left_dbn.topology = [shape ** 2, h_n, h_n2]
+    # config.right_dbn.topology = [shape ** 2, h_n_r, h_n_r2]
     config.reuse_dbn = False
 
     # Association Layer
@@ -437,7 +442,7 @@ def get_brain_model_AssociativeDBN(shape, h_n=250, h_n2=250, n_association=100):
                         sparsity_target=0.1,
                         sparsity_decay=0.9,
                         sparsity_cost=0.01,
-                        dropout=True,
+                        dropout=dropout,
                         dropout_rate=0.5,
                         batch_size=10,
                         epochs=5)
@@ -544,7 +549,8 @@ if __name__ == '__main__':
             print 'Secure'
             experiment_adbn('ExperimentADBN2', mapping=secure_mapping, shape=25)
     else:
-        experiment_dbn('ExperimentDBN', mapping=secure_mapping, shape=25)
+        # experiment_dbn('ExperimentDBN1l', mapping=secure_mapping, shape=25)
+        experiment_adbn('ExperimentADBN2l', mapping=secure_mapping, shape=25)
         # experiment_adbn('ExperimentDBN2_ambi', mapping=ambivalent_mapping, shape=25)
         # experiment_adbn('ExperimentDBN2_avoi', mapping=avoidant_mapping, shape=25)
 
