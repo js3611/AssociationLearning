@@ -23,34 +23,36 @@ def associate_data2label(cache=False):
     print "Testing ClassRBM with generative target (i.e. AssociativeRBM with picture-label association)"
 
     # Load mnist hand digits, class label is already set to binary
-    train, valid, test = m_loader.load_digits(n=[500, 100, 100], pre={'label_vector': True})
+    train, valid, test = m_loader.load_digits(n=[50000, 100, 10], pre={'label_vector': True})
     train_x, train_y = train
     test_x, test_y = test
     train_y = T.cast(train_y, dtype=theano.config.floatX)
     test_y = T.cast(test_y, dtype=theano.config.floatX)
 
     # Initialise the RBM and training parameters
-    tr = RBM.TrainParam(learning_rate=0.1,
-                        momentum_type=RBM.CLASSICAL,
-                        momentum=0.5,
-                        weight_decay=0.001,
-                        sparsity_constraint=True,
-                        sparsity_target=0.01,
-                        sparsity_cost=0.5,
-                        sparsity_decay=0.9,
-                        epochs=20)
+    tr = TrainParam(learning_rate=0.01,
+                    momentum_type=CLASSICAL,
+                    momentum=0.5,
+                    weight_decay=0.0001,
+                    sparsity_constraint=True,
+                    sparsity_target=0.1,
+                    sparsity_cost=0.01,
+                    sparsity_decay=0.9,
+                    epochs=5)
+
     n_visible = train_x.get_value().shape[1]
     n_visible2 = 10
-    n_hidden = 500
+    n_hidden = 100
 
-    rbm = RBM.RBM(n_visible,
-                  n_visible2,
-                  n_hidden,
-                  associative=True,
-                  cd_type=RBM.CLASSICAL,
-                  cd_steps=1,
-                  train_parameters=tr,
-                  progress_logger=RBM.ProgressLogger())
+    config = RBMConfig(v_n=n_visible,
+                       v2_n=n_visible2,
+                       h_n=n_hidden,
+                       associative=True,
+                       cd_type=CLASSICAL,
+                       cd_steps=1,
+                       train_params=tr,
+                       progress_logger=ProgressLogger())
+    rbm = RBM(config)
 
     store.move_to('label_test/' + str(rbm))
 
@@ -62,17 +64,18 @@ def associate_data2label(cache=False):
         rbm.train(train_x, train_y)
         rbm.save()
 
-    rbm.associative = False
-    rbm.reconstruct(test_x, 10)
-    rbm.associative = True
 
-    # Classification test - Reconstruct y through x
-    output_probability = rbm.reconstruct_association(test_x, None)
-    sol = np.array([np.argmax(lab) for lab in test_y.eval()])
-    guess = np.array([np.argmax(lab) for lab in output_probability])
-    diff = np.count_nonzero(sol == guess)
+    # rbm.associative = False
+    # rbm.reconstruct(test_x, 10)
+    # rbm.associative = True
 
-    print "Classification Rate: {}".format((diff / float(test_y.eval().shape[0])))
+    y = map(np.argmax, test_y.eval())
+    pred = rbm.classify(test_x)
+    print y
+    print pred
+    score = np.sum(y == pred) * 1. / len(y)
+
+    print "Classification Rate: {}".format(score)
 
 
 def associate_data2data(cache=False, train_further=True):
@@ -107,8 +110,8 @@ def associate_data2data(cache=False, train_further=True):
     # weight_decay=0.001,
     # sparsity_constraint=True,
     # sparsity_target=0.1 ** 9,
-    #                 sparsity_cost=0.9,
-    #                 sparsity_decay=0.99,
+    # sparsity_cost=0.9,
+    # sparsity_decay=0.99,
     #                 epochs=50)
 
     tr = TrainParam(learning_rate=0.001,
@@ -216,8 +219,8 @@ def get_p_h(brain_c, tr_x, tr_x01):
 
 
 # def plot_hidden_activity(brain_c, tr_x, tr_x01):
-#     p_h = get_p_h(brain_c, tr_x.get_value(), tr_x01.get_value())
-#     plt.clf()
+# p_h = get_p_h(brain_c, tr_x.get_value(), tr_x01.get_value())
+# plt.clf()
 #     plt.figure(0)
 #     plt.plot(p_h)
 #     # plt.show(block=False)
@@ -295,9 +298,9 @@ def associate_data2dataADBN(cache=False, train_further=True):
             for lr in [0.001, 0.0001, 0.00005, 0.00001]:
                 for n in [100, 250, 500]:
                     config = get_brain_model_AssociativeDBNConfig(28, data_manager=data_manager)
-                    config.top_rbm.train_params.learning_rate=lr
-                    config.top_rbm.train_params.sparsity_constraint=sc
-                    config.top_rbm.train_params.dropout=dropout
+                    config.top_rbm.train_params.learning_rate = lr
+                    config.top_rbm.train_params.sparsity_constraint = sc
+                    config.top_rbm.train_params.dropout = dropout
                     config.n_association = n
                     adbn = associative_dbn.AssociativeDBN(config=config, data_manager=data_manager)
                     brain_c = adbn
@@ -314,9 +317,9 @@ def associate_data2dataADBN(cache=False, train_further=True):
                         if i == 0:
                             # Reconstruction
                             recon_right = brain_c.dbn_left.reconstruct(tr_x, k=10, plot_every=1, plot_n=100,
-                                                                         img_name='adbn_left_recon_{}'.format(shape))
+                                                                       img_name='adbn_left_recon_{}'.format(shape))
                             recon_left = brain_c.dbn_right.reconstruct(tr_x01, k=10, plot_every=1, plot_n=100,
-                                                                         img_name='adbn_right_recon_{}'.format(shape))
+                                                                       img_name='adbn_right_recon_{}'.format(shape))
 
                         # Plot hidden activity
                         # plot_hidden_activity(brain_c, tr_x, tr_x01)
@@ -326,22 +329,24 @@ def associate_data2dataADBN(cache=False, train_further=True):
                         # clf = SimpleClassifier('logistic', te_x.get_value(), te_y.eval())
 
                         for j in [5, 10]:
-
-                            recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}1'.format(shape), y_type='active_h')
+                            recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0,
+                                                     img_name='adbn_child_recon_{}1'.format(shape), y_type='active_h')
                             error = clf.get_score(recon_x, te_y.eval())
                             f.write("active_h %f\n" % error)
 
-                            recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0, img_name='adbn_child_recon_{}2'.format(shape), y_type='v_noisy_active_h')
+                            recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0,
+                                                     img_name='adbn_child_recon_{}2'.format(shape),
+                                                     y_type='v_noisy_active_h')
                             error = clf.get_score(recon_x, te_y.eval())
                             f.write("v_noisy_active_h %f\n" % error)
 
-            # error = clf.get_score(recon_x, te_y.eval())
-            # print error
-            # errors.append(error)
+                            # error = clf.get_score(recon_x, te_y.eval())
+                            # print error
+                            # errors.append(error)
 
-            # plt.plot(errors)
-            # plt.show()
-        # print errors
+                            # plt.plot(errors)
+                            # plt.show()
+                            # print errors
     # plt.show(block=True)
     f.close()
 
@@ -364,16 +369,16 @@ def get_brain_model_AssociativeDBNConfig(shape):
                            epochs=10)
 
     bottom_tr_r = TrainParam(learning_rate=0.001,
-                           momentum_type=NESTEROV,
-                           momentum=0.5,
-                           weight_decay=0.0001,
-                           sparsity_constraint=True,
-                           sparsity_target=0.1,
-                           sparsity_decay=0.9,
-                           sparsity_cost=0.1,
-                           dropout=True,
-                           dropout_rate=0.5,
-                           epochs=10)
+                             momentum_type=NESTEROV,
+                             momentum=0.5,
+                             weight_decay=0.0001,
+                             sparsity_constraint=True,
+                             sparsity_target=0.1,
+                             sparsity_decay=0.9,
+                             sparsity_cost=0.1,
+                             dropout=True,
+                             dropout_rate=0.5,
+                             epochs=10)
 
     rest_tr = TrainParam(learning_rate=0.0001,
                          momentum_type=NESTEROV,
@@ -393,10 +398,9 @@ def get_brain_model_AssociativeDBNConfig(shape):
                            train_params=bottom_tr)
 
     bottom_rbm_r = RBMConfig(v_n=shape ** 2,
-                           h_n=h_n_r,
-                           progress_logger=bottom_logger,
-                           train_params=bottom_tr_r)
-
+                             h_n=h_n_r,
+                             progress_logger=bottom_logger,
+                             train_params=bottom_tr_r)
 
     rest_logger = ProgressLogger()
     rest_rbm = RBMConfig(v_n=250,
@@ -470,19 +474,19 @@ def get_brain_model_JointDBNConfig(shape, data_manager):
 
     # Layer 3
     top_tr = TrainParam(learning_rate=0.0001,
-                         momentum_type=NESTEROV,
-                         momentum=0.0,
-                         weight_decay=0.0000,
-                         dropout=False,
-                         dropout_rate=0.8,
-                         epochs=10,
-                         batch_size=5)
+                        momentum_type=NESTEROV,
+                        momentum=0.0,
+                        weight_decay=0.0000,
+                        dropout=False,
+                        dropout_rate=0.8,
+                        epochs=10,
+                        batch_size=5)
 
     top_h_n = 100
     top_rbm = RBMConfig(v_n=h_n,
-                         h_n=top_h_n,
-                         progress_logger=rest_logger,
-                         train_params=rest_tr)
+                        h_n=top_h_n,
+                        progress_logger=rest_logger,
+                        train_params=rest_tr)
 
     config.rbm_configs = [bottom_rbm, top_rbm]  # , rest_rbm]
     config.topology = [(shape ** 2) * 2, h_n, top_h_n]  # , 250]
@@ -490,8 +494,6 @@ def get_brain_model_JointDBNConfig(shape, data_manager):
 
 
 def get_adbns():
-
-
     adbns_configs = []
 
     # for dropout in [True, False]:
@@ -618,7 +620,7 @@ def associate_data2dataJDBN(cache=False, train_further=False):
     zeroes = m_loader.load_digits(n=[test_n, 0, 0], digits=[0])[0][0]
     tr_X = theano.shared(np.concatenate([tr_x.get_value(), tr_x01.get_value()], axis=1))
     initial_y = np.random.binomial(n=1, p=0.0, size=te_x.get_value(True).shape).astype(t_float_x)
-    initial_y_uni = np.random.uniform(low=0, high=1,size=te_x.get_value(True).shape).astype(t_float_x)
+    initial_y_uni = np.random.uniform(low=0, high=1, size=te_x.get_value(True).shape).astype(t_float_x)
     initial_y_bi001 = np.random.binomial(n=1, p=0.01, size=te_x.get_value(True).shape).astype(t_float_x)
     initial_y_bi01 = np.random.binomial(n=1, p=0.1, size=te_x.get_value(True).shape).astype(t_float_x)
     te_X = theano.shared(np.concatenate([te_x.get_value(), initial_y], axis=1))
@@ -631,7 +633,7 @@ def associate_data2dataJDBN(cache=False, train_further=False):
 
     for h_n in [100, 250, 500]:
         config1 = get_brain_model_JointDBNConfig(shape, data_manager)
-        config1.topology = [784*2, h_n, h_n]
+        config1.topology = [784 * 2, h_n, h_n]
         config1.rbm_configs[0].h_n = h_n
         config1.rbm_configs[1].v_n = h_n
         config1.rbm_configs[1].h_n = h_n
@@ -639,7 +641,7 @@ def associate_data2dataJDBN(cache=False, train_further=False):
 
     for h_n in [100, 250, 500]:
         config1 = get_brain_model_JointDBNConfig(shape, data_manager)
-        config1.topology = [784*2, h_n, h_n * 2]
+        config1.topology = [784 * 2, h_n, h_n * 2]
         config1.rbm_configs[0].h_n = h_n
         config1.rbm_configs[1].v_n = h_n
         config1.rbm_configs[1].h_n = h_n * 2
@@ -647,7 +649,7 @@ def associate_data2dataJDBN(cache=False, train_further=False):
 
     for h_n in [100, 250, 500]:
         config1 = get_brain_model_JointDBNConfig(shape, data_manager)
-        config1.topology = [784*2, h_n * 2, h_n ]
+        config1.topology = [784 * 2, h_n * 2, h_n]
         config1.rbm_configs[0].h_n = h_n * 2
         config1.rbm_configs[1].v_n = h_n * 2
         config1.rbm_configs[1].h_n = h_n
@@ -667,12 +669,14 @@ def associate_data2dataJDBN(cache=False, train_further=False):
 
             for i in xrange(0, 5):
                 brain_c.fine_tune(tr_X)
-                recon_x = brain_c.reconstruct(te_X, k=1, plot_n=100, img_name=('{}_{}_recon_fine_tune{}'.format(a,config.topology, i)))
+                recon_x = brain_c.reconstruct(te_X, k=1, plot_n=100,
+                                              img_name=('{}_{}_recon_fine_tune{}'.format(a, config.topology, i)))
                 recon = recon_x[:, 784:]
                 error = clf.get_score(recon, te_y.eval())
                 print error
                 f.write('{}, '.format(error))
-                recon_x = brain_c.reconstruct(te_X4, k=1, plot_n=100, img_name=('{}_{}_recon_fine_tune_2_{}'.format(a,config.topology, i)))
+                recon_x = brain_c.reconstruct(te_X4, k=1, plot_n=100,
+                                              img_name=('{}_{}_recon_fine_tune_2_{}'.format(a, config.topology, i)))
                 recon = recon_x[:, 784:]
                 error = clf.get_score(recon, te_y.eval())
                 print error
@@ -707,13 +711,15 @@ def associate_data2dataADBN_Finetune(cache=False, train_further=False):
         for n, config in enumerate(configs):
             t = 'l{}_r{}_t{}'.format(config.left_dbn.topology, config.right_dbn.topology, config.n_association)
             f.write('{}:{}:'.format(a, t))
-            brain_c = associative_dbn.AssociativeDBN(config=config, data_manager=store.StorageManager('{}/{}'.format(proj_name,n),log=False))
+            brain_c = associative_dbn.AssociativeDBN(config=config,
+                                                     data_manager=store.StorageManager('{}/{}'.format(proj_name, n),
+                                                                                       log=False))
             brain_c.train(tr_x, tr_x01, cache=True, train_further=True)
 
             recon = brain_c.recall(tr_x,
-                                     associate_steps=10,
-                                     recall_steps=0,
-                                     img_name='{}_{}'.format(a, t))
+                                   associate_steps=10,
+                                   recall_steps=0,
+                                   img_name='{}_{}'.format(a, t))
 
             error = clf.get_score(recon, tr_y.eval())
             print error
@@ -723,10 +729,10 @@ def associate_data2dataADBN_Finetune(cache=False, train_further=False):
                 brain_c.fine_tune(tr_x, tr_x01, epochs=1)
                 for y_type in ['active_h', 'v_noisy_active_h', 'zero']:
                     recon = brain_c.recall(tr_x,
-                                         associate_steps=10,
-                                         recall_steps=0,
-                                         img_name='{}_{}_{}_{}'.format(a, t, y_type, i),
-                                         y_type=y_type)
+                                           associate_steps=10,
+                                           recall_steps=0,
+                                           img_name='{}_{}_{}_{}'.format(a, t, y_type, i),
+                                           y_type=y_type)
                     error = clf.get_score(recon, tr_y.eval())
                     print error
                     f.write('{}, '.format(error))
@@ -735,8 +741,8 @@ def associate_data2dataADBN_Finetune(cache=False, train_further=False):
 
 
 if __name__ == '__main__':
-    # associate_data2label()
-    associate_data2data(True, True)
+    associate_data2label()
+    # associate_data2data(True, True)
     # associate_data2dataADBN(True, True)
     # associate_data2dataADBN_Finetune(True, True)
     # associate_data2dataJDBN(True, False)

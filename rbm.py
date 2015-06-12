@@ -122,6 +122,10 @@ class RBM(object):
             self.active_probability_h = theano.shared(value=new_p_h,
                                                       name="active_probability_h")
 
+    def __str__(self):
+        name = 'ass_' if self.associative else ''
+        return name + "rbm_{}-{}_{}{}_{}".format(self.v_n, self.h_n, self.cd_type, self.cd_steps, self.train_parameters)
+
     def get_initial_weight(self, w, nrow, ncol, name):
         if w is None:
             w = np.asarray(
@@ -168,11 +172,6 @@ class RBM(object):
             bias = np.log(t / (1 - t))
             self.h_bias.set_value(np.tile(bias, self.h_n).astype(t_float_x))
 
-
-    def __str__(self):
-        name = 'ass_' if self.associative else ''
-        return name + "rbm_{}-{}_{}{}_{}".format(self.v_n, self.h_n, self.cd_type, self.cd_steps, self.train_parameters)
-
     def free_energy(self, v, v2=None):
         if self.associative:
             return self.calc_free_energy(v, v2)
@@ -187,7 +186,7 @@ class RBM(object):
         t0 = self.v_unit.energy(v, v_bias)
         t1 = T.dot(v, w) + h_bias
 
-        if v2:
+        if type(v2) is not None:
             u = self.U
             v_bias2 = self.v_bias2
             # t0 += -T.dot(v2, v_bias2) # For classRBM
@@ -276,7 +275,6 @@ class RBM(object):
         h_total_input, h_p_activation, h_sample = self.sample_h_given_v(v_sample)
         return [v_total_input, v_p_activation, v_sample,
                 h_total_input, h_p_activation, h_sample]
-
 
     def gibbs_vhv_assoc(self, v):
         h_total_input, h_p_activation, h_sample = self.sample_h_given_v(v)
@@ -1105,6 +1103,24 @@ class RBM(object):
             return self.np_rand.binomial(n=1, p=reconstruction_chain[-1][:, (ylen):])
         else:
             return reconstruction_chain[-1][:, (ylen):]
+
+    def classify(self, xs):
+        assert self.associative
+        n_case = xs.get_value().shape[0]
+        n_classes = self.v_n2
+        pred_mat = np.zeros((n_case, n_classes))
+        for c in xrange(n_classes):
+            v_c = utils.get_class_vector(c, n_classes)
+            vs = np.tile(v_c, (n_case, 1))
+            energy = theano.function([], self.free_energy(xs, vs))()
+            print energy
+            pred_mat[:, c] = energy
+
+        print np.sum(pred_mat)
+        print pred_mat / np.sum(pred_mat, axis=0)
+        return pred_mat.argmin(axis=0)
+
+
 
 
 class AssociativeRBM(RBM):
