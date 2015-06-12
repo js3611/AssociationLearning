@@ -265,11 +265,11 @@ def experiment_adbn(project_name, mapping, shape):
 
     configs = []
     for lr1 in [0.01]:
-        for dropout in [True, False]:
-            for h_n, n_association in zip([500, 250], [500, 250]):
-                config = get_brain_model_AssociativeDBN(shape, h_n=h_n, n_association=n_association,dropout=dropout)
-                # config.left_dbn.rbm_configs[1].train_params.learning_rate = lr1
-                # config.right_dbn.rbm_configs[1].train_params.learning_rate = lr1
+        for dropout in [True]:
+            for n_association in [100]:
+                config = get_brain_model_AssociativeDBN(shape, n_association=n_association,dropout=dropout)
+                config.left_dbn.rbm_configs[1].train_params.learning_rate = lr1
+                config.right_dbn.rbm_configs[1].train_params.learning_rate = lr1
                 config.top_rbm.train_params.learning_rate = lr1
                 # config.n_association = n_association
                 # config.left_dbn.topology = [shape ** 2, h_n, h_n]
@@ -303,7 +303,7 @@ def experiment_adbn(project_name, mapping, shape):
                 for emo in xrange(len(kanade_loader.emotion_dict)):
                     errors[y_type][emo] = [proportion[emo]]
 
-            for j in xrange(3):
+            for j in xrange(1):
                 brain_c.fine_tune(tr_x, p_tr_x, epochs=1)
                 recon_p_tr_x = brain_c.dbn_right.reconstruct(p_tr_x, k=10, plot_every=1, plot_n=100,
                                                              img_name='{}_right_ft{}_{}'.format(epoch, j, shape))
@@ -397,7 +397,7 @@ def get_brain_model_AssociativeDBN(shape, h_n=250, h_n2=250, n_association=100,d
 
     # Layer 2
     rest_tr = TrainParam(learning_rate=0.0001,
-                         momentum_type=CLASSICAL,
+                         momentum_type=NESTEROV,
                          momentum=0.5,
                          weight_decay=0.0001,
                          sparsity_constraint=True,
@@ -423,14 +423,14 @@ def get_brain_model_AssociativeDBN(shape, h_n=250, h_n2=250, n_association=100,d
 
 
     # DBN Configs
-    config.left_dbn.rbm_configs = [bottom_rbm]
-    config.right_dbn.rbm_configs = [bottom_rbm_r]
-    config.left_dbn.topology = [shape ** 2, h_n]
-    config.right_dbn.topology = [shape ** 2, h_n_r]
-    # config.left_dbn.rbm_configs = [bottom_rbm, rest_rbm]
-    # config.right_dbn.rbm_configs = [bottom_rbm_r, rest_rbm_r]
-    # config.left_dbn.topology = [shape ** 2, h_n, h_n2]
-    # config.right_dbn.topology = [shape ** 2, h_n_r, h_n_r2]
+    # config.left_dbn.rbm_configs = [bottom_rbm]
+    # config.right_dbn.rbm_configs = [bottom_rbm_r]
+    # config.left_dbn.topology = [shape ** 2, h_n]
+    # config.right_dbn.topology = [shape ** 2, h_n_r]
+    config.left_dbn.rbm_configs = [bottom_rbm, rest_rbm]
+    config.right_dbn.rbm_configs = [bottom_rbm_r, rest_rbm_r]
+    config.left_dbn.topology = [shape ** 2, h_n, h_n2]
+    config.right_dbn.topology = [shape ** 2, h_n_r, h_n_r2]
     config.reuse_dbn = False
 
     # Association Layer
@@ -550,7 +550,7 @@ if __name__ == '__main__':
             experiment_adbn('ExperimentADBN2', mapping=secure_mapping, shape=25)
     else:
         # experiment_dbn('ExperimentDBN1l', mapping=secure_mapping, shape=25)
-        experiment_adbn('ExperimentADBN2l', mapping=secure_mapping, shape=25)
+        experiment_adbn('ExperimentADBN8', mapping=secure_mapping, shape=25)
         # experiment_adbn('ExperimentDBN2_ambi', mapping=ambivalent_mapping, shape=25)
         # experiment_adbn('ExperimentDBN2_avoi', mapping=avoidant_mapping, shape=25)
 
