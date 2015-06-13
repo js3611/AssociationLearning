@@ -157,7 +157,7 @@ class DBN(object):
 
         return pretrain_fns
 
-    def pretrain(self, train_data, cache=False, train_further=False, optimise=False):
+    def pretrain(self, train_data, cache=False, train_further=False, names=None):
         if type(cache) is not list:
             cache = np.repeat(cache, self.n_layers)
         if type(train_further) is not list:
@@ -172,7 +172,8 @@ class DBN(object):
 
             # Check Cache
             cost = 0
-            loaded = store.retrieve_object(str(rbm))
+            name=names[i] if names else str(rbm)
+            loaded = store.retrieve_object(name)
             if cache[i] and loaded:
                 # TODO override neural network's weights too
                 epochs = rbm.config.train_params.epochs
@@ -184,13 +185,13 @@ class DBN(object):
 
                 if train_further[i]:
                     cost += np.mean(rbm.train(layer_input))
-                    self.data_manager.persist(rbm)
+                    self.data_manager.persist(rbm, name=name)
             else:
                 if rbm.train_parameters.sparsity_constraint:
                     rbm.set_initial_hidden_bias()
                     rbm.set_hidden_mean_activity(layer_input)
                 cost += np.mean(rbm.train(layer_input))
-                self.data_manager.persist(rbm)
+                self.data_manager.persist(rbm, name=name)
 
             self.data_manager.move_to_project_root()
             # os.chdir('../..')
@@ -203,6 +204,53 @@ class DBN(object):
             layer_input = theano.shared(res)
         return cost
 
+    def pretrain(self, train_data, cache=False, train_further=False, names=None):
+        if type(cache) is not list:
+            cache = np.repeat(cache, self.n_layers)
+        if type(train_further) is not list:
+            train_further = np.repeat(train_further, self.n_layers)
+
+        layer_input = train_data
+        for i in xrange(len(self.rbm_layers)):
+            rbm = self.rbm_layers[i]
+            print 'training layer {}, {}'.format(i, rbm)
+
+            self.data_manager.move_to('{}/layer/{}/{}'.format(self.out_dir, i, rbm))
+
+            # Check Cache
+            cost = 0
+            name=names[i] if names else str(rbm)
+            ret_name = cache[i] if isinstance(cache[i], str) else name
+            loaded = store.retrieve_object(ret_name)
+            if cache[i] and loaded:
+                # TODO override neural network's weights too
+                epochs = rbm.config.train_params.epochs
+                rbm = loaded
+                rbm.config.train_params.epochs = epochs
+                # Override the reference
+                self.rbm_layers[i] = rbm
+                print "... loaded trained layer {}".format(ret_name)
+
+                if train_further[i]:
+                    cost += np.mean(rbm.train(layer_input))
+                    self.data_manager.persist(rbm, name=name)
+            else:
+                if rbm.train_parameters.sparsity_constraint:
+                    rbm.set_initial_hidden_bias()
+                    rbm.set_hidden_mean_activity(layer_input)
+                cost += np.mean(rbm.train(layer_input))
+                self.data_manager.persist(rbm, name=name)
+
+            self.data_manager.move_to_project_root()
+            # os.chdir('../..')
+
+            # Pass the input through sampler method to get next layer input
+            sampled_layer = rbm.sample_h_given_v(layer_input)
+            transform_input = sampled_layer[2]
+            f = theano.function([], transform_input)
+            res = f()
+            layer_input = theano.shared(res)
+        return cost
 
     def build_finetune_functions(self, datasets, batch_size, learning_rate):
         (train_set_x, train_set_y) = datasets[0]

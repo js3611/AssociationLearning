@@ -186,7 +186,8 @@ class RBM(object):
         t0 = self.v_unit.energy(v, v_bias)
         t1 = T.dot(v, w) + h_bias
 
-        if type(v2) is not None:
+        if type(v2) is not type(None):
+            print type(v2)
             u = self.U
             v_bias2 = self.v_bias2
             # t0 += -T.dot(v2, v_bias2) # For classRBM
@@ -1106,6 +1107,7 @@ class RBM(object):
 
     def classify(self, xs):
         assert self.associative
+
         n_case = xs.get_value().shape[0]
         n_classes = self.v_n2
         pred_mat = np.zeros((n_case, n_classes))
@@ -1113,12 +1115,19 @@ class RBM(object):
             v_c = utils.get_class_vector(c, n_classes)
             vs = np.tile(v_c, (n_case, 1))
             energy = theano.function([], self.free_energy(xs, vs))()
-            print energy
+            # print energy
             pred_mat[:, c] = energy
 
         print np.sum(pred_mat)
-        print pred_mat / np.sum(pred_mat, axis=0)
-        return pred_mat.argmin(axis=0)
+        print pred_mat.shape
+        print "PRED MAT"
+        print pred_mat
+        print pred_mat.sum(axis=1)
+
+        normalised = np.transpose(pred_mat.T / np.sum(pred_mat, axis=1))
+        print normalised
+
+        return normalised.argmax(axis=1)
 
 
 

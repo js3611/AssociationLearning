@@ -20,29 +20,32 @@ logging.basicConfig(filename='trace.log', level=logging.INFO)
 
 
 def associate_data2label(cache=False):
+    cache=True
     print "Testing ClassRBM with generative target (i.e. AssociativeRBM with picture-label association)"
 
     # Load mnist hand digits, class label is already set to binary
-    train, valid, test = m_loader.load_digits(n=[50000, 100, 10], pre={'label_vector': True})
+    train, valid, test = m_loader.load_digits(n=[50000, 100, 30], pre={'label_vector': True})
     train_x, train_y = train
     test_x, test_y = test
     train_y = T.cast(train_y, dtype=theano.config.floatX)
     test_y = T.cast(test_y, dtype=theano.config.floatX)
 
     # Initialise the RBM and training parameters
-    tr = TrainParam(learning_rate=0.01,
+    tr = TrainParam(learning_rate=0.001,
                     momentum_type=CLASSICAL,
                     momentum=0.5,
                     weight_decay=0.0001,
-                    sparsity_constraint=True,
+                    sparsity_constraint=False,
                     sparsity_target=0.1,
                     sparsity_cost=0.01,
                     sparsity_decay=0.9,
-                    epochs=5)
+                    dropout=True,
+                    dropout_rate=0.8,
+                    epochs=20)
 
     n_visible = train_x.get_value().shape[1]
     n_visible2 = 10
-    n_hidden = 100
+    n_hidden = 500
 
     config = RBMConfig(v_n=n_visible,
                        v2_n=n_visible2,

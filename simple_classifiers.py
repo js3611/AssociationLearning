@@ -28,12 +28,15 @@ class SimpleClassifier(object):
         train_x, train_y = self.__get_values(train_x, train_y)
         self.clf.fit(train_x, train_y)
 
-    def get_score(self, test_x, test_y):
+    def get_score(self, test_x, test_y, return_metric=False):
         test_x, test_y = self.__get_values(test_x, test_y)
         guess_y = self.classify(test_x)
-        print metrics.classification_report(test_y, guess_y)
+        metric = metrics.classification_report(test_y, guess_y)
         print metrics.confusion_matrix(test_y, guess_y)
-        return np.sum(guess_y == test_y) * 1. / len(guess_y)
+        clf_score = np.sum(guess_y == test_y) * 1. / len(guess_y)
+        if return_metric:
+            return clf_score, metric
+        return clf_score
 
     def __get_values(self, x, y):
         if utils.isSharedType(x):

@@ -38,8 +38,9 @@ def load_kanade(shared=True, set_name='sharp_equi25_25', emotions=None, pre=None
 
     # pre-processing
     if emotions:  # filter
+        emo_keys = emotions.keys() if type(emotions) is dict else emotions
         x, y = data
-        filter_keys = map(lambda x: emotion_dict[x], emotions)
+        filter_keys = map(lambda x: emotion_dict[x], emo_keys)
         filtered = filter(lambda (x1, y1): y1 in filter_keys, enumerate(y))
         idx = [s[0] for s in filtered]
         data = (x[idx], y[idx])
@@ -53,13 +54,25 @@ def load_kanade(shared=True, set_name='sharp_equi25_25', emotions=None, pre=None
     ys = []
     x, y = data
     labels = np.unique(y)
-    per_n = len(y) / len(labels)
+    n_cases = len(y)
+    n_classes = len(labels)
+    per_n = {}
+    for lab in labels:
+        per_n[lab] = n_cases / n_classes
+
+    if isinstance(emotions, dict):
+        for k in emotions:
+            proportion = emotions[k]
+            per_n[emotion_dict[k]] = proportion * n_cases
+
+    print per_n
+
     for lab in labels:
         # get subset
         filtered = filter(lambda (x1, y1): y1 == lab, enumerate(y))
         idx = [s[0] for s in filtered]
         # Shuffle data
-        sub_idx = np.random.choice(idx, size=per_n)
+        sub_idx = np.random.choice(idx, size=per_n[lab])
         xs += x[sub_idx].tolist()
         ys += y[sub_idx].tolist()
 

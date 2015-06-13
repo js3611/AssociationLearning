@@ -267,7 +267,7 @@ def experiment_adbn(project_name, mapping, shape):
     for lr1 in [0.01]:
         for dropout in [True]:
             for n_association in [100]:
-                config = get_brain_model_AssociativeDBN(shape, n_association=n_association,dropout=dropout)
+                config = get_brain_model_AssociativeDBN(shape, n_association=n_association,h_n=250, h_n2=100,dropout=dropout)
                 config.left_dbn.rbm_configs[1].train_params.learning_rate = lr1
                 config.right_dbn.rbm_configs[1].train_params.learning_rate = lr1
                 config.top_rbm.train_params.learning_rate = lr1
@@ -364,7 +364,7 @@ def get_brain_model_RBM(shape):
     return brain_c
 
 
-def get_brain_model_AssociativeDBN(shape, h_n=250, h_n2=250, n_association=100,dropout=True):
+def get_brain_model_AssociativeDBN(shape, h_n=500, h_n2=250, n_association=100,dropout=True):
     # initialise AssociativeDBN
     config = associative_dbn.DefaultADBNConfig()
 
@@ -469,7 +469,7 @@ def get_brain_model_DBN(shape, data_manager):
                          batch_size=10,
                          epochs=5)
 
-    rest_tr = TrainParam(learning_rate=0.001,
+    rest_tr = TrainParam(learning_rate=0.1,
                          momentum_type=CLASSICAL,
                          momentum=0.5,
                          weight_decay=0.0001,
@@ -478,7 +478,7 @@ def get_brain_model_DBN(shape, data_manager):
                          dropout=True,
                          dropout_rate=0.5)
 
-    top_tr = TrainParam(learning_rate=0.001,
+    top_tr = TrainParam(learning_rate=0.1,
                         momentum_type=NESTEROV,
                         momentum=0.5,
                         weight_decay=0.0001,
