@@ -152,7 +152,7 @@ def assess_rbm(clf, noisy_data, noisy_label, noisy_levels, tr_x):
     pred_table = {}
     for l in xrange(len(noisy_levels)):
         pred_table[l] = []
-    for i in xrange(10):
+    for i in xrange(20):
         # Train architecture
         model.train(tr_x)
 
@@ -182,7 +182,7 @@ def assess_dbn(clf, noisy_data, noisy_label, noisy_levels, tr_x, manager):
         pred_table[l] = []
     for i in xrange(20):
         # Train architecture
-        config = get_dbn_config(25, data_manager=manager, n_hidden=100, epochs=epochs)
+        config = get_dbn_config(25, data_manager=manager, n_hidden=500, epochs=epochs)
         new_epochs = epochs + i * epochs
         config.rbm_configs[1].train_params.epochs = new_epochs
         model = DBN.DBN(config)
@@ -222,12 +222,16 @@ if __name__ == '__main__':
     import sys
 
     if len(sys.argv) > 1:
-        ratio_type = sys.argv[1]
+        ratio_type = float(sys.argv[1])
+        print sys.argv
         if ratio_type == 1:
-            noise_classification('Happy50',emotion={'happy':0.5,'sadness':0.5})
+            print '===================HAPPY50===================='
+            noise_classification('Happy50',emotions={'happy':0.5,'sadness':0.5})
         elif ratio_type == 2:
-            noise_classification('Happy75',emotion={'happy':0.75,'sadness':0.25})
+            print '===================HAPPY75===================='
+            noise_classification('Happy75',emotions={'happy':0.75,'sadness':0.25})
         elif ratio_type == 3:
-            noise_classification('Happy90',emotion={'happy':0.9,'sadness':0.1})
+            print '===================HAPPY90===================='
+            noise_classification('Happy90',emotions={'happy':0.9,'sadness':0.1})
     else:
         noise_classification()
