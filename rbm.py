@@ -186,7 +186,7 @@ class RBM(object):
         t0 = self.v_unit.energy(v, v_bias)
         t1 = T.dot(v, w) + h_bias
 
-        if type(v2) is not None:
+        if type(v2) is not type(None):
             u = self.U
             v_bias2 = self.v_bias2
             # t0 += -T.dot(v2, v_bias2) # For classRBM

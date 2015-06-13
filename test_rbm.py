@@ -39,7 +39,7 @@ def test_rbm():
 
     data_manager = store.StorageManager('Dropout0.2nosparse')
     # Load mnist hand digits
-    datasets = loader.load_kanade(set_name='sharp_equi25_25', pre={'scale': True},n=100)
+    datasets = loader.load_kanade(set_name='noise0.7_25_25', pre={'scale': True},n=100)
     # datasets = loader.load_kanade(pre={'scale2unit': True})
     train_set_x, train_set_y = datasets[0]
     test_set_x, test_set_y = datasets[2]
