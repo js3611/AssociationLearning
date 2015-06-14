@@ -120,7 +120,7 @@ def associate_data2data(cache=False, train_further=True):
     tr = TrainParam(learning_rate=0.001,
                     momentum_type=NESTEROV,
                     momentum=0.5,
-                    weight_decay=0.0001,
+                    weight_decay=0.1,
                     sparsity_constraint=True,
                     sparsity_target=0.1,
                     sparsity_decay=0.9,
@@ -744,8 +744,8 @@ def associate_data2dataADBN_Finetune(cache=False, train_further=False):
 
 
 if __name__ == '__main__':
-    associate_data2label()
-    # associate_data2data(True, True)
+    # associate_data2label()
+    associate_data2data(True, True)
     # associate_data2dataADBN(True, True)
     # associate_data2dataADBN_Finetune(True, True)
     # associate_data2dataJDBN(True, False)

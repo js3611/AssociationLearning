@@ -127,25 +127,25 @@ def noise_classification(project_name = 'NoiseClassification', emotions = {'happ
     clf_tr_x, clf_tr_y = tr
     clf = SimpleClassifier('knn', clf_tr_x, clf_tr_y)
 
-    emotions = ['sadness','happy']
+    emotions = ['sadness']
     noisy_data = []
     noisy_label = []
-    noisy_levels = ['', 'noise0.1_', 'noise0.3_','noise0.5_']
+    noisy_levels = ['', 'noise0.1_', 'noise0.3_','noise0.5_','noise0.7_','noise0.9_']
     for noise_lvl in noisy_levels:
         t, vl, te = k_loader.load_kanade(set_name='{}25_25'.format(noise_lvl), pre={'scale': True}, emotions=emotions, n=1000)
         n_tr_x, n_tr_y = t
         noisy_data.append(n_tr_x)
         noisy_label.append(n_tr_y.eval())
 
-    assess_rbm(clf, noisy_data, noisy_label, noisy_levels, tr_x)
-    assess_dbn(clf, noisy_data, noisy_label, noisy_levels, tr_x, manager)
+    assess_rbm(clf, noisy_data, noisy_label, noisy_levels, tr_x, '2')
+    assess_dbn(clf, noisy_data, noisy_label, noisy_levels, tr_x, manager, '2')
 
 
 
 
-def assess_rbm(clf, noisy_data, noisy_label, noisy_levels, tr_x):
-    f_score = open('report.txt', 'a')
-    f_metric = open('metric.txt', 'a')
+def assess_rbm(clf, noisy_data, noisy_label, noisy_levels, tr_x, postfix):
+    f_score = open('report{}.txt'.format(postfix), 'a')
+    f_metric = open('metric{}.txt'.format(postfix), 'a')
     # Initialise architecture
     config = get_rbm_config(25, n_hidden=500, epochs=10)
     model = RBM(config)
@@ -172,9 +172,9 @@ def assess_rbm(clf, noisy_data, noisy_label, noisy_levels, tr_x):
     f_metric.close()
 
 
-def assess_dbn(clf, noisy_data, noisy_label, noisy_levels, tr_x, manager):
-    f_score = open('dbn_report.txt', 'a')
-    f_metric = open('dbn_metric.txt', 'a')
+def assess_dbn(clf, noisy_data, noisy_label, noisy_levels, tr_x, manager,postfix=''):
+    f_score = open('dbn_report{}.txt'.format(postfix), 'a')
+    f_metric = open('dbn_metric{}.txt'.format(postfix), 'a')
     epochs = 10
     # Initialise architecture
     pred_table = {}

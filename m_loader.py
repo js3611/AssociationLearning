@@ -406,4 +406,4 @@ def construct_atlas():
 if __name__ == '__main__':
     atlas = construct_atlas()
     for k in atlas:
-        save_digit(atlas[k],"atlas/digit_%d.png" % k)
+        save_digit(atlas[k], "atlas/digit_%d.png" % k)
