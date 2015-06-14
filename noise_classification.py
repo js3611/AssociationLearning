@@ -235,13 +235,13 @@ if __name__ == '__main__':
         print sys.argv
         if ratio_type == 1:
             print '===================HAPPY50===================='
-            noise_classification('Happy50',emotions={'happy':0.5,'sadness':0.5})
+            noise_classification('Happy50', emotions={'happy':0.5,'sadness':0.5})
         elif ratio_type == 2:
             print '===================HAPPY75===================='
-            noise_classification('Happy75',emotions={'happy':0.75,'sadness':0.25})
+            noise_classification('Happy75', emotions={'happy':0.75,'sadness':0.25})
         elif ratio_type == 3:
             print '===================HAPPY90===================='
-            noise_classification('Happy90',emotions={'happy':0.9,'sadness':0.1})
+            noise_classification('Happy90', emotions={'happy':0.9,'sadness':0.1})
     else:
         noise_classification('Sad50',emotions={'happy':0.5,'sadness':0.5})
         noise_classification('Sad25',emotions={'happy':0.75,'sadness':0.25})
