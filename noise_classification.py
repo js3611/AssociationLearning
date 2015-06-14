@@ -44,7 +44,7 @@ def get_rbm_config(shape, n_hidden=500, epochs=10):
     return config
 
 
-def get_dbn_config(shape, data_manager, n_hidden=500, lr=0.01, epochs=10):
+def get_dbn_config(shape, data_manager, n_hidden=500, lr=0.01, epochs=10, l=2):
     # Initialise RBM parameters
     base_tr = TrainParam(learning_rate=0.0001,
                          momentum_type=NESTEROV,
@@ -89,7 +89,7 @@ def get_dbn_config(shape, data_manager, n_hidden=500, lr=0.01, epochs=10):
     # Layer 1
     # Layer 2
     # Layer 3
-    topology = [(shape ** 2), n_hidden, n_hidden] #n_hidden
+    topology = [(shape ** 2), n_hidden, n_hidden, n_hidden]
     # batch_size = 10
     first_progress_logger = ProgressLogger(img_shape=(shape, shape),monitor_weights=False)
     rest_progress_logger = ProgressLogger(monitor_weights=False)
@@ -102,8 +102,11 @@ def get_dbn_config(shape, data_manager, n_hidden=500, lr=0.01, epochs=10):
     top_rbm_config = RBMConfig(train_params=top_tr,
                                progress_logger=rest_progress_logger)
 
-    rbm_configs = [first_rbm_config, rest_rbm_config]#, top_rbm_config]
+    rbm_configs = [first_rbm_config, rest_rbm_config, top_rbm_config]
 
+    topology = topology[:(l+1)]
+    rbm_configs = rbm_configs[:l]
+    
     config = DBN.DBNConfig(topology=topology,
                            training_parameters=base_tr,
                            rbm_configs=rbm_configs,
@@ -137,22 +140,22 @@ def noise_classification(project_name = 'NoiseClassification', emotions = {'happ
         noisy_data.append(n_tr_x)
         noisy_label.append(n_tr_y.eval())
 
-    assess_rbm(clf, noisy_data, noisy_label, noisy_levels, tr_x, '2')
-    assess_dbn(clf, noisy_data, noisy_label, noisy_levels, tr_x, manager, '2')
+    assess_rbm(clf, noisy_data, noisy_label, noisy_levels, tr_x,'2')
+    # assess_dbn(clf, noisy_data, noisy_label, noisy_levels, tr_x, manager,'2')
 
 
 
 
-def assess_rbm(clf, noisy_data, noisy_label, noisy_levels, tr_x, postfix):
+def assess_rbm(clf, noisy_data, noisy_label, noisy_levels, tr_x,postfix=''):
     f_score = open('report{}.txt'.format(postfix), 'a')
     f_metric = open('metric{}.txt'.format(postfix), 'a')
     # Initialise architecture
-    config = get_rbm_config(25, n_hidden=500, epochs=10)
+    config = get_rbm_config(25, n_hidden=500, epochs=2)
     model = RBM(config)
     pred_table = {}
     for l in xrange(len(noisy_levels)):
         pred_table[l] = []
-    for i in xrange(20):
+    for i in xrange(50):
         # Train architecture
         model.train(tr_x)
 
@@ -172,21 +175,27 @@ def assess_rbm(clf, noisy_data, noisy_label, noisy_levels, tr_x, postfix):
     f_metric.close()
 
 
-def assess_dbn(clf, noisy_data, noisy_label, noisy_levels, tr_x, manager,postfix=''):
-    f_score = open('dbn_report{}.txt'.format(postfix), 'a')
-    f_metric = open('dbn_metric{}.txt'.format(postfix), 'a')
-    epochs = 10
+def assess_dbn(clf, noisy_data, noisy_label, noisy_levels, tr_x, manager, postfix=''):
+    f_score = open('dbn3_report{}.txt'.format(postfix), 'a')
+    f_metric = open('dbn3_metric{}.txt'.format(postfix), 'a')
+    epochs = 4
     # Initialise architecture
     pred_table = {}
     for l in xrange(len(noisy_levels)*2):
         pred_table[l] = []
-    for i in xrange(20):
+    for i in xrange(25):
         # Train architecture
-        config = get_dbn_config(25, data_manager=manager, n_hidden=500, epochs=epochs)
+        config = get_dbn_config(25, data_manager=manager, n_hidden=500, epochs=epochs, l=2)
         new_epochs = epochs + i * epochs
         config.rbm_configs[1].train_params.epochs = new_epochs
         model = DBN.DBN(config)
-        model.pretrain(tr_x, cache=['epoch{}'.format(new_epochs - epochs), False], train_further=[True, False], names=['epoch{}'.format(new_epochs)]*2)
+        # model.pretrain(tr_x,
+        #                cache=['epoch{}'.format(new_epochs - epochs), False, False],
+        #                train_further=[True, True, True], names=['epoch{}'.format(new_epochs)]*3)
+
+        model.pretrain(tr_x,
+                       cache=['epoch{}'.format(new_epochs), 'epoch{}'.format(new_epochs), False],
+                       train_further=[False, False, True], names=['epoch{}'.format(new_epochs)]*3)
 
         j = 0
         for xs, ys in zip(noisy_data, noisy_label):
@@ -212,7 +221,7 @@ def assess_dbn(clf, noisy_data, noisy_label, noisy_levels, tr_x, manager,postfix
             j += 1
 
     for k in pred_table:
-        f_score.write('{}:{}\n'.format(noisy_levels[k], pred_table[k]))
+        f_score.write('{}:{}\n'.format(noisy_levels[k % len(noisy_levels)], pred_table[k]))
     f_score.close()
     f_metric.close()
 
@@ -234,4 +243,8 @@ if __name__ == '__main__':
             print '===================HAPPY90===================='
             noise_classification('Happy90',emotions={'happy':0.9,'sadness':0.1})
     else:
-        noise_classification()
+        noise_classification('Sad50',emotions={'happy':0.5,'sadness':0.5})
+        noise_classification('Sad25',emotions={'happy':0.75,'sadness':0.25})
+        noise_classification('Sad10',emotions={'happy':0.9,'sadness':0.1})
+
+        
