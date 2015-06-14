@@ -120,9 +120,9 @@ def associate_data2data(cache=False, train_further=True):
     tr = TrainParam(learning_rate=0.001,
                     momentum_type=NESTEROV,
                     momentum=0.5,
-                    weight_decay=0.0001,
+                    weight_decay=0.1,
                     sparsity_constraint=True,
-                    sparsity_target=0.1,
+                    sparsity_target=0.01,
                     sparsity_decay=0.9,
                     sparsity_cost=0.1,
                     dropout=True,
@@ -137,7 +137,7 @@ def associate_data2data(cache=False, train_further=True):
     # Hinton way
     # 10 classes that are equi-probable: p(x) = 0.1
     # n_hidden = min(1000, int((- np.log2(0.1)) * train_n / 10))
-    n_hidden = 332
+    n_hidden = 1000
     print "number of hidden nodes: %d" % n_hidden
 
     config = RBMConfig(v_n=n_visible,
@@ -166,7 +166,7 @@ def associate_data2data(cache=False, train_further=True):
         data_manager.persist(rbm)
 
         # Reconstruct using RBM
-        y = theano.shared(rbm.np_rand.binomial(1, 0.0, size=(test_n, 784)).astype(t_float_x))
+        y = theano.shared(rbm.np_rand.binomial(1, 0, size=(test_n, 784)).astype(t_float_x))
 
         recon_x = rbm.mean_field_inference_opt(te_x,
                                                y,
@@ -744,8 +744,8 @@ def associate_data2dataADBN_Finetune(cache=False, train_further=False):
 
 
 if __name__ == '__main__':
-    associate_data2label()
-    # associate_data2data(True, True)
+    # associate_data2label()
+    associate_data2data(True, True)
     # associate_data2dataADBN(True, True)
     # associate_data2dataADBN_Finetune(True, True)
     # associate_data2dataJDBN(True, False)
