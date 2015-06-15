@@ -117,12 +117,12 @@ def associate_data2data(cache=False, train_further=True):
     # sparsity_decay=0.99,
     #                 epochs=50)
 
-    tr = TrainParam(learning_rate=0.001,
+    tr = TrainParam(learning_rate=0.01,
                     momentum_type=NESTEROV,
                     momentum=0.5,
-                    weight_decay=0.1,
+                    weight_decay=0.001,
                     sparsity_constraint=True,
-                    sparsity_target=0.01,
+                    sparsity_target=0.1,
                     sparsity_decay=0.9,
                     sparsity_cost=0.1,
                     dropout=True,
@@ -137,7 +137,8 @@ def associate_data2data(cache=False, train_further=True):
     # Hinton way
     # 10 classes that are equi-probable: p(x) = 0.1
     # n_hidden = min(1000, int((- np.log2(0.1)) * train_n / 10))
-    n_hidden = 332
+    # n_hidden = 332
+    n_hidden = 300
     print "number of hidden nodes: %d" % n_hidden
 
     config = RBMConfig(v_n=n_visible,
@@ -168,12 +169,13 @@ def associate_data2data(cache=False, train_further=True):
         # Reconstruct using RBM
         y = theano.shared(rbm.np_rand.binomial(1, 0, size=(test_n, 784)).astype(t_float_x))
 
-        recon_x = rbm.mean_field_inference_opt(te_x,
-                                               y,
-                                               # te_x01,
-                                               sample=False,
-                                               k=5,
-                                               img_name="te_recon_%d" % i)
+        recon_x = rbm.reconstruct_association_opt(te_x, k=10, bit_p=0)
+        # recon_x = rbm.mean_field_inference_opt(te_x,
+        #                                        y,
+        #                                        # te_x01,
+        #                                        sample=False,
+        #                                        k=1,
+        #                                        img_name="te_recon_%d" % i)
 
 
         # Compare free energy
@@ -200,7 +202,7 @@ def associate_data2data(cache=False, train_further=True):
                                               # te_x01,
                                               mean_x,
                                               sample=False,
-                                              k=10,
+                                              k=1,
                                               img_name="tr_recon_%d" % i)
 
         clf = SimpleClassifier('logistic', te_x.get_value(), te_y.eval())

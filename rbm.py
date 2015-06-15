@@ -918,7 +918,7 @@ class RBM(object):
         return reconstructions[-1]
 
     def reconstruct_association(self, x, y=None, k=1, bit_p=0, plot_n=None, plot_every=1,
-                                img_name='association_reconstruction.png'):
+                                img_name='association_reconstruction.png', initial_input_multiplier=10):
         # Initialise parameters
         if not utils.isSharedType(x):
             x = theano.shared(x, allow_downcast=True)
@@ -927,7 +927,7 @@ class RBM(object):
             y = self.rand.binomial(size=(data_size, self.v_n2), n=1, p=bit_p, dtype=t_float_x)
 
         # Gibbs sampling
-        _, _, h_sample = self.sample_h_given_v(x, y)
+        _, _, h_sample = self.sample_h_given_v(x * initial_input_multiplier, y)
         chain_start = theano.shared(theano.function([], h_sample)())
         k_batch = k / plot_every
         (res, updates) = theano.scan(
@@ -953,7 +953,7 @@ class RBM(object):
         return reconstruction_chain[-1]
 
     def reconstruct_association_opt(self, x, y=None, k=1, bit_p=0, plot_n=None, plot_every=1,
-                                    img_name='association_reconstruction.png'):
+                                    img_name='association_reconstruction.png', initial_input_multiplier=10):
         '''
         As an optimisation, we can concatenate two images and feed it as a single image to train the network.
         In this way theano performs matrix optimisation so its much faster.
@@ -972,7 +972,7 @@ class RBM(object):
         z = T.concatenate([x, y], axis=1)
 
         # Gibbs sampling
-        _, _, h_sample = self.sample_h_given_v(z)
+        _, _, h_sample = self.sample_h_given_v(z * initial_input_multiplier)
         chain_start = theano.shared(theano.function([], h_sample)(), name='Z')
 
         print chain_start.get_value().shape
@@ -1047,7 +1047,7 @@ class RBM(object):
         else:
             return m[-1]
 
-    def mean_field_inference_opt(self, x, y=None, ylen=-1, sample=False, k=100, img_name='mean_field_inference'):
+    def mean_field_inference_opt(self, x, y=None, ylen=-1, sample=False, k=100, img_name='mean_field_inference', initial_input_multiplier=10):
         '''
         As an optimisation, we can concatenate two images and feed it as a single image to train the network.
         In this way theano performs matrix optimisation so its much faster.
@@ -1067,15 +1067,18 @@ class RBM(object):
             y = self.rand.binomial(size=(data_size, ylen), n=1, p=0, dtype=t_float_x)
 
         # get initial values of tau (Concatenate x and y)
-        z = T.concatenate([x, y], axis=1)
-        _, tau = self.prop_up(z)
+        z = T.concatenate([x * initial_input_multiplier , y], axis=1)
+        total_input, tau = self.prop_up(z)
+        tau = self.h_unit.scale(total_input)
+
         chain_start = theano.shared(theano.function([], tau)(), name='tau')
 
         # mean field func
         def mean_field(tau1, fixed):
             _, mu2 = self.prop_down(tau1)
             mu2 = T.concatenate([fixed, mu2[:, (ylen):]], axis=1)
-            _, tau2 = self.prop_up(mu2)
+            total_input, tau2 = self.prop_up(mu2)
+            tau2 = self.h_unit.scale(total_input)
             return mu2, tau2  # , {ctr: ctr+1}, theano.scan_module.until(ctr < 50)
 
         # loop

@@ -568,7 +568,7 @@ class DBN(object):
             psleep_state = psleep_states[i]
             statistics_diff = sleep_state - psleep_state
             updates[rbm.W] = rbm.W + r * T.dot(sleep_states[i].T, statistics_diff) / batch_size
-            updates[rbm.h_bias] = rbm.h_bias + r * T.mean((statistics_diff), axis=0)
+            updates[rbm.h_bias] = rbm.h_bias + r * T.mean(statistics_diff, axis=0)
 
         return updates
 
