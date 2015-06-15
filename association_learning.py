@@ -137,7 +137,7 @@ def associate_data2data(cache=False, train_further=True):
     # Hinton way
     # 10 classes that are equi-probable: p(x) = 0.1
     # n_hidden = min(1000, int((- np.log2(0.1)) * train_n / 10))
-    n_hidden = 332
+    n_hidden = 3000
     print "number of hidden nodes: %d" % n_hidden
 
     config = RBMConfig(v_n=n_visible,
@@ -193,14 +193,14 @@ def associate_data2data(cache=False, train_further=True):
         #
         # print e1 > e0
 
-        mean_x = theano.shared(theano.function([], 0.5 * (ones + zeroes))())
+        mean_x = theano.shared(theano.function([], (ones + zeroes))())
 
 
         clf_tr = rbm.mean_field_inference_opt(te_x,
                                               # te_x01,
                                               mean_x,
                                               sample=False,
-                                              k=10,
+                                              k=1,
                                               img_name="tr_recon_%d" % i)
 
         clf = SimpleClassifier('logistic', te_x.get_value(), te_y.eval())
