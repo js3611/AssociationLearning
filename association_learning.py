@@ -117,10 +117,10 @@ def associate_data2data(cache=False, train_further=True):
     # sparsity_decay=0.99,
     #                 epochs=50)
 
-    tr = TrainParam(learning_rate=0.01,
+    tr = TrainParam(learning_rate=0.001,
                     momentum_type=NESTEROV,
                     momentum=0.5,
-                    weight_decay=0.001,
+                    weight_decay=0.1,
                     sparsity_constraint=True,
                     sparsity_target=0.1,
                     sparsity_decay=0.9,
