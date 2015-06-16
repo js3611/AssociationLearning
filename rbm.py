@@ -918,7 +918,7 @@ class RBM(object):
         return reconstructions[-1]
 
     def reconstruct_association(self, x, y=None, k=1, bit_p=0, plot_n=None, plot_every=1,
-                                img_name='association_reconstruction.png', initial_input_multiplier=10):
+                                img_name='association_reconstruction.png', initial_input_multiplier=1):
         # Initialise parameters
         if not utils.isSharedType(x):
             x = theano.shared(x, allow_downcast=True)
@@ -953,7 +953,7 @@ class RBM(object):
         return reconstruction_chain[-1]
 
     def reconstruct_association_opt(self, x, y=None, k=1, bit_p=0, plot_n=None, plot_every=1,
-                                    img_name='association_reconstruction.png', initial_input_multiplier=10):
+                                    img_name='association_reconstruction.png', initial_input_multiplier=1):
         '''
         As an optimisation, we can concatenate two images and feed it as a single image to train the network.
         In this way theano performs matrix optimisation so its much faster.
@@ -1047,7 +1047,7 @@ class RBM(object):
         else:
             return m[-1]
 
-    def mean_field_inference_opt(self, x, y=None, ylen=-1, sample=False, k=100, img_name='mean_field_inference', initial_input_multiplier=10):
+    def mean_field_inference_opt(self, x, y=None, ylen=-1, sample=False, k=100, img_name='mean_field_inference', initial_input_multiplier=1):
         '''
         As an optimisation, we can concatenate two images and feed it as a single image to train the network.
         In this way theano performs matrix optimisation so its much faster.
