@@ -47,13 +47,16 @@ class ProgressLogger(object):
             plotting_end = time.clock()
             return plotting_end - plotting_start
 
-        def visualise_reconstructions(self, orig, reconstructions, plot_n=None, img_name='reconstruction', opt=False):
+        def visualise_reconstructions(self, orig, reconstructions, plot_n=None, img_name='reconstruction', opt=False, multi=False):
             if opt:
                 img_shape = (self.img_shape[0]/2, self.img_shape[1])
             else:
                 img_shape = self.img_shape
 
-            visualise_reconstructions(orig, reconstructions, img_shape, plot_n, img_name)
+            if multi:
+                visualise_reconstructions_animate(orig, reconstructions, img_shape, plot_n, img_name)
+            else:
+                visualise_reconstructions(orig, reconstructions, img_shape, plot_n, img_name)
 
         def monitor_wt(self, rbm):
             # print rbm.W.get_value(borrow=True)[0][0:5]
@@ -137,3 +140,41 @@ def visualise_reconstructions(orig, reconstructions, img_shape, plot_n=None, img
                 # construct image
                 image = Image.fromarray(image_data)
                 image.save(img_name + '_{}.png'.format(k))
+
+
+def visualise_reconstructions_animate(orig, reconstructions, img_shape, plot_n=None, img_name='reconstruction'):
+            k = len(reconstructions)
+            assert k > 0
+
+            if plot_n:
+                data_size = min(plot_n, orig.shape[0])
+            else:
+                data_size = orig.shape[0]
+
+            if orig.shape[1] in [784, 625, 1250, 784*2, 2500, 5000]:
+                nrow, ncol = img_shape
+
+                # Original images
+                image_data = utils.tile_raster_images(
+                    X=orig,
+                    img_shape=img_shape,
+                    tile_shape=(1, data_size),
+                    tile_spacing=(1, 1)
+                )
+
+                image = Image.fromarray(image_data)
+                image.save(img_name + '_%05d.png' % 0)
+
+                for i in xrange(1, k+1):
+                    # print ' ... plotting sample ', i
+                    idx = (nrow+1) * i
+                    image_data = utils.tile_raster_images(
+                        X=(reconstructions[i-1]),
+                        img_shape=img_shape,
+                        tile_shape=(1, data_size),
+                        tile_spacing=(1, 1)
+                    )
+
+                    # construct image
+                    image = Image.fromarray(image_data)
+                    image.save(img_name + '_%05d.png' % i)

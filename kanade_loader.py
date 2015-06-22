@@ -543,6 +543,11 @@ if __name__ == '__main__':
     #                   mapping={ 'happy': {'happy':0.5, 'sadness':0.5}, 'sadness': {'happy':0.2, 'sadness':0.8} },
     #                   pre={'scale':True})
 
+    a, b, c = load_kanade(False)
+    print a[0].shape
+    print b[0].shape
+    print c[0].shape
+
     faces = construct_atlas('25_25', pre={'scale2unit':True})
 
     for i in faces:

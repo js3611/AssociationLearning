@@ -815,7 +815,7 @@ class RBM(object):
         self.train_parameters = tr
         self.set_default_weights()
 
-    def train(self, train_data, train_label=None):
+    def train(self, train_data, train_label=None, ctr=0):
         self.training = True
         """Trains RBM. For now, input needs to be Theano matrix"""
         param = self.train_parameters
@@ -844,7 +844,7 @@ class RBM(object):
 
             if self.track_progress:
                 print 'Epoch %d, cost is ' % epoch, np.mean(mean_cost)
-                plotting_time += self.track_progress.visualise_weight(self, 'epoch_%i.png' % epoch)
+                plotting_time += self.track_progress.visualise_weight(self, 'epoch_%05d.png' % (ctr+epoch))
 
         end_time = time.clock()
         pre_training_time = (end_time - start_time) - plotting_time
@@ -913,7 +913,7 @@ class RBM(object):
             reconstructions.append(reconstruction_chain[-1])
 
         if self.track_progress:
-            self.track_progress.visualise_reconstructions(orig, reconstructions, plot_n, img_name=img_name)
+            self.track_progress.visualise_reconstructions(orig, reconstructions, plot_n, img_name=img_name, multi=True)
 
         return reconstructions[-1]
 
@@ -1008,7 +1008,7 @@ class RBM(object):
         data_size = x.get_value().shape[0]
 
         plot_every = 100
-        mu = theano.shared(np.zeros((data_size, self.v_n2), dtype=t_float_x), name='mu')
+        mu = theano.shared(np.zeros((data_size, self.v_n), dtype=t_float_x), name='mu')
         tau = theano.shared(np.zeros((data_size, self.h_n), dtype=t_float_x), name='tau')
 
         # Mean field inference -- basically gibbs sampling with no actual sampling
@@ -1019,7 +1019,8 @@ class RBM(object):
 
         def mean_field_rev(m, t, x):
             _, tau2 = self.prop_up(x, m)
-            _, mu2 = self.prop_down_assoc(tau2)
+            _, mu2 = self.prop_down(tau2)
+            # _, mu2 = self.prop_down_assoc(tau2)
             return mu2, tau2  # , {ctr: ctr+1}, theano.scan_module.until(ctr < 50)
 
         k_batch = k / plot_every
