@@ -1,13 +1,4 @@
-import cPickle
-import gzip
-import os
-import sys
-import time
 import numpy
-import preprocessing
-
-import theano
-import theano.tensor as T
 try:
     import PIL.Image as Image
 except ImportError:
