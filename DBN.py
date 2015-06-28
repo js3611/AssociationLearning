@@ -295,7 +295,6 @@ class DBN(object):
                 rbm.v_bias.set_value(rbm.get_initial_bias(v_bias, len(v_bias), ('%s_vbias_%d' % t, i)))
                 rbm.h_bias.set_value(rbm.get_initial_weight(h_bias, len(h_bias), ('%s_hbias_%d' % t, i)))
 
-
     def wake_phase(self, data):
         # PERFORM A BOTTOM-UP PASS TO GET WAKE/POSITIVE PHASE
         # PROBABILITIES AND SAMPLE STATES
@@ -417,7 +416,7 @@ class DBN(object):
         mini_batches = data.get_value(borrow=True).shape[0] / batch_size
 
         for epoch in xrange(epochs):
-            print 'Epoch %d' % epoch
+            print '... epoch %d' % epoch
 
             i = T.iscalar()
             x = T.matrix('x')
@@ -427,8 +426,8 @@ class DBN(object):
             })
 
             start_time = time.clock()
-            for mini_batche_i in xrange(mini_batches):
-                fine_tune(mini_batche_i)
+            for mini_batch_i in xrange(mini_batches):
+                fine_tune(mini_batch_i)
             end_time = time.clock()
 
         print ('... fine tuning took %f minutes' % ((end_time - start_time) / 60))

@@ -1,18 +1,3 @@
-import os
-import sys
-import time
-
-import numpy as np
-import datastorage as store
-import m_loader as m_loader
-import kanade_loader as k_loader
-
-import theano
-import theano.tensor as T
-from theano.tensor.shared_randomstreams import RandomStreams
-
-from mlp import HiddenLayer
-
 from rbm import *
 from DBN import *
 from simple_classifiers import SimpleClassifier
@@ -110,9 +95,10 @@ class AssociativeDBN(object):
     def __str__(self):
         return 'l{}_r{}_t{}'.format(self.dbn_left, self.dbn_right, self.association_layer.h_n)
 
-    def train(self, x1, x2, cache=False, train_further=False, optimise=False):
+    def train(self, x1, x2, cache=False, train_further=False):
         cache_left = cache_right = cache_top = cache if type(cache) is bool else False
-        train_further_left = train_further_right = train_further_top = train_further if type(train_further) is bool else False
+        train_further_left = train_further_right = train_further_top = train_further if type(
+            train_further) is bool else False
         if type(cache) is list:
             cache_left = cache[0]
             cache_right = cache[1]
@@ -124,15 +110,13 @@ class AssociativeDBN(object):
 
         # Train left & right DBN's
         self.dbn_left.pretrain(x1, cache=cache_left,
-                               train_further=train_further_left,
-                               optimise=optimise)
+                               train_further=train_further_left)
 
         if self.config.reuse_dbn:
             self.dbn_right = self.dbn_left
         else:
             self.dbn_right.pretrain(x2, cache=cache_right,
-                                    train_further=train_further_right,
-                                    optimise=optimise)
+                                    train_further=train_further_right)
 
         # Pass the parameter to top layer
         x1_np = self.dbn_left.bottom_up_pass(x1.get_value(True))
@@ -177,7 +161,6 @@ class AssociativeDBN(object):
                                       '{}_{}'.format(self.opt_top, top),
                                       out_dir=out_dir)
 
-    # TODO clean up input and output of each function (i.e. they should all return theano or optional flag)
     def recall(self, x, associate_steps=10, recall_steps=5, img_name='dbn', y=None, y_type='sample_active_h'):
         ''' left dbn bottom-up -> associate -> right dbn top-down
         :param x: data
@@ -343,13 +326,14 @@ class AssociativeDBN(object):
         })
 
         for epoch in xrange(epochs):
-            print 'Epoch %d' % epoch
+            print '... epoch %d' % epoch
             start_time = time.clock()
             for mini_batche_i in xrange(mini_batches):
                 fine_tune(mini_batche_i)
             end_time = time.clock()
 
-        print ('Fine tuning took %f minutes' % ((end_time - start_time) / 60))
+        print ('... fine tuning took %f minutes' % ((end_time - start_time) / 60))
+
 
 def test_associative_dbn(i=0):
     print "Testing Associative DBN which tries to learn even-odd of numbers"
@@ -365,7 +349,7 @@ def test_associative_dbn(i=0):
 
     # project set up
     project_name = 'AssociationDBNTest/{}'.format(i)
-    data_manager = store.StorageManager(project_name)
+    data_manager = store.StorageManager(project_name, log=False)
     cache = True
 
     # initialise AssociativeDBN
@@ -393,9 +377,9 @@ def test_associative_dbn(i=0):
                                              recall_steps=0,
                                              y_type='active_h')
     reconstructed_y0 = associative_dbn.recall(test_x,
-                                             associate_steps=10,
-                                             recall_steps=0,
-                                             y_type='zero')
+                                              associate_steps=10,
+                                              recall_steps=0,
+                                              y_type='zero')
     print "... reconstructed images"
 
     # Classify the reconstructions
@@ -408,34 +392,21 @@ def test_associative_dbn(i=0):
     out_msg = '{} (orig, retrain):{}'.format(associative_dbn, score_orig)
     print out_msg
 
-    for j in xrange(10):
+    for j in xrange(1):
         # Fine tune them
         associative_dbn.fine_tune(train_x, train_x01, 1, 1)
 
-        # Reconstruct images
-        reconstructed_y = associative_dbn.recall(test_x,
-                                                 associate_steps=10,
-                                                 recall_steps=0,
-                                                 y_type='active_h',
-                                                 img_name='active_h_{}'.format(j))
-
         reconstructed_y0 = associative_dbn.recall(test_x,
-                                                 associate_steps=10,
-                                                 recall_steps=0,
-                                                 y_type='zero',
-                                                 img_name='zero_{}'.format(j))
+                                                  associate_steps=10,
+                                                  recall_steps=0,
+                                                  y_type='zero',
+                                                  img_name='zero_{}'.format(j))
         print "... reconstructed images"
-
-        # Classify the reconstructions
-        score_orig = clf.get_score(reconstructed_y, test_y.eval())
-        out_msg = '{} (orig, retrain):{}'.format(associative_dbn, score_orig)
-        print out_msg
 
         # Classify the reconstructions
         score_orig = clf.get_score(reconstructed_y0, test_y.eval())
         out_msg = '{} (orig, retrain):{}'.format(associative_dbn, score_orig)
         print out_msg
-
 
 
 if __name__ == '__main__':

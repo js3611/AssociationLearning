@@ -13,24 +13,22 @@ PERSISTENT = "persistent"
 
 class TrainParam(object):
     def __init__(self,
-                 epochs=15,
-                 batch_size=20,
-                 learning_rate=0.001,
-                 adj_lr=0.001,
-                 momentum_type=NESTEROV,
-                 momentum=0.5,
-                 weight_decay=0.001,
+                 epochs=15,                     # monitor weight
+                 batch_size=20,                 # in range [10, 100]
+                 learning_rate=0.001,           # use histogram
+                 momentum_type=NESTEROV,        # {CLASSICAL, NESTEROV}
+                 momentum=0.5,                  # in range [0.5, 0.9]
+                 weight_decay=0.001,            # in range [0.0001, 0.01]
                  sparsity_constraint=False,
-                 sparsity_target=0.01,  # in range (0.1^9, 0.01)
-                 sparsity_cost=0.01,
-                 sparsity_decay=0.1,
+                 sparsity_target=0.01,          # in range {0.1, 0.01}
+                 sparsity_cost=0.01,            # use histogram
+                 sparsity_decay=0.9,            # in range [0.9, 0.99]
                  dropout=False,
-                 dropout_rate=0.8
+                 dropout_rate=0.8               # in range [0.5 0.9]
                  ):
         self.epochs = epochs
         self.batch_size = batch_size
         # Weight Update Parameters
-        self.adj_lr = adj_lr  # Scaler for adjusting learning rate
         self.learning_rate = learning_rate
 
         self.momentum_type = momentum_type

@@ -293,8 +293,4 @@ def get_dbn_model(manager, shape):
 
 
 if __name__ == '__main__':
-    #     test_DBN(finetune_lr=0.1, pretraining_epochs=30,
-    #              pretrain_lr=0.01, k=1, training_epochs=100,
-    #              dataset='mnist.pkl.gz', batch_size=20)
-
     test_generative_dbn()

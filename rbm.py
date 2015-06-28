@@ -35,8 +35,8 @@ data_dir = "/".join([root_dir, "data"])
 # Theano Debugging Configuration
 # compute_test_value is 'off' by default, meaning this feature is inactive
 # theano.config.compute_test_value = 'off' # Use 'warn' to activate this feature
-theano.config.optimizer = 'None'
-theano.config.exception_verbosity = 'high'
+# theano.config.optimizer = 'None'
+# theano.config.exception_verbosity = 'high'
 
 
 class RBM(object):
@@ -839,14 +839,15 @@ class RBM(object):
                     self.track_progress.monitor_wt(self)
 
             if self.track_progress:
-                print 'Epoch %d, cost is ' % epoch, np.mean(mean_cost)
+                print '... epoch %d, cost is ' % epoch, np.mean(mean_cost)
                 plotting_time += self.track_progress.visualise_weight(self, 'epoch_%05d.png' % (ctr + epoch))
 
         end_time = time.clock()
         pre_training_time = (end_time - start_time) - plotting_time
 
         if self.track_progress:
-            print ('Training took %f minutes' % (pre_training_time / 60.))
+            print ('... training took %f minutes' % (pre_training_time / 60.))
+            print ('... training log saved to {}'.format(os.getcwd()))
             if self.track_progress.monitor_weights:
                 print 'Weight histogram'
                 avg_hist, avg_bins = np.histogram(self.track_progress.weight_hist['avg'])
