@@ -1,17 +1,8 @@
-import os
-import sys
-import time
 import copy
 import datastorage as store
-
-import numpy as np
-
-import theano
 import theano.tensor as T
 from theano.tensor.shared_randomstreams import RandomStreams
 
-from logistic_sgd import LogisticRegression
-from mlp import HiddenLayer
 from rbm import RBM
 from rbm_config import *
 from rbm_logger import *
@@ -82,127 +73,17 @@ class DBN(object):
         if type(rbm_configs) is not list:
             rbm_configs = [rbm_configs for i in xrange(self.n_layers)]
 
-
-        # Create Layers
-        self.x = T.matrix('x')
-        self.y = T.ivector('y')  # labels presented as 1D vector
         for i in xrange(self.n_layers):
-            # construct sigmoidal layer
-            if i == 0:
-                input_size = n_ins
-            else:
-                input_size = hidden_layers_sizes[i - 1]
-
-            if i == 0:
-                layer_input = self.x
-            else:
-                layer_input = self.sigmoid_layers[-1].output
-
-            sigmoid_layer = HiddenLayer(rng=numpy_rng,
-                                        input=layer_input,
-                                        n_in=topology[i],
-                                        n_out=topology[i + 1],
-                                        activation=T.nnet.sigmoid)
-
-            self.sigmoid_layers.append(sigmoid_layer)
-            self.params.extend(sigmoid_layer.params)
-
             rbm_config = rbm_configs[i]
             rbm_config.v_n = topology[i]
             rbm_config.h_n = topology[i + 1]
             # rbm_config.training_parameters = tr[i]  # Ensure it has parameters
-            rbm_layer = RBM(rbm_config, W=sigmoid_layer.W, h_bias=sigmoid_layer.b)
+            rbm_layer = RBM(rbm_config)
             self.rbm_layers.append(rbm_layer)
-
-        # Logistic layer on top of the MLP
-        self.logLayer = LogisticRegression(
-            input=self.sigmoid_layers[-1].output,
-            n_in=hidden_layers_sizes[-1],
-            n_out=n_outs)
-        self.params.extend(self.logLayer.params)
-
-        # cost for fine tuning
-        self.finetune_cost = self.logLayer.negative_log_likelihood(self.y)
-        # gradient wrt model parameters
-        self.errors = self.logLayer.errors(self.y)
 
     def __str__(self):
         return 'dbn_' + str(self.n_layers) + \
                'lys_' + '_'.join([str(i) for i in self.topology])
-
-    def pretraining_functions(self, train_set_x, batch_size, k):
-        # index to a [mini]batch
-        index = T.lscalar('index')
-        learning_rate = T.scalar('lr')
-
-        n_batches = train_set_x.get_value(borrow=True).shape[0] / batch_size
-        batch_begin = index * batch_size
-        batch_end = batch_begin + batch_size
-
-        pretrain_fns = []
-        for rbm in self.rbm_layers:
-            # cost, updates = rbm.get_cost_updates(learning_rate, persistent=None, k=k)
-            cost, updates = rbm.get_cost_updates(learning_rate, k=k)
-
-            # input gets propagated through layer weights W i.e. W2(W1x+b1)+b2 etc
-            fn = theano.function(
-                inputs=[index, theano.Param(learning_rate, default=0.1)],
-                outputs=cost,
-                updates=updates,
-                givens={
-                    self.x: train_set_x[batch_begin:batch_end]
-                }
-            )
-            pretrain_fns.append(fn)
-
-        return pretrain_fns
-
-    def pretrain(self, train_data, cache=False, train_further=False, names=None):
-        if type(cache) is not list:
-            cache = np.repeat(cache, self.n_layers)
-        if type(train_further) is not list:
-            train_further = np.repeat(train_further, self.n_layers)
-
-        layer_input = train_data
-        for i in xrange(len(self.rbm_layers)):
-            rbm = self.rbm_layers[i]
-            print 'training layer {}, {}'.format(i, rbm)
-
-            self.data_manager.move_to('{}/layer/{}/{}'.format(self.out_dir, i, rbm))
-
-            # Check Cache
-            cost = 0
-            name=names[i] if names else str(rbm)
-            loaded = store.retrieve_object(name)
-            if cache[i] and loaded:
-                # TODO override neural network's weights too
-                epochs = rbm.config.train_params.epochs
-                rbm = loaded
-                rbm.config.train_params.epochs = epochs
-                # Override the reference
-                self.rbm_layers[i] = rbm
-                print "... loaded trained layer {}".format(rbm)
-
-                if train_further[i]:
-                    cost += np.mean(rbm.train(layer_input))
-                    self.data_manager.persist(rbm, name=name)
-            else:
-                if rbm.train_parameters.sparsity_constraint:
-                    rbm.set_initial_hidden_bias()
-                    rbm.set_hidden_mean_activity(layer_input)
-                cost += np.mean(rbm.train(layer_input))
-                self.data_manager.persist(rbm, name=name)
-
-            self.data_manager.move_to_project_root()
-            # os.chdir('../..')
-
-            # Pass the input through sampler method to get next layer input
-            sampled_layer = rbm.sample_h_given_v(layer_input)
-            transform_input = sampled_layer[2]
-            f = theano.function([], transform_input)
-            res = f()
-            layer_input = theano.shared(res)
-        return cost
 
     def pretrain(self, train_data, cache=False, train_further=False, names=None):
         if type(cache) is not list:
@@ -251,77 +132,6 @@ class DBN(object):
             res = f()
             layer_input = theano.shared(res)
         return cost
-
-    def build_finetune_functions(self, datasets, batch_size, learning_rate):
-        (train_set_x, train_set_y) = datasets[0]
-        (valid_set_x, valid_set_y) = datasets[1]
-        (test_set_x, test_set_y) = datasets[2]
-
-        # compute number of minibatches for training, validation and testing
-        n_valid_batches = valid_set_x.get_value(borrow=True).shape[0]
-        n_valid_batches /= batch_size
-        n_test_batches = test_set_x.get_value(borrow=True).shape[0]
-        n_test_batches /= batch_size
-
-        index = T.lscalar('index')  # index to a [mini]batch
-
-        # compute the gradients with respect to the model parameters
-        gparams = T.grad(self.finetune_cost, self.params)
-
-        # compute list of fine-tuning updates
-        updates = []
-        for param, gparam in zip(self.params, gparams):
-            updates.append((param, param - gparam * learning_rate))
-
-        train_fn = theano.function(
-            inputs=[index],
-            outputs=self.finetune_cost,
-            updates=updates,
-            givens={
-                self.x: train_set_x[
-                        index * batch_size: (index + 1) * batch_size
-                        ],
-                self.y: train_set_y[
-                        index * batch_size: (index + 1) * batch_size
-                        ]
-            }
-        )
-
-        test_score_i = theano.function(
-            [index],
-            self.errors,
-            givens={
-                self.x: test_set_x[
-                        index * batch_size: (index + 1) * batch_size
-                        ],
-                self.y: test_set_y[
-                        index * batch_size: (index + 1) * batch_size
-                        ]
-            }
-        )
-
-        valid_score_i = theano.function(
-            [index],
-            self.errors,
-            givens={
-                self.x: valid_set_x[
-                        index * batch_size: (index + 1) * batch_size
-                        ],
-                self.y: valid_set_y[
-                        index * batch_size: (index + 1) * batch_size
-                        ]
-            }
-        )
-
-        # Create a function that scans the entire validation set
-        def valid_score():
-            return [valid_score_i(i) for i in xrange(n_valid_batches)]
-
-        # Create a function that scans the entire test set
-        def test_score():
-            return [test_score_i(i) for i in xrange(n_test_batches)]
-
-        return train_fn, valid_score, test_score
 
     def bottom_up_pass(self, x, start=0, end=sys.maxint):
         '''
@@ -623,98 +433,3 @@ class DBN(object):
 
         print ('Fine tuning took %f minutes' % ((end_time - start_time) / 60))
 
-
-
-        # # UPDATES TO GENERATIVE PARAMETERS
-        # hidvis = hidvis + r*wakehidstates?*(data-pvisprobs);
-        # visgenbiases = visgenbiases + r*(data - pvisprobs);
-        # penhid = penhid + r*wakepenstates?*(wakehidstates-phidprobs);
-        # hidgenbiases = hidgenbiases + r*(wakehidstates - phidprobs);
-        #
-        # # UPDATES TO TOP LEVEL ASSOCIATIVE MEMORY PARAMETERS
-        # pentop = pentop + r*(pospentopstatistics - negpentopstatistics);
-        # pengenbiases = pengenbiases + r*(wakepenstates - negpenstates);
-        # topbiases = topbiases + r*(waketopstates - negtopstates);
-        #
-        # #UPDATES TO RECOGNITION/INFERENCE APPROXIMATION PARAMETERS
-        # hidpen = hidpen + r*(sleephidstates?*(sleeppenstates - psleeppenstates));
-        # penrecbiases = penrecbiases + r*(sleeppenstates-psleeppenstates);
-        #
-        # vishid = vishid + r*(sleepvisprobs?*(sleephidstatesp - sleephidstates));
-        # hidrecbiases = hidrecbiases + r*(sleephidstates-psleephidstates);
-        #
-        #
-        #
-        # # UP-DOWN ALGORITHM
-        # #
-        # # the data and all biases are row vectors.
-        # # the generative model is: lab <--> top <--> pen --> hid --> vis
-        # # the number of units in layer foo is numfoo
-        # # weight matrices have names fromlayer tolayer
-        # # "rec" is for recognition biases and "gen" is for generative
-        # # biases.
-        # # for simplicity, the same learning rate, r, is used everywhere.
-        #
-        #
-        # # PERFORM A BOTTOM-UP PASS TO GET WAKE/POSITIVE PHASE
-        # # PROBABILITIES AND SAMPLE STATES
-        # wakehidprobs = logistic(data*vishid + hidrecbiases);
-        # wakehidstates = wakehidprobs > rand(1, numhid);
-        # wakepenprobs = logistic(wakehidstates*hidpen + penrecbiases);
-        # wakepenstates = wakepenprobs > rand(1, numpen);
-        # waketopprobs = logistic(wakepenstates*pentop + targets*labtop +topbiases);
-        # waketopstates = waketopprobs > rand(1, numtop);
-        #
-        # self.wake_phase(data)
-        #
-        # # POSITIVE PHASE STATISTICS FOR CONTRASTIVE DIVERGENCE
-        # pospentopstatistics = wakepenstates? * waketopstates;
-        #
-        # # PERFORM numCDiters GIBBS SAMPLING ITERATIONS USING THE TOP LEVEL
-        # # UNDIRECTED ASSOCIATIVE MEMORY
-        # negtopstates = waketopstates; # to initialize loop
-        # for iter=1:numCDiters
-        # negpenprobs = logistic(negtopstates*pentop? + pengenbiases);
-        #     negpenstates = negpenprobs > rand(1, numpen);
-        #     negtopprobs = logistic(negpenstates*pentop+topbiases);
-        #     negtopstates = negtopprobs > rand(1, numtop);
-        #
-        # # NEGATIVE PHASE STATISTICS FOR CONTRASTIVE DIVERGENCE
-        # negpentopstatistics = negpenstates?*negtopstates;
-        # neglabtopstatistics = neglabprobs?*negtopstates;
-        #
-        #
-        # # STARTING FROM THE END OF THE GIBBS SAMPLING RUN, PERFORM A
-        # # TOP-DOWN GENERATIVE PASS TO GET SLEEP/NEGATIVE PHASE
-        # # PROBABILITIES AND SAMPLE STATES
-        # sleeppenstates = negpenstates;
-        # sleephidprobs = logistic(sleeppenstates*penhid + hidgenbiases);
-        # sleephidstates = sleephidprobs > rand(1, numhid);
-        # sleepvisprobs = logistic(sleephidstates*hidvis + visgenbiases);
-        #
-        #
-        # # PREDICTIONS
-        # psleeppenstates = logistic(sleephidstates*hidpen + penrecbiases);
-        # psleephidstates = logistic(sleepvisprobs*vishid + hidrecbiases);
-        #
-        # pvisprobs = logistic(wakehidstates*hidvis + visgenbiases);
-        # phidprobs = logistic(wakepenstates*penhid + hidgenbiases);
-        #
-        #
-        # # UPDATES TO GENERATIVE PARAMETERS
-        # hidvis = hidvis + r*wakehidstates?*(data-pvisprobs);
-        # visgenbiases = visgenbiases + r*(data - pvisprobs);
-        # penhid = penhid + r*wakepenstates?*(wakehidstates-phidprobs);
-        # hidgenbiases = hidgenbiases + r*(wakehidstates - phidprobs);
-        #
-        # # UPDATES TO TOP LEVEL ASSOCIATIVE MEMORY PARAMETERS
-        # pentop = pentop + r*(pospentopstatistics - negpentopstatistics);
-        # pengenbiases = pengenbiases + r*(wakepenstates - negpenstates);
-        # topbiases = topbiases + r*(waketopstates - negtopstates);
-        #
-        # #UPDATES TO RECOGNITION/INFERENCE APPROXIMATION PARAMETERS
-        # hidpen = hidpen + r*(sleephidstates?*(sleeppenstates - psleeppenstates));
-        # penrecbiases = penrecbiases + r*(sleeppenstates-psleeppenstates);
-        #
-        # vishid = vishid + r*(sleepvisprobs?*(sleephidstatesp - sleephidstates));
-        # hidrecbiases = hidrecbiases + r*(sleephidstates-psleephidstates);
