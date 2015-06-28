@@ -219,7 +219,7 @@ def test_generative_dbn():
     k_loader.save_faces(sampled, tile=(sample_n / 10, 10), img_name="sampled.png", img_shape=(shape, shape))
     dbn.reconstruct(train_x, k=1, plot_every=1, plot_n=100, img_name='dbn_recon')
 
-    for i in xrange(0,10):
+    for i in xrange(0,1):
         dbn.fine_tune(train_x)
         sampled = dbn.sample(sample_n, k=100, rand_type='noisy_mean')
         k_loader.save_faces(sampled, tile=(sample_n / 10, 10), img_name=("sampled_fine_tuned%d.png" % i), img_shape=(shape, shape))

@@ -94,7 +94,7 @@ class DBN(object):
         layer_input = train_data
         for i in xrange(len(self.rbm_layers)):
             rbm = self.rbm_layers[i]
-            print 'training layer {}, {}'.format(i, rbm)
+            print '... training layer {}, {}'.format(i, rbm)
 
             self.data_manager.move_to('{}/layer/{}/{}'.format(self.out_dir, i, rbm))
 
@@ -409,7 +409,7 @@ class DBN(object):
         return updates
 
     def fine_tune(self, data, epochs=5, batch_size=10):
-        print 'fine tuning ...'
+        print '... fine tuning'
 
         if not self.untied:
             self.untie_weights()
@@ -431,5 +431,5 @@ class DBN(object):
                 fine_tune(mini_batche_i)
             end_time = time.clock()
 
-        print ('Fine tuning took %f minutes' % ((end_time - start_time) / 60))
+        print ('... fine tuning took %f minutes' % ((end_time - start_time) / 60))
 

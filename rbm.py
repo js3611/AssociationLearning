@@ -816,8 +816,8 @@ class RBM(object):
         self.set_default_weights()
 
     def train(self, train_data, train_label=None, ctr=0):
-        self.training = True
         """Trains RBM. For now, input needs to be Theano matrix"""
+        self.training = True
         param = self.train_parameters
         batch_size = param.batch_size
         mini_batches = train_data.get_value(borrow=True).shape[0] / batch_size
@@ -829,22 +829,18 @@ class RBM(object):
             mean_cost = []
             for batch_index in xrange(mini_batches):
                 if self.dropout:
-                    # self.dropout_mask = self.np_rand.binomial(n=1, p=self.dropout_rate, size=self.h_n).astype(t_float_x)
-                    self.dropout_mask = self.np_rand.binomial(n=1, p=self.dropout_rate, size=(batch_size,self.h_n)).astype(t_float_x)
+                    self.dropout_mask = self.np_rand.binomial(n=1, p=self.dropout_rate,
+                                                              size=(batch_size, self.h_n)).astype(t_float_x)
 
                 cost = train_fn(batch_index)
                 if not math.isnan(cost):
-                    # continue
-                    # raise Exception('training cost is infty -- try lowering learning rate')
-
                     mean_cost += [cost]
                 if self.track_progress and self.track_progress.monitor_weights:
                     self.track_progress.monitor_wt(self)
-                    self.track_progress.monitor_mean_activity(self, train_data, train_label)
 
             if self.track_progress:
                 print 'Epoch %d, cost is ' % epoch, np.mean(mean_cost)
-                plotting_time += self.track_progress.visualise_weight(self, 'epoch_%05d.png' % (ctr+epoch))
+                plotting_time += self.track_progress.visualise_weight(self, 'epoch_%05d.png' % (ctr + epoch))
 
         end_time = time.clock()
         pre_training_time = (end_time - start_time) - plotting_time
@@ -853,7 +849,6 @@ class RBM(object):
             print ('Training took %f minutes' % (pre_training_time / 60.))
             if self.track_progress.monitor_weights:
                 print 'Weight histogram'
-                # avg_hist, avg_bins = np.histogram(np.abs(self.track_progress.weight_hist['avg']), bin=[0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000])
                 avg_hist, avg_bins = np.histogram(self.track_progress.weight_hist['avg'])
                 std_hist, std_bins = np.histogram(self.track_progress.weight_hist['std'])
                 print avg_hist, avg_bins
@@ -869,7 +864,7 @@ class RBM(object):
         print "... saved RBM object to " + os.getcwd() + "/" + str(self)
 
     def sample(self, n=1, k=1, p=0.01, rand_type='uniform'):
-        assert rand_type in ['binomial', 'uniform', 'normal', 'mean','noisy_mean']
+        assert rand_type in ['binomial', 'uniform', 'normal', 'mean', 'noisy_mean']
 
         # Generate random "v"
         if rand_type == 'binomial':
@@ -878,7 +873,7 @@ class RBM(object):
             data = np.tile(p, (n, 1))
         elif rand_type == 'noisy_mean':
             data = np.tile(p, (n, 1)) + self.np_rand.normal(0, 0.2, size=(n, self.v_n)).astype(t_float_x)
-        else: # rand_type == 'uniform':
+        else:  # rand_type == 'uniform':
             data = self.np_rand.uniform(size=(n, self.v_n), low=0, high=1).astype(t_float_x)
 
         return self.reconstruct(data, k)
@@ -1048,7 +1043,8 @@ class RBM(object):
         else:
             return m[-1]
 
-    def mean_field_inference_opt(self, x, y=None, ylen=-1, sample=False, k=100, img_name='mean_field_inference', initial_input_multiplier=1):
+    def mean_field_inference_opt(self, x, y=None, ylen=-1, sample=False, k=100, img_name='mean_field_inference',
+                                 initial_input_multiplier=1):
         '''
         As an optimisation, we can concatenate two images and feed it as a single image to train the network.
         In this way theano performs matrix optimisation so its much faster.
@@ -1058,7 +1054,8 @@ class RBM(object):
 
         plot_n = 100
         plot_every = k if k <= 10 else 10
-        ylen = self.v_n / 2 if type(y) is None and ylen == -1 else self.v_n - len(y.get_value()[0]) if type(y) is not None else ylen
+        ylen = self.v_n / 2 if type(y) is None and ylen == -1 else self.v_n - len(y.get_value()[0]) if type(
+            y) is not None else ylen
 
         # Initialise parameters
         if not utils.isSharedType(x):
@@ -1068,7 +1065,7 @@ class RBM(object):
             y = self.rand.binomial(size=(data_size, ylen), n=1, p=0, dtype=t_float_x)
 
         # get initial values of tau (Concatenate x and y)
-        z = T.concatenate([x * initial_input_multiplier , y], axis=1)
+        z = T.concatenate([x * initial_input_multiplier, y], axis=1)
         total_input, tau = self.prop_up(z)
         tau = self.h_unit.scale(total_input)
 
@@ -1121,22 +1118,10 @@ class RBM(object):
             # print energy
             pred_mat[:, c] = energy
 
-        print np.sum(pred_mat)
-        print pred_mat.shape
-        print "PRED MAT"
-        print pred_mat
-        print pred_mat.sum(axis=1)
-
         normalised = np.transpose(pred_mat.T / np.sum(pred_mat, axis=1))
         print normalised
 
         return normalised.argmax(axis=1)
-
-
-
-
-class AssociativeRBM(RBM):
-    pass
 
 
 def test_rbm():
@@ -1160,16 +1145,15 @@ def test_rbm():
     n_visible = train_set_x.get_value().shape[1]
     n_hidden = 2
 
-    rbm = RBM(n_visible,
-              n_visible,
-              n_hidden,
-              associative=False,
-              cd_type=CLASSICAL,
-              cd_steps=1,
-              v_activation_fn=rectify,
-              h_activation_fn=rectify,
-              train_parameters=tr,
-              progress_logger=ProgressLogger())
+    config = rbm_config.RBMConfig(v_n=n_visible,
+                                  v2_n=n_visible,
+                                  h_n=n_hidden,
+                                  associative=False,
+                                  cd_type=CLASSICAL,
+                                  cd_steps=1,
+                                  train_params=tr,
+                                  progress_logger=ProgressLogger())
+    rbm = RBM(config)
 
     print "... initialised RBM"
 
@@ -1180,7 +1164,7 @@ def test_rbm():
     rbm.train(train_set_x)
 
     # Test RBM
-    rbm.reconstruct(test_set_x, k=1, n=20)
+    rbm.reconstruct(test_set_x, k=1, plot_n=20)
 
 
 if __name__ == '__main__':

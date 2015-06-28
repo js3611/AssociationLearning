@@ -11,7 +11,7 @@ class ProgressLogger(object):
 
         def __init__(self,
                      likelihood=True,
-                     monitor_weights=True,
+                     monitor_weights=False,
                      time_training=True,
                      plot=True,
                      plot_info=None,
@@ -64,10 +64,6 @@ class ProgressLogger(object):
             self.weight_hist['std'].append(np.std(rbm.W.get_value(borrow=True)))
             self.weight_hist['min'] = min(np.min(rbm.W.get_value(borrow=True)), self.weight_hist['min'])
             self.weight_hist['max'] = max(np.max(rbm.W.get_value(borrow=True)), self.weight_hist['max'])
-
-        def monitor_mean_activity(self, rbm, x, y):
-            _, hp = rbm.prop_up(x, y)
-            pass
 
 
 class AssociationProgressLogger(ProgressLogger):
