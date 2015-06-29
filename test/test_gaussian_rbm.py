@@ -9,7 +9,7 @@ import theano
 import theano.tensor as T
 import scipy.stats as ss
 import matplotlib.pyplot as plt
-import m_loader
+import mnist_loader
 import kanade_loader as k_loader
 
 
@@ -106,7 +106,7 @@ class UtilsTest(unittest.TestCase):
         self.assertTrue(np.count_nonzero(g_rbm.v_bias.get_value(borrow=True) - vb) == 0)
         self.assertTrue(np.count_nonzero(g_rbm.h_bias.get_value(borrow=True) - hb) == 0)
 
-        tr, vl, te = m_loader.load_digits(n=[5, 10, 10], pre={'scale': True})
+        tr, vl, te = mnist_loader.load_digits(n=[5, 10, 10], pre={'scale': True})
         v = tr[0]
 
         # print 'inputs:'
@@ -351,7 +351,7 @@ class UtilsTest(unittest.TestCase):
         self.assertTrue(np.all(v3 == np.array([2, 5])))
 
     def test_full(self):
-        train, valid, test = m_loader.load_digits(n=[100, 0, 100], pre={'scale':True})
+        train, valid, test = mnist_loader.load_digits(n=[100, 0, 100], pre={'scale':True})
         train_x, train_y = train
         valid_x, valid_y = valid
         test_x, test_y = test

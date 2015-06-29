@@ -1,19 +1,11 @@
 import os
 
 import datastorage as store
-import m_loader as m_loader
+import mnist_loader as m_loader
 import kanade_loader as k_loader
-import theano
 from models.rbm_config import *
 from models.rbm_logger import *
 from models.DBN import DBN, DBNConfig
-
-try:
-    import PIL.Image as Image
-except ImportError:
-    import Image
-
-from utils import tile_raster_images
 
 theano.config.optimizer = 'None'
 
@@ -51,12 +43,6 @@ def test_generative_dbn():
         sampled = dbn.sample(sample_n, k=100, rand_type='noisy_mean')
         k_loader.save_faces(sampled, tile=(sample_n / 10, 10), img_name=("sampled_fine_tuned%d.png" % i), img_shape=(shape, shape))
         dbn.reconstruct(train_x, k=1, plot_every=1, plot_n=100, img_name=('dbn_recon_fine_tune%d' % i))
-
-
-
-
-    # end-snippet-2
-    # subtracted plotting time
 
 
 def get_data(shape):

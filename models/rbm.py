@@ -6,7 +6,7 @@ from models.rbm_logger import *
 from models import rbm_config
 from theano.tensor.shared_randomstreams import RandomStreams
 import utils
-import m_loader
+import mnist_loader
 import datastorage as store
 
 
@@ -1124,7 +1124,7 @@ def test_rbm():
     print "Testing RBM"
 
     # Load mnist hand digits
-    datasets = m_loader.load_digits(n=[100, 0, 100], digits=[1])
+    datasets = mnist_loader.load_digits(n=[100, 0, 100], digits=[1])
     train_set_x, train_set_y = datasets[0]
     test_set_x, test_set_y = datasets[2]
 

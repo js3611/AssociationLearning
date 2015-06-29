@@ -4,7 +4,7 @@ __author__ = 'joschlemper'
 
 import theano
 import theano.tensor as T
-from simple_classifiers import SimpleClassifier
+from models.simple_classifiers import SimpleClassifier
 from models.rbm import RBM
 from rbm_config import *
 from models.rbm_logger import *

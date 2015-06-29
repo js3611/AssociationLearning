@@ -1,6 +1,6 @@
 from models.rbm import *
 from models.DBN import *
-from simple_classifiers import SimpleClassifier
+from models.simple_classifiers import SimpleClassifier
 
 try:
     import PIL.Image as Image
@@ -341,10 +341,10 @@ def test_associative_dbn(i=0):
     # load dataset
     train_n = 1000
     test_n = 1000
-    train, valid, test = m_loader.load_digits(n=[train_n, 100, test_n], pre={'binary_label': True})
+    train, valid, test = mnist_loader.load_digits(n=[train_n, 100, test_n], pre={'binary_label': True})
     train_x, train_y = train
     test_x, test_y = test
-    train_x01 = m_loader.sample_image(train_y)
+    train_x01 = mnist_loader.sample_image(train_y)
     clf = SimpleClassifier('logistic', train_x01, train_y)
 
     # project set up

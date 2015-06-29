@@ -4,11 +4,11 @@ from models.rbm_units import *
 from models.rbm_logger import *
 from models import DBN, associative_dbn
 import utils
-import m_loader as m_loader
+import mnist_loader as m_loader
 import datastorage as store
 # from matplotlib.pyplot import plot, show, ion
 # import matplotlib.pyplot as plt
-from simple_classifiers import SimpleClassifier
+from models.simple_classifiers import SimpleClassifier
 
 import logging
 

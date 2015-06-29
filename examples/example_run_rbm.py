@@ -5,7 +5,7 @@ import datastorage as store
 from models.rbm import RBM
 from models.rbm_config import *
 from models.rbm_logger import *
-from simple_classifiers import SimpleClassifier
+from models.simple_classifiers import SimpleClassifier
 
 
 try:

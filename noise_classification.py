@@ -8,7 +8,7 @@ import kanade_loader as k_loader
 from datastorage import StorageManager
 # from matplotlib.pyplot import plot, show, ion
 # import matplotlib.pyplot as plt
-from simple_classifiers import SimpleClassifier
+from models.simple_classifiers import SimpleClassifier
 
 
 def get_rbm_config(shape, n_hidden=500, epochs=10):

@@ -1,16 +1,11 @@
 __author__ = 'joschlemper'
 
-import utils
 import kanade_loader as loader
-import sklearn as ss
 import numpy as np
-import theano
-import theano.tensor as T
-import matplotlib.pyplot as plt
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn import svm
-from simple_classifiers import SimpleClassifier
+from models.simple_classifiers import SimpleClassifier
 
 def get_score(train_x, train_y, test_x, test_y, classifier='logistic'):
     '''

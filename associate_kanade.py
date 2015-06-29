@@ -8,7 +8,7 @@ import utils
 import numpy as np
 import theano
 import theano.tensor as T
-from simple_classifiers import SimpleClassifier
+from models.simple_classifiers import SimpleClassifier
 
 
 def train_kanade():
