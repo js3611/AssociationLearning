@@ -6,9 +6,8 @@ import theano
 import theano.tensor as T
 from models.simple_classifiers import SimpleClassifier
 from models.rbm import RBM
-from rbm_config import *
+from models.rbm_config import *
 from models.rbm_logger import *
-from rbm_units import *
 from datastorage import StorageManager
 import kanade_loader
 
@@ -77,7 +76,6 @@ def experimentChild(project_name, mapping, shape, model):
     c3 = theano.function([], T.concatenate([c1, c2], axis=0))()
     tr_x_mixed = theano.shared(c3, name='tr_x_mixed')
 
-    # TODO make interface for brain model
     # initial_y = np.zeros(h_te_x.get_value(True).shape)
     initial_y = np.random.normal(0, 1, h_te_x.get_value(True).shape)
     initial_y = theano.shared(initial_y, name='initial_y')

@@ -102,17 +102,6 @@ def associate_data2data(cache=False, train_further=True):
     # tr_concat_x = theano.shared(c, name='tr_concat_x')
     tr_concat_x = theano.shared(concat1, name='tr_concat_x')
 
-    # Initialise the RBM and training parameters
-    # tr = TrainParam(learning_rate=0.1,
-    # momentum_type=NESTEROV,
-    # momentum=0.5,
-    # weight_decay=0.001,
-    # sparsity_constraint=True,
-    # sparsity_target=0.1 ** 9,
-    # sparsity_cost=0.9,
-    # sparsity_decay=0.99,
-    #                 epochs=50)
-
     tr = TrainParam(learning_rate=0.001,
                     momentum_type=NESTEROV,
                     momentum=0.5,
@@ -129,11 +118,6 @@ def associate_data2data(cache=False, train_further=True):
     k = 1
     n_visible = 784 * 2
     n_visible2 = 0
-
-    # Hinton way
-    # 10 classes that are equi-probable: p(x) = 0.1
-    # n_hidden = min(1000, int((- np.log2(0.1)) * train_n / 10))
-    # n_hidden = 332
     n_hidden = 300
     print "number of hidden nodes: %d" % n_hidden
 
@@ -163,52 +147,13 @@ def associate_data2data(cache=False, train_further=True):
         data_manager.persist(rbm)
 
         # Reconstruct using RBM
-        y = theano.shared(rbm.np_rand.binomial(1, 0, size=(test_n, 784)).astype(t_float_x))
-
         recon_x = rbm.reconstruct_association_opt(te_x, k=10, bit_p=0)
-        # recon_x = rbm.mean_field_inference_opt(te_x,
-        #                                        y,
-        #                                        # te_x01,
-        #                                        sample=False,
-        #                                        k=1,
-        #                                        img_name="te_recon_%d" % i)
-
-
-        # Compare free energy
-        te_x_one = theano.function([], T.concatenate([te_x, ones], axis=1))()
-        te_x_one = theano.shared(te_x_one, name='te_x_one')
-        te_x_zero = theano.function([], T.concatenate([te_x, zeroes], axis=1))()
-        te_x_zero = theano.shared(te_x_zero, name='te_x_zero')
-
-        e0 = rbm.free_energy(te_x_zero)
-        e1 = rbm.free_energy(te_x_one)
-
-        e0, e1 = theano.function([], [e0, e1])()
-        # take column that's bigger
-
-        # print e0
-        # print e1
-        #
-        # print e1 > e0
-
-        mean_x = theano.shared(theano.function([], 0.5 * (ones + zeroes))())
-
-
-        clf_tr = rbm.mean_field_inference_opt(te_x,
-                                              # te_x01,
-                                              mean_x,
-                                              sample=False,
-                                              k=1,
-                                              img_name="tr_recon_%d" % i)
-
         clf = SimpleClassifier('logistic', te_x.get_value(), te_y.eval())
         orig = te_y.eval()
         error = clf.get_score(recon_x, orig)
         print error
         errors.append(error)
 
-    # plt.plot(errors)
-    # plt.show()
     print errors
 
 
@@ -223,32 +168,11 @@ def get_p_h(brain_c, tr_x, tr_x01):
     return p_h
 
 
-# def plot_hidden_activity(brain_c, tr_x, tr_x01):
-# p_h = get_p_h(brain_c, tr_x.get_value(), tr_x01.get_value())
-# plt.clf()
-#     plt.figure(0)
-#     plt.plot(p_h)
-#     # plt.show(block=False)
-#
-#     t0 = m_loader.load_digits(shared=False, n=[100, 0, 0], digits=[0])[0][0]
-#     t1 = m_loader.load_digits(shared=False, n=[100, 0, 0], digits=[1])[0][0]
-#     zero = np.zeros((100, 784)).astype(t_float_x)
-#
-#     plt.figure(1)
-#     plt.subplot(321)
-#     p_h1 = get_p_h(brain_c, t0, t0)
-#     plt.plot(p_h1)
-#     plt.subplot(322)
-#     p_h2 = get_p_h(brain_c, t0, zero)
-#     plt.plot(p_h2)
-#     plt.show(block=False)
-
-
 def associate_data2dataADBN(cache=False, train_further=True):
     print "Testing Associative RBM which tries to learn even-oddness of numbers"
     f = open('adbnlog.txt', 'a')
     # project set-up
-    data_manager = store.StorageManager('AssDBN_digits_Long', log=False)
+    data_manager = store.StorageManager('AssociativeDBN_digits', log=False)
     shape = 28
     train_n = 10000
     test_n = 1000
@@ -260,43 +184,8 @@ def associate_data2dataADBN(cache=False, train_further=True):
     tr_x, tr_y = dataset[0]
     te_x, te_y = dataset[2]
     tr_x01 = m_loader.sample_image(tr_y)
-    te_x01 = m_loader.sample_image(te_y)
-    ones = m_loader.load_digits(n=[test_n, 0, 0], digits=[1])[0][0]
-    zeroes = m_loader.load_digits(n=[test_n, 0, 0], digits=[0])[0][0]
 
-    # brain_c = get_brain_model_AssociativeDBN(shape, data_manager)
-    # brains = get_adbns(data_manager)
-    # brain_c.train(tr_x, tr_x01,
-    #               cache=[[True, True, True], [True, True, True], True],
-    #               train_further=[[True, True, True], [True, True, True], False])
-
-    # brain_c.train(tr_x, tr_x01,
-    #               cache=[[True, True, True], [True, True, True], True],
-    #               train_further=[[False, True, True], [False, True, True], False])
-    #
     clf = SimpleClassifier('logistic', te_x.get_value(), te_y.eval())
-    #
-    #
-    # for i in [3, 5, 10]:
-    #     recon_x = brain_c.recall(te_x, associate_steps=i, recall_steps=0, img_name='adbn_child_recon_{}1'.format(shape), y_type='sample_active_h')
-    #     error = clf.get_score(recon_x, te_y.eval())
-    #     print "sample_active_h %f" % error
-    #
-    #     recon_x = brain_c.recall(te_x, associate_steps=i, recall_steps=0, img_name='adbn_child_recon_{}2'.format(shape), y_type='active_h')
-    #     error = clf.get_score(recon_x, te_y.eval())
-    #     print "active_h %f" % error
-    #
-    #     recon_x = brain_c.recall(te_x, associate_steps=i, recall_steps=0, img_name='adbn_child_recon_{}3'.format(shape), y_type='noisy_active_h')
-    #     error = clf.get_score(recon_x, te_y.eval())
-    #     print "noisy_active_h %f" % error
-    #
-    #     recon_x = brain_c.recall(te_x, associate_steps=i, recall_steps=0, img_name='adbn_child_recon_{}4'.format(shape), y_type='v_noisy_active_h')
-    #     error = clf.get_score(recon_x, te_y.eval())
-    #     print "v_noisy_active_h %f" % error
-    #
-    #
-    #
-    # print error
 
     for dropout in [True, False]:
         for sc in [True, False]:
@@ -326,13 +215,6 @@ def associate_data2dataADBN(cache=False, train_further=True):
                             recon_left = brain_c.dbn_right.reconstruct(tr_x01, k=10, plot_every=1, plot_n=100,
                                                                        img_name='adbn_right_recon_{}'.format(shape))
 
-                        # Plot hidden activity
-                        # plot_hidden_activity(brain_c, tr_x, tr_x01)
-
-                        # recon_x = brain_c.recall(te_x, associate_steps=5, recall_steps=0, img_name='adbn_child_recon_{}'.format(shape))
-                        #
-                        # clf = SimpleClassifier('logistic', te_x.get_value(), te_y.eval())
-
                         for j in [5, 10]:
                             recon_x = brain_c.recall(te_x, associate_steps=j, recall_steps=0,
                                                      img_name='adbn_child_recon_{}1'.format(shape), y_type='active_h')
@@ -345,14 +227,6 @@ def associate_data2dataADBN(cache=False, train_further=True):
                             error = clf.get_score(recon_x, te_y.eval())
                             f.write("v_noisy_active_h %f\n" % error)
 
-                            # error = clf.get_score(recon_x, te_y.eval())
-                            # print error
-                            # errors.append(error)
-
-                            # plt.plot(errors)
-                            # plt.show()
-                            # print errors
-    # plt.show(block=True)
     f.close()
 
 
@@ -520,7 +394,7 @@ def get_adbns():
 
 
 def associate_data2dataDBN(cache=False):
-    print "Testing Associative DBN which tries to learn even-oddness of numbers"
+    print "Testing Joint DBN which tries to learn even-oddness of numbers"
     # project set-up
     data_manager = store.StorageManager('associative_dbn_test', log=True)
 
@@ -579,15 +453,15 @@ def associate_data2dataDBN(cache=False):
             config.top_cd_type = cd_type
 
             # Construct DBN
-            ass_dbn = associative_dbn.AssociativeDBN(config=config, data_manager=data_manager)
+            assoc_dbn = associative_dbn.AssociativeDBN(config=config, data_manager=data_manager)
 
             # Train
-            ass_dbn.train(train_x, train_x01, cache=cache, optimise=True)
+            assoc_dbn.train(train_x, train_x01, cache=cache, optimise=True)
 
             for n_recall in [1, 3, 5, 7, 10]:
                 for n_think in [0, 1, 3, 5, 7, 10]:  # 1, 3, 5, 7, 10]:
                     # Reconstruct
-                    sampled = ass_dbn.recall(test_x, n_recall, n_think)
+                    sampled = assoc_dbn.recall(test_x, n_recall, n_think)
 
                     # Sample from top layer to generate data
                     sample_n = 100
@@ -595,12 +469,6 @@ def associate_data2dataDBN(cache=False):
                                       shape=(sample_n / 10, 10))
 
                     dataset01[2] = (theano.shared(sampled), test_y)
-
-                    # Classify the reconstructions TODO
-                    # score = logistic_sgd.sgd_optimization_mnist(0.13, 100, dataset01, 100)
-                    #
-                    # print 'Score: {}'.format(str(score))
-                    # logging.info('{}, {}, {}, {}: {}'.format(cd_type, n_ass, n_recall, n_think, score))
 
 
 def associate_data2dataJDBN(cache=False, train_further=False):
