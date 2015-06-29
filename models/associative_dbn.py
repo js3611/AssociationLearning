@@ -1,5 +1,5 @@
-from rbm import *
-from DBN import *
+from models.rbm import *
+from models.DBN import *
 from simple_classifiers import SimpleClassifier
 
 try:

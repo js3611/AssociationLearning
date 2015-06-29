@@ -1,12 +1,8 @@
-import theano
-import theano.tensor as T
-import numpy as np
-from rbm import RBM
-from rbm_config import *
-from rbm_units import *
-from rbm_logger import *
-import DBN
-import associative_dbn
+from models.rbm import RBM
+from models.rbm_config import *
+from models.rbm_units import *
+from models.rbm_logger import *
+from models import DBN, associative_dbn
 import utils
 import m_loader as m_loader
 import datastorage as store

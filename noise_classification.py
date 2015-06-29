@@ -1,16 +1,9 @@
 __author__ = 'js3611'
 
-import theano
-import theano.tensor as T
-import numpy as np
-from rbm import RBM
-from rbm_config import *
-from rbm_units import *
-from rbm_logger import *
-import DBN
-import associative_dbn
-import utils
-import m_loader as m_loader
+from models.rbm import RBM
+from models.rbm_config import *
+from models.rbm_logger import *
+from models import DBN
 import kanade_loader as k_loader
 from datastorage import StorageManager
 # from matplotlib.pyplot import plot, show, ion

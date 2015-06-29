@@ -1,11 +1,9 @@
 __author__ = 'joschlemper'
 
 import unittest
-import rbm
-import dbn
-import theano
-import theano.tensor as T
+
 import numpy as np
+
 
 class MyTestCase(unittest.TestCase):
     def test_bottom_up(self):

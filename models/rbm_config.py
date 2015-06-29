@@ -1,7 +1,7 @@
 __author__ = 'joschlemper'
 
 import theano
-import rbm_units
+from models import rbm_units
 
 
 t_float_x = theano.config.floatX

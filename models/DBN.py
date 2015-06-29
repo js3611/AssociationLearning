@@ -1,11 +1,11 @@
 import copy
+
 import datastorage as store
 import theano.tensor as T
 from theano.tensor.shared_randomstreams import RandomStreams
-
-from rbm import RBM
+from models.rbm import RBM
 from rbm_config import *
-from rbm_logger import *
+from models.rbm_logger import *
 
 
 class DBNConfig(object):
@@ -235,7 +235,7 @@ class DBN(object):
         top_layer = self.rbm_layers[-1]
 
         if self.n_layers > 1 and rand_type in ['mean', 'noisy_mean']:
-            print 'sampling according to active_probability of layer below'
+            print '... sampling according to active_probability of layer below'
             pen = self.rbm_layers[-2]
             active_h = pen.active_probability_h.get_value(borrow=True)
             x = top_layer.sample(n, k, rand_type=rand_type, p=active_h)

@@ -1,12 +1,12 @@
 __author__ = 'joschlemper'
 
-import m_loader
-import kanade_loader as k_loader
-import datastorage as store
-from simple_classifiers import SimpleClassifier
-from rbm import *
-from DBN import *
 import logging
+
+import kanade_loader as k_loader
+from simple_classifiers import SimpleClassifier
+from models.rbm import *
+from models.DBN import *
+
 
 def find_associative_dbn_hyper_parameters():
     proj_name = 'AssociativeDBN_params'

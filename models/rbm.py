@@ -1,19 +1,14 @@
-import numpy as np
-import theano
-import theano.tensor as T
-from activationFunction import *
-from rbm_units import *
-from rbm_logger import *
+import os
+import math
+
+from models.rbm_units import *
+from models.rbm_logger import *
+from models import rbm_config
 from theano.tensor.shared_randomstreams import RandomStreams
 import utils
 import m_loader
 import datastorage as store
-import rbm_config
 
-import sys
-import os
-import time
-import math
 
 try:
     import PIL.Image as Image

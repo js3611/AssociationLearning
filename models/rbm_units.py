@@ -2,10 +2,9 @@ __author__ = 'joschlemper'
 
 import numpy as np
 import theano
-import theano.tensor as T
 
 from theano.tensor.shared_randomstreams import RandomStreams
-from activationFunction import *
+from models.activationFunction import *
 
 
 class RBMUnit(object):

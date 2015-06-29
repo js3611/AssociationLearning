@@ -1,11 +1,13 @@
 import unittest
-from rbm import RBM
+
+from models.rbm import RBM
 from rbm_config import *
-from rbm_logger import *
+from models.rbm_logger import *
 import theano
 import theano.tensor as T
 from theano.tensor.shared_randomstreams import RandomStreams
 import numpy as np
+
 
 class SingleRBMTest(unittest.TestCase):
     def setUpRBM(self):

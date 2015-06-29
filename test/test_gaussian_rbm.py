@@ -1,17 +1,14 @@
 import unittest
+
 import datastorage as store
-import utils
 import numpy as np
-import rbm as rbm
-import rbm_config
-import rbm_logger
+from models import rbm_logger, rbm_config, rbm_units, rbm
 import rbm_units
 import sklearn
 import theano
 import theano.tensor as T
 import scipy.stats as ss
 import matplotlib.pyplot as plt
-
 import m_loader
 import kanade_loader as k_loader
 

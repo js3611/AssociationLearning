@@ -1,10 +1,9 @@
 import unittest
-import datastorage as store
-import utils
-import rbm as RBM
-import dbn as DBN
-
 import os
+
+import datastorage as store
+from models import rbm as RBM
+import dbn as DBN
 
 
 class UtilsTest(unittest.TestCase):

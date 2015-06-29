@@ -1,11 +1,7 @@
 __author__ = 'joschlemper'
 
-from rbm import RBM
-import DBN
-import rbm_config
-import rbm_logger
-import rbm_units
-import associative_dbn
+from models.rbm import RBM
+from models import rbm_logger, rbm_config, rbm_units, DBN, associative_dbn
 import kanade_loader as loader
 import datastorage as store
 import utils

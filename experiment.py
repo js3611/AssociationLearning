@@ -1,19 +1,16 @@
+from models import rbm_units, DBN, associative_dbn
+
 __author__ = 'joschlemper'
 
-import numpy as np
 import theano
 import theano.tensor as T
-import scipy
 from simple_classifiers import SimpleClassifier
-from rbm import RBM
+from models.rbm import RBM
 from rbm_config import *
-from rbm_logger import *
+from models.rbm_logger import *
 from rbm_units import *
-import DBN
-import associative_dbn
 from datastorage import StorageManager
 import kanade_loader
-import sys
 
 
 def evaluate(p_tr_y, recon, recon_p_tr_x):
