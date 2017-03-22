@@ -124,15 +124,13 @@ class AssociativeDBN(object):
 
         # Train left & right DBN's
         self.dbn_left.pretrain(x1, cache=cache_left,
-                               train_further=train_further_left,
-                               optimise=optimise)
+                               train_further=train_further_left)
 
         if self.config.reuse_dbn:
             self.dbn_right = self.dbn_left
         else:
             self.dbn_right.pretrain(x2, cache=cache_right,
-                                    train_further=train_further_right,
-                                    optimise=optimise)
+                                    train_further=train_further_right)
 
         # Pass the parameter to top layer
         x1_np = self.dbn_left.bottom_up_pass(x1.get_value(True))
