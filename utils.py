@@ -1,17 +1,9 @@
-import cPickle
-import gzip
-import os
-import sys
-import time
 import numpy
-import preprocessing
-
-import theano
-import theano.tensor as T
 try:
     import PIL.Image as Image
 except ImportError:
     import Image
+
 
 def scale_to_unit_interval(ndar, eps=1e-8):
     """ Scales all values in the ndarray ndar to be between 0 and 1 """
@@ -19,6 +11,7 @@ def scale_to_unit_interval(ndar, eps=1e-8):
     ndar -= ndar.min()
     ndar *= 1.0 / (ndar.max() + eps)
     return ndar
+
 
 def save_images(x, image_name='digits.png', shape=None, img_shape=(28, 28)):
     data_size = x.shape[0]
@@ -36,6 +29,7 @@ def save_images(x, image_name='digits.png', shape=None, img_shape=(28, 28)):
     # construct image
     image = Image.fromarray(image_data)
     image.save(image_name)
+
 
 def save_digit(x, name="digit.png"):
     image_data = numpy.zeros((29, 29), dtype='uint8')

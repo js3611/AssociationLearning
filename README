@@ -1,0 +1,47 @@
+Author: Jo Schlemper, Imperial College London 
+4th Year Project
+
+
+====================================================================
+1. In order to run the program, you will need the following packages:
+
+theano, opencv, sklearn, numpy, scipy, matplotlib, cPickle and Image
+
+
+====================================================================
+2. The directory contains 3 experiments described in the report:
+
+noise_classification.py - Classify happy/sad face using models trained
+on different ratio of training data
+
+associate_digits.py - Learn even-odds of handwritten digits
+
+associate_kanade.py - Attachment Theory simulation
+
+
+====================================================================
+3. Brief Overview of the directories:
+
+models - contains all the models, including RBM, DBN and AssociativeDBN
+
+examples - contains example files of how to initialise, run, store the models 
+
+test - all the test cases
+
+kanade_preprocessing - methods used to crop/preprocess face images
+
+result - all the logs/results from running the experiments. Also,
+methods to plot these files are included. All the images will be saved
+in ``data'' directory.
+
+
+====================================================================
+4. Dataset
+
+You will need:
+MNIST handwritten digits - mnist.pkl.gz 
+Cohn Kanade face images - stored in /data/ using cPickle 
+
+These data are loaded using mnist_loader.py and kanade_loader.py
+respectively.
+

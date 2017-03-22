@@ -1,11 +1,11 @@
 import unittest
-from rbm import RBM
+
+from models.rbm import RBM
 from rbm_config import *
-from rbm_logger import *
-from utils import *
+from models.rbm_logger import *
 import theano.tensor as T
 import numpy as np
-import scipy.stats as ss
+
 theano.config.optimizer = 'None'
 
 

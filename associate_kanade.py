@@ -1,18 +1,14 @@
 __author__ = 'joschlemper'
 
-from rbm import RBM
-import DBN
-import rbm_config
-import rbm_logger
-import rbm_units
-import associative_dbn
+from models.rbm import RBM
+from models import rbm_logger, rbm_config, rbm_units, DBN, associative_dbn
 import kanade_loader as loader
 import datastorage as store
 import utils
 import numpy as np
 import theano
 import theano.tensor as T
-from simple_classifiers import SimpleClassifier
+from models.simple_classifiers import SimpleClassifier
 
 
 def train_kanade():
@@ -34,34 +30,25 @@ def train_kanade():
                                sparsity_target=0.01,
                                sparsity_cost=1,
                                sparsity_decay=0.9,
+                               dropout=True,
                                epochs=100)
 
     n_visible = train_x.get_value().shape[1]
     n_hidden = 500
 
-    config = rbm_config.RBMConfig(n_visible,
-                                  n_visible,
-                                  n_hidden,
+    config = rbm_config.RBMConfig(v_n=n_visible,
+                                  v2_n=n_visible,
+                                  h_n=n_hidden,
                                   v_unit=rbm_units.GaussianVisibleUnit,
                                   associative=False,
-                                  dropout=True,
                                   cd_type=rbm_config.CLASSICAL,
                                   cd_steps=1,
-                                  train_parameters=tr,
-                                  progress_logger=RBM.ProgressLogger(img_shape=(25, 25)))
+                                  train_params=tr,
+                                  progress_logger=rbm_logger.ProgressLogger(img_shape=(25, 25)))
 
     rbm = RBM(config)
 
     print "... initialised RBM"
-
-    if sparsity_constraint:
-        rbm.set_initial_hidden_bias()
-        rbm.set_hidden_mean_activity(train_x)
-
-
-    # adjust learning rate
-    # rbm.pretrain_lr(train_x)
-    # rbm.pretrain_mean_activity_h(train_x)
 
     # Train RBM
     rbm.train(train_x)
@@ -73,90 +60,9 @@ def train_kanade():
     data_manager.persist(rbm)
 
 
-def associate_data2data(cache=False):
-    print "Testing Associative RBM which tries to learn even-oddness of numbers"
-    # project set-up
-    data_manager = store.StorageManager('Kanade/AssociationRBMTest', log=True)
-
-    resolution = '25_25'
-    img_shape = (25, 25)
-
-    # Load mnist hand digits, class label is already set to binary
-    dataset = loader.load_kanade(n=500, set_name=resolution, emotions=['anger', 'happy', 'sadness'],
-                                 pre={'scale2unit': True})
-    train_x, train_y = dataset
-    # for now id map
-    train_x01 = loader.sample_image(train_y)
-
-    dataset01 = loader.load_kanade(n=10)
-
-
-    # Initialise the RBM and training parameters
-    tr = RBM.TrainParam(learning_rate=0.001,
-                        momentum_type=RBM.CLASSICAL,
-                        momentum=0.0,
-                        weight_decay=0.000,
-                        sparsity_constraint=False,
-                        sparsity_target=0.1 ** 9,
-                        sparsity_cost=0.9,
-                        sparsity_decay=0.99,
-                        epochs=100)
-    # tr = RBM.TrainParam(learning_rate=0.005,
-    # momentum_type=RBM.CLASSICAL,
-    # momentum=0.5,
-    # weight_decay=0.001,
-    # sparsity_constraint=False,
-    # sparsity_target=0.01,
-    # sparsity_cost=0.5,
-    # sparsity_decay=0.9,
-    # epochs=20)
-
-    # Even odd test
-    k = 1
-    n_visible = train_x.get_value().shape[1]
-    n_visible2 = n_visible
-    n_hidden = 100
-
-    rbm = RBM.RBM(n_visible,
-                  n_visible2,
-                  n_hidden,
-                  associative=True,
-                  cd_type=RBM.CLASSICAL,
-                  cd_steps=k,
-                  train_parameters=tr,
-                  progress_logger=RBM.AssociationProgressLogger(img_shape=img_shape))
-
-    # Load RBM (test)
-    loaded = store.retrieve_object(str(rbm))
-    if loaded and cache:
-        rbm = loaded
-        print "... loaded precomputed rbm"
-    else:
-        # Train RBM - learn joint distribution
-        # rbm.pretrain_lr(train_x, train_x01)
-        rbm.train(train_x, train_x01)
-        rbm.save()
-
-    print "... reconstruction of associated images"
-    reconstructed_y = rbm.reconstruct_association(train_x, None, 30, 0.0, plot_n=100, plot_every=1,
-                                                  img_name='kanade_recon.png')
-    print "... reconstructed"
-
-    # TODO use sklearn to obtain accuracy/precision etc
-
-    # Create Dataset to feed into logistic regression
-    # Test set: reconstructed y's become the input. Get the corresponding x's and y's
-    # dataset01[2] = (theano.shared(reconstructed_y), test_y)
-    #
-    # # Classify the reconstructions
-    # score = logistic_sgd.sgd_optimization_mnist(0.13, 100, dataset01, 100)
-    #
-    # print 'Score: {}'.format(str(score))
-    # print str(rbm)
-
-
-def KanadeAssociativeOptRBM(cache=False, train_further=False):
-    print "Testing Associative RBM which tries to learn the following mapping: {anger, saddness, disgust} -> {sadness}, {contempt, happy, surprise} -> {happy}"
+def KanadeAssociativeRBM(cache=False, train_further=False):
+    print "Testing Associative RBM which tries to learn the ID map "
+    # print "Testing Associative RBM which tries to learn the following mapping: {anger, saddness, disgust} -> {sadness}, {contempt, happy, surprise} -> {happy}"
     # project set-up
     data_manager = store.StorageManager('Kanade/OptMFSparse0.01RBMTest', log=True)
     # data_manager = store.StorageManager('Kanade/OptAssociativeRBMTest', log=True)
@@ -243,8 +149,6 @@ def KanadeAssociativeOptRBM(cache=False, train_further=False):
 
         # Get associated images of test data
         nsamples = np.random.normal(0, 1, test_x.get_value(True).shape).astype(np.float32)
-        # nsamples = np.random.normal(0, 0.0001, test_x.get_value(True).shape)
-        # nsamples = np.random.normal(0, 1, test_x.get_value(True).shape)
         initial_y = theano.shared(nsamples, name='initial_y')
         utils.save_images(nsamples[0:100], 'initialisation.png', (10, 10), (25, 25))
 
@@ -290,7 +194,8 @@ def KanadeAssociativeOptRBM(cache=False, train_further=False):
 
 def KanadeAssociativeDBN(cache=False):
     print "Testing Associative RBM which tries to learn the following mapping: " \
-          "{anger, saddness, disgust} -> {sadness}, {contempt, happy, surprise} -> {happy}"
+          "ID"
+          # "{anger, saddness, disgust} -> {sadness}, {contempt, happy, surprise} -> {happy}"
     # project set-up
     data_manager = store.StorageManager('Kanade/AssociativeDBNTest', log=True)
     shape = 25
@@ -307,11 +212,11 @@ def KanadeAssociativeDBN(cache=False):
     #            'sadness': 'sadness',
     #            'surprise': 'happy'}
 
-    dataset = loader.load_kanade(  # n=3000,
+    dataset = loader.load_kanade(  n=100,
                                    pre=preprocessing,
                                    set_name=dataset_name)
 
-    mapped_dataset = loader.load_kanade(  # n=3000,
+    mapped_dataset = loader.load_kanade(  n=100,
                                           # emotions=['sadness', 'happy'],
                                           pre=preprocessing,
                                           set_name=dataset_name)  # Target Image
@@ -398,11 +303,11 @@ def KanadeAssociativeDBN(cache=False):
         print out_msg
 
 
-def KanadeStackedOptRBM(cache=False):
-    print "Testing Stacked-RBM which tries to learn id map association"
+def KanadeJointDBN(cache=False):
+    print "Testing JointDBN which tries to learn id map association"
 
     # project set-up
-    data_manager = store.StorageManager('Kanade/MeanField3', log=True)
+    data_manager = store.StorageManager('Kanade/JointDBN', log=True)
     shape = 25
     dataset_name = 'sharp_equi{}_{}'.format(shape, shape)
     preprocessing = {'scale': True}
@@ -461,7 +366,7 @@ def KanadeStackedOptRBM(cache=False):
     # Layer 1
     # Layer 2
     # Layer 3
-    topology = [2 * (shape ** 2), 3000]
+    topology = [2 * (shape ** 2), 100, 100]
     # batch_size = 10
     first_progress_logger = rbm_logger.ProgressLogger(img_shape=(shape * 2, shape))
     rest_progress_logger = rbm_logger.ProgressLogger()
@@ -494,7 +399,7 @@ def KanadeStackedOptRBM(cache=False):
     recons2 = []
 
     # Train DBN
-    dbn.pretrain(train_X, cache=[True, True, False], train_further=[True, True, True], optimise=False)
+    dbn.pretrain(train_X, cache=[True, True, False], train_further=[True, True, True])
 
     recon = dbn.reconstruct(train_X, k=1, plot_n=20,
                             img_name='stackedRBM_train_recon_{}_{}'.format(topology, 0))
@@ -584,7 +489,7 @@ def associate_data2dataDBN(cache=False):
 
             # Train
             for trainN in xrange(0, 5):
-                ass_dbn.train(train_x, train_x01, cache=cache)  # , optimise=True)
+                ass_dbn.train(train_x, train_x01, cache=cache)
 
                 for n_recall in [1, 3, 10]:
                     for n_think in [0, 1, 3, 5, 10]:  # 1, 3, 5, 7, 10]:
@@ -602,7 +507,6 @@ def associate_data2dataDBN(cache=False):
 
 if __name__ == '__main__':
     # train_kanade()
-    # associate_data2data()
-    KanadeAssociativeOptRBM(True, train_further=True)
-    # KanadeAssociativeDBN()
-    # KanadeStackedOptRBM()
+    KanadeAssociativeRBM(True, train_further=True)
+    KanadeAssociativeDBN()
+    KanadeJointDBN()

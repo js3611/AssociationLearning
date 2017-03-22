@@ -1,15 +1,14 @@
 import unittest
-from rbm import RBM
+
+from models.rbm import RBM
 from rbm_config import *
-from rbm_logger import *
-from activationFunction import *
+from models.rbm_logger import *
+from models.activationFunction import *
 from theano.tensor.shared_randomstreams import RandomStreams
-from utils import *
-import numpy as np
 import theano
 import theano.tensor as T
 import numpy as np
-import scipy.stats as ss
+
 theano.config.optimizer = 'None'
 
 class RBMMethodTest(unittest.TestCase):

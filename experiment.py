@@ -1,19 +1,15 @@
+from models import rbm_units, DBN, associative_dbn
+
 __author__ = 'joschlemper'
 
-import numpy as np
 import theano
 import theano.tensor as T
-import scipy
-from simple_classifiers import SimpleClassifier
-from rbm import RBM
-from rbm_config import *
-from rbm_logger import *
-from rbm_units import *
-import DBN
-import associative_dbn
+from models.simple_classifiers import SimpleClassifier
+from models.rbm import RBM
+from models.rbm_config import *
+from models.rbm_logger import *
 from datastorage import StorageManager
 import kanade_loader
-import sys
 
 
 def evaluate(p_tr_y, recon, recon_p_tr_x):
@@ -80,7 +76,6 @@ def experimentChild(project_name, mapping, shape, model):
     c3 = theano.function([], T.concatenate([c1, c2], axis=0))()
     tr_x_mixed = theano.shared(c3, name='tr_x_mixed')
 
-    # TODO make interface for brain model
     # initial_y = np.zeros(h_te_x.get_value(True).shape)
     initial_y = np.random.normal(0, 1, h_te_x.get_value(True).shape)
     initial_y = theano.shared(initial_y, name='initial_y')

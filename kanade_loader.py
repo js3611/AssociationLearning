@@ -27,6 +27,7 @@ emotion_rev_dict = {1: 'anger', 2: 'contempt', 3: 'disgust', 4: 'fear', 5: 'happ
 
 def load_kanade(shared=True, set_name='sharp_equi25_25', emotions=None, pre=None, n=None):
     '''
+    Loads CD dataset.
     :param shared: To return theano shared variable. If false, returns in numpy
     :param digits: filter. if none, all digits will be returned
     :param pre: a dictionary of pre-processing. Options: pca, white-pca, center, threshold
@@ -64,8 +65,6 @@ def load_kanade(shared=True, set_name='sharp_equi25_25', emotions=None, pre=None
         for k in emotions:
             proportion = emotions[k]
             per_n[emotion_dict[k]] = proportion * n_cases
-
-    print per_n
 
     for lab in labels:
         # get subset
@@ -381,7 +380,7 @@ def save_faces(x, tile=None, img_name='digits.png', img_shape=(25, 25)):
     image.save(img_name)
 
 
-def save_face(x, name="digit.png", img_shape=(25, 25)):
+def save_face(x, name="face.png", img_shape=(25, 25)):
     image_data = np.zeros(img_shape, dtype='uint8')
 
     # Original images
@@ -534,7 +533,6 @@ def construct_atlas(set_name='25_25', pre=None):
 
     f_arrays[len(f_arrays)+1] = np.mean(f_arrays.values(), axis=0)
 
-
     return f_arrays
 
 if __name__ == '__main__':
@@ -542,6 +540,11 @@ if __name__ == '__main__':
     # d = sample_image2(np.array([5, 6, 5, 5, 5, 6]),
     #                   mapping={ 'happy': {'happy':0.5, 'sadness':0.5}, 'sadness': {'happy':0.2, 'sadness':0.8} },
     #                   pre={'scale':True})
+
+    a, b, c = load_kanade(False)
+    print a[0].shape
+    print b[0].shape
+    print c[0].shape
 
     faces = construct_atlas('25_25', pre={'scale2unit':True})
 

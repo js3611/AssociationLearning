@@ -1,21 +1,14 @@
 __author__ = 'js3611'
 
-import theano
-import theano.tensor as T
-import numpy as np
-from rbm import RBM
-from rbm_config import *
-from rbm_units import *
-from rbm_logger import *
-import DBN
-import associative_dbn
-import utils
-import m_loader as m_loader
+from models.rbm import RBM
+from models.rbm_config import *
+from models.rbm_logger import *
+from models import DBN
 import kanade_loader as k_loader
 from datastorage import StorageManager
 # from matplotlib.pyplot import plot, show, ion
 # import matplotlib.pyplot as plt
-from simple_classifiers import SimpleClassifier
+from models.simple_classifiers import SimpleClassifier
 
 
 def get_rbm_config(shape, n_hidden=500, epochs=10):
@@ -86,9 +79,6 @@ def get_dbn_config(shape, data_manager, n_hidden=500, lr=0.01, epochs=10, l=2):
                         epochs=epochs,
                         )
 
-    # Layer 1
-    # Layer 2
-    # Layer 3
     topology = [(shape ** 2), n_hidden, n_hidden, n_hidden]
     # batch_size = 10
     first_progress_logger = ProgressLogger(img_shape=(shape, shape),monitor_weights=False)
@@ -234,14 +224,14 @@ if __name__ == '__main__':
         ratio_type = float(sys.argv[1])
         print sys.argv
         if ratio_type == 1:
-            print '===================HAPPY50===================='
-            noise_classification('Happy50', emotions={'happy':0.5,'sadness':0.5})
+            print '===================SAD50===================='
+            noise_classification('Sad50', emotions={'happy':0.5,'sadness':0.5})
         elif ratio_type == 2:
-            print '===================HAPPY75===================='
-            noise_classification('Happy75', emotions={'happy':0.75,'sadness':0.25})
+            print '===================SAD75===================='
+            noise_classification('Sad75', emotions={'happy':0.75,'sadness':0.25})
         elif ratio_type == 3:
-            print '===================HAPPY90===================='
-            noise_classification('Happy90', emotions={'happy':0.9,'sadness':0.1})
+            print '===================SAD90===================='
+            noise_classification('Sad90', emotions={'happy':0.9,'sadness':0.1})
     else:
         noise_classification('Sad50',emotions={'happy':0.5,'sadness':0.5})
         noise_classification('Sad25',emotions={'happy':0.75,'sadness':0.25})
